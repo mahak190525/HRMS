@@ -1,0 +1,69 @@
+You are building a **secure, scalable, and maintainable HRMS (Human Resource Management System) web application**.
+
+### **Architecture & Code Structure**
+
+- **Modular Architecture** — Organize the project into clearly defined folders:
+    - `/components` → Reusable UI components (ShadCN-based, no direct API calls).
+    - `/pages` → Page-level components (routing only, minimal business logic).
+    - `/hooks` → Reusable React hooks for data fetching, state management, and logic.
+    - `/services` → Centralized API service layer for all backend communication.
+    - `/contexts` → Global state management (e.g., Auth, Theme).
+    - `/utils` → Helper functions (formatters, validators, etc.).
+    - `/types` → TypeScript types and interfaces.
+    - `/constants` → Static configuration (routes, roles, API endpoints).
+- **Separation of Concerns** —
+    - **UI Components** should be purely presentational.
+    - **Logic** (API calls, state updates) should reside in **hooks** or **services**, never directly in components.
+- **Reusability First** — Any component, hook, or utility used in more than one place should be abstracted into a shared module.
+
+### **Frontend**
+- **Framework:** React.js with TypeScript.
+- **Styling:** Tailwind CSS + ShadCN/UI for a **clean, Notion-inspired interface** with **more fun** — subtle pops of color, smooth animations, and friendly micro-interactions.
+- **Component Management:** Add new ShadCN components by running:
+    
+    ```
+    npx shadcn@latest add <component-name>
+    ```
+- **Animations:** Use Framer Motion for modals, button hovers, and state transitions.
+- **Charts:** Use Recharts for visualizations.
+- **Date Handling:** Use date-fns for formatting and calculations.
+- **Document Export:** Use pdfkit and json2csv.
+
+### **Backend & Database**
+
+- **Supabase** for database, storage, and custom authentication.
+- **Authentication:**
+    - Do **NOT** use `auth.users`.
+    - Use a **custom `public.users` table** with: `id`, `email`, `password_hash`, `role`, `name`, `department`, etc.
+    - Securely hash passwords (e.g., bcrypt) before storing.
+- **Role-Based Access Control:**
+    - Enforce **Row Level Security (RLS)** policies based on `public.users.role`.
+    - Apply authorization checks in both the backend and frontend.
+- **API Layer:**
+    - All API calls go through a **centralized `/services/api.ts`** file.
+    - No direct Supabase queries from UI components.
+    - Implement reusable service functions (e.g., `getUserById`, `updateProfile`, `fetchDashboardStats`).
+
+### **Security**
+
+- Role-based routing and authorization (React Router guards + Supabase policies).
+- Server-side validation for **all** input data.
+- No sensitive keys in frontend code.
+- JWTs or session tokens validated against `public.users`.
+
+### **Performance**
+
+- Lazy load non-critical pages.
+- Optimize API calls with caching (React Query/SWR) and pagination.
+- Debounce search and filter queries.
+
+### **UI/UX Guidelines**
+
+- **Minimal but lively** — clean typography, consistent spacing, responsive layouts.
+- Use **color accents** for important actions/statuses.
+- **Friendly empty states**, **tooltips**, and **inline hints**.
+- Accessibility: WCAG compliance, keyboard navigation, ARIA labels.
+
+### **Design Goal**
+
+The app should feel **fast, intuitive, and elegant like Notion** — but with **more personality and joy**, making HR tasks enjoyable while maintaining clarity, security, and performance.
