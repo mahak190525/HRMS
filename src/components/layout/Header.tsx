@@ -18,7 +18,7 @@ export function Header() {
         <div className="flex h-16 justify-between items-center">
           <div className="flex items-center">
             <h2 className="text-lg font-semibold text-gray-900">
-              Welcome back, {user?.full_name?.split(' ')[0]}!
+              Welcome {user?.full_name?.split(' ')[0]}!
             </h2>
           </div>
 

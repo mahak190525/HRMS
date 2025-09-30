@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import bcrypt from 'bcryptjs';
 import { useAuth } from '@/contexts/AuthContext';
+import { authApi } from '@/services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { format } from 'date-fns';
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 import {
   Settings as SettingsIcon,
   User,
@@ -36,6 +42,9 @@ export function Settings() {
   const [phone, setPhone] = useState(user?.phone || '');
   const [address, setAddress] = useState(user?.address || '');
   const [dateOfBirth, setDateOfBirth] = useState(user?.date_of_birth || '');
+  const [alternateContactNo, setAlternateContactNo] = useState(user?.alternate_contact_no || '');
+  const [permanentAddress, setPermanentAddress] = useState(user?.permanent_address || '');
+  const [qualification, setQualification] = useState(user?.qualification || '');
 
   // Password form states
   const [currentPassword, setCurrentPassword] = useState('');
@@ -44,7 +53,6 @@ export function Settings() {
 
   // Notification preferences
   const [emailNotifications, setEmailNotifications] = useState(true);
-  const [pushNotifications, setPushNotifications] = useState(true);
   const [leaveReminders, setLeaveReminders] = useState(true);
   const [performanceUpdates, setPerformanceUpdates] = useState(true);
   const [systemAnnouncements, setSystemAnnouncements] = useState(true);
@@ -56,20 +64,30 @@ export function Settings() {
 
   const handleProfileSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
+    
     setIsSaving(true);
 
     try {
-      await updateUser({
+      const updates = {
         full_name: fullName,
         phone: phone,
         address: address,
         date_of_birth: dateOfBirth,
-      });
+        alternate_contact_no: alternateContactNo,
+        permanent_address: permanentAddress,
+        qualification: qualification,
+      };
+      await authApi.updateProfile(user.id, updates);
+      
+      // Update local user state
+      await updateUser(updates);
       
       setIsEditing(false);
-      alert('Profile updated successfully!');
+      toast.success('Profile updated successfully!');
     } catch (error) {
-      alert('Failed to update profile');
+      toast.error('Failed to update profile');
+      console.error('Profile update error:', error);
     } finally {
       setIsSaving(false);
     }
@@ -77,29 +95,32 @@ export function Settings() {
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
     
     if (newPassword !== confirmPassword) {
-      alert('New passwords do not match');
+      toast.error('New passwords do not match');
       return;
     }
 
     if (newPassword.length < 8) {
-      alert('Password must be at least 8 characters long');
+      toast.error('Password must be at least 8 characters long');
       return;
     }
 
     setIsSaving(true);
     try {
-      // Simulate password change API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await authApi.updateProfile(user.id, {
+        password_hash: btoa(newPassword) // Simple encoding for demo
+      });
       
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       
-      alert('Password changed successfully!');
+      toast.success('Password changed successfully!');
     } catch (error) {
-      alert('Failed to change password');
+      toast.error('Failed to change password');
+      console.error('Password change error:', error);
     } finally {
       setIsSaving(false);
     }
@@ -108,11 +129,24 @@ export function Settings() {
   const handleNotificationSave = async () => {
     setIsSaving(true);
     try {
-      // Simulate API call to save notification preferences
-      await new Promise(resolve => setTimeout(resolve, 500));
-      alert('Notification preferences saved!');
+      if (!user) return;
+      
+      await authApi.updateProfile(user.id, {
+        extra_permissions: {
+          ...user.extra_permissions,
+          notifications: {
+            email: emailNotifications,
+            leave_reminders: leaveReminders,
+            performance_updates: performanceUpdates,
+            system_announcements: systemAnnouncements
+          }
+        }
+      });
+      
+      toast.success('Notification preferences saved!');
     } catch (error) {
-      alert('Failed to save preferences');
+      toast.error('Failed to save preferences');
+      console.error('Notification preferences error:', error);
     } finally {
       setIsSaving(false);
     }
@@ -121,11 +155,23 @@ export function Settings() {
   const handleAppearanceSave = async () => {
     setIsSaving(true);
     try {
-      // Simulate API call to save appearance preferences
-      await new Promise(resolve => setTimeout(resolve, 500));
-      alert('Appearance preferences saved!');
+      if (!user) return;
+      
+      await authApi.updateProfile(user.id, {
+        extra_permissions: {
+          ...user.extra_permissions,
+          preferences: {
+            theme,
+            language,
+            timezone
+          }
+        }
+      });
+      
+      toast.success('Appearance preferences saved!');
     } catch (error) {
-      alert('Failed to save preferences');
+      toast.error('Failed to save preferences');
+      console.error('Appearance preferences error:', error);
     } finally {
       setIsSaving(false);
     }
@@ -141,11 +187,11 @@ export function Settings() {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-1">
+          <TabsTrigger value="profile">Profile</TabsTrigger> 
+          {/* <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
-          <TabsTrigger value="appearance">Appearance</TabsTrigger>
+          <TabsTrigger value="appearance">Appearance</TabsTrigger> */}
         </TabsList>
 
         <TabsContent value="profile" className="space-y-6">
@@ -162,7 +208,7 @@ export function Settings() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <form onSubmit={handleProfileSave} className="space-y-6">
+                  <form key={isEditing ? 'editing' : 'readonly'} onSubmit={handleProfileSave} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="fullName">Full Name</Label>
@@ -172,6 +218,7 @@ export function Settings() {
                           onChange={(e) => setFullName(e.target.value)}
                           disabled={!isEditing}
                           className="mt-1"
+                          autoFocus={isEditing}
                         />
                       </div>
 
@@ -202,6 +249,17 @@ export function Settings() {
                       </div>
 
                       <div>
+                        <Label htmlFor="alternateContactNo">Alternate Contact No.</Label>
+                        <Input
+                          id="alternateContactNo"
+                          value={alternateContactNo}
+                          onChange={(e) => setAlternateContactNo(e.target.value)}
+                          disabled={!isEditing}
+                          className="mt-1"
+                        />
+                      </div>
+
+                      <div>
                         <Label htmlFor="dateOfBirth">Date of Birth</Label>
                         <Input
                           id="dateOfBirth"
@@ -215,11 +273,35 @@ export function Settings() {
                     </div>
 
                     <div>
-                      <Label htmlFor="address">Address</Label>
+                      <Label htmlFor="address">Current Address</Label>
                       <Textarea
                         id="address"
                         value={address}
                         onChange={(e) => setAddress(e.target.value)}
+                        disabled={!isEditing}
+                        className="mt-1"
+                        rows={3}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="permanentAddress">Permanent Address</Label>
+                      <Textarea
+                        id="permanentAddress"
+                        value={permanentAddress}
+                        onChange={(e) => setPermanentAddress(e.target.value)}
+                        disabled={!isEditing}
+                        className="mt-1"
+                        rows={3}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="qualification">Qualification</Label>
+                      <Textarea
+                        id="qualification"
+                        value={qualification}
+                        onChange={(e) => setQualification(e.target.value)}
                         disabled={!isEditing}
                         className="mt-1"
                         rows={3}
@@ -233,13 +315,15 @@ export function Settings() {
                         </Button>
                       ) : (
                         <>
-                          <Button type="submit" disabled={isSaving}>
+                          <Button type="submit" disabled={isSaving || !isEditing}>
                             <Save className="h-4 w-4 mr-2" />
+                            {isSaving && <LoadingSpinner size="sm" className="mr-2" />}
                             {isSaving ? 'Saving...' : 'Save Changes'}
                           </Button>
                           <Button 
                             type="button" 
                             variant="outline" 
+                            disabled={isSaving}
                             onClick={() => {
                               setIsEditing(false);
                               // Reset form values
@@ -247,6 +331,9 @@ export function Settings() {
                               setPhone(user?.phone || '');
                               setAddress(user?.address || '');
                               setDateOfBirth(user?.date_of_birth || '');
+                              setAlternateContactNo(user?.alternate_contact_no || '');
+                              setPermanentAddress(user?.permanent_address || '');
+                              setQualification(user?.qualification || '');
                             }}
                           >
                             Cancel
@@ -260,7 +347,7 @@ export function Settings() {
             </div>
 
             <div className="space-y-6">
-              <Card>
+              {/* <Card>
                 <CardHeader>
                   <CardTitle>Profile Picture</CardTitle>
                 </CardHeader>
@@ -271,7 +358,7 @@ export function Settings() {
                       {user?.full_name?.charAt(0) || 'U'}
                     </AvatarFallback>
                   </Avatar>
-                  <Button size="sm" variant="outline">
+                  {/* <Button size="sm" variant="outline">
                     <Camera className="h-4 w-4 mr-2" />
                     Change Photo
                   </Button>
@@ -279,7 +366,7 @@ export function Settings() {
                     JPG, PNG or GIF. Max size 2MB.
                   </p>
                 </CardContent>
-              </Card>
+              </Card> */}
 
               <Card>
                 <CardHeader>
@@ -292,20 +379,133 @@ export function Settings() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Role:</span>
-                    <span className="font-medium capitalize">{user?.role_id?.replace('_', ' ')}</span>
+                    <span className="font-medium capitalize">{user?.role?.name?.replace('_', ' ') || 'Not assigned'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Department:</span>
-                    <span className="font-medium">{user?.department_id || 'Not assigned'}</span>
+                    <span className="font-medium">{user?.department?.name || 'Not assigned'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Joining Date:</span>
-                    <span className="font-medium">{user?.date_of_joining || 'Not set'}</span>
+                    <span className="font-medium">{user?.date_of_joining ? format(new Date(user.date_of_joining), 'PPP') : 'Not set'}</span>
                   </div>
                 </CardContent>
               </Card>
             </div>
           </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Work Information</CardTitle>
+              <CardDescription>Your employment details (read-only).</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="font-medium">Position</p>
+                  <p className="text-muted-foreground">{user?.position || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="font-medium">Designation (Offer Letter)</p>
+                  <p className="text-muted-foreground">{user?.designation_offer_letter || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="font-medium">Level/Grade</p>
+                  <p className="text-muted-foreground">{user?.level_grade || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="font-medium">Employment Terms</p>
+                  <p className="text-muted-foreground capitalize">{user?.employment_terms?.replace('_', ' ') || 'N/A'}</p>
+                </div>
+                <div className="md:col-span-2">
+                  <p className="font-medium">Skills</p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {user?.skill?.length > 0 ? user.skill.map((s, i) => (
+                      <Badge key={i} variant="secondary">{s}</Badge>
+                    )) : <p className="text-muted-foreground">No skills listed</p>}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Additional Information</CardTitle>
+              <CardDescription>Other personal and financial details (read-only).</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <h4 className="md:col-span-2 font-semibold text-base">Personal Details</h4>
+                <div>
+                  <p className="font-medium">Gender</p>
+                  <p className="text-muted-foreground capitalize">{user?.gender?.replace('_', ' ') || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="font-medium">Blood Group</p>
+                  <p className="text-muted-foreground">{user?.blood_group || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="font-medium">Religion</p>
+                  <p className="text-muted-foreground">{user?.religion || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="font-medium">Marital Status</p>
+                  <p className="text-muted-foreground capitalize">{user?.marital_status || 'N/A'}</p>
+                </div>
+                {user?.marital_status === 'married' && user?.date_of_marriage_anniversary && (
+                  <div>
+                    <p className="font-medium">Marriage Anniversary</p>
+                    <p className="text-muted-foreground">{format(new Date(user.date_of_marriage_anniversary), 'PPP')}</p>
+                  </div>
+                )}
+
+                <h4 className="md:col-span-2 font-semibold text-base pt-4 border-t">Family Details</h4>
+                <div>
+                  <p className="font-medium">Father's Name</p>
+                  <p className="text-muted-foreground">{user?.father_name || 'N/A'}</p>
+                </div>
+                {user?.father_dob && (
+                  <div>
+                    <p className="font-medium">Father's Date of Birth</p>
+                    <p className="text-muted-foreground">{format(new Date(user.father_dob), 'PPP')}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="font-medium">Mother's Name</p>
+                  <p className="text-muted-foreground">{user?.mother_name || 'N/A'}</p>
+                </div>
+                {user?.mother_dob && (
+                  <div>
+                    <p className="font-medium">Mother's Date of Birth</p>
+                    <p className="text-muted-foreground">{format(new Date(user.mother_dob), 'PPP')}</p>
+                  </div>
+                )}
+
+                <h4 className="md:col-span-2 font-semibold text-base pt-4 border-t">Identity & Financial Details</h4>
+                <div>
+                  <p className="font-medium">Personal Email</p>
+                  <p className="text-muted-foreground">{user?.personal_email || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="font-medium">Aadhar Card No.</p>
+                  <p className="text-muted-foreground">{user?.aadhar_card_no || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="font-medium">PAN No.</p>
+                  <p className="text-muted-foreground">{user?.pan_no || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="font-medium">Bank Account No.</p>
+                  <p className="text-muted-foreground">{user?.bank_account_no || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="font-medium">IFSC Code</p>
+                  <p className="text-muted-foreground">{user?.ifsc_code || 'N/A'}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="security" className="space-y-6">
@@ -393,6 +593,7 @@ export function Settings() {
                 </Alert>
 
                 <Button type="submit" disabled={isSaving}>
+                  {isSaving && <LoadingSpinner size="sm" className="mr-2" />}
                   {isSaving ? 'Changing Password...' : 'Change Password'}
                 </Button>
               </form>
@@ -424,20 +625,6 @@ export function Settings() {
                     id="emailNotifications"
                     checked={emailNotifications}
                     onCheckedChange={setEmailNotifications}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="pushNotifications">Push Notifications</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Receive push notifications in browser
-                    </p>
-                  </div>
-                  <Switch
-                    id="pushNotifications"
-                    checked={pushNotifications}
-                    onCheckedChange={setPushNotifications}
                   />
                 </div>
 
@@ -486,6 +673,7 @@ export function Settings() {
 
               <Button onClick={handleNotificationSave} disabled={isSaving}>
                 <Save className="h-4 w-4 mr-2" />
+                {isSaving && <LoadingSpinner size="sm" className="mr-2" />}
                 {isSaving ? 'Saving...' : 'Save Preferences'}
               </Button>
             </CardContent>
@@ -553,6 +741,7 @@ export function Settings() {
 
               <Button onClick={handleAppearanceSave} disabled={isSaving}>
                 <Save className="h-4 w-4 mr-2" />
+                {isSaving && <LoadingSpinner size="sm" className="mr-2" />}
                 {isSaving ? 'Saving...' : 'Save Preferences'}
               </Button>
             </CardContent>

@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useComplaintCategories, useComplaints, useCreateComplaint } from '@/hooks/useComplaints';
+import { useResolverOptions } from '@/hooks/useGrievance';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,16 +24,19 @@ import {
   User
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { toast } from 'sonner';
+import { useCreateExitProcess, useExitProcess } from '../../hooks/useExit';
 
-const complaintCategories = [
-  { value: 'harassment', label: 'Harassment', color: 'bg-red-500' },
-  { value: 'discrimination', label: 'Discrimination', color: 'bg-orange-500' },
-  { value: 'workplace', label: 'Workplace Environment', color: 'bg-yellow-500' },
-  { value: 'management', label: 'Management Issues', color: 'bg-blue-500' },
-  { value: 'policy', label: 'Policy Violation', color: 'bg-purple-500' },
-  { value: 'safety', label: 'Safety Concerns', color: 'bg-green-500' },
-  { value: 'other', label: 'Other', color: 'bg-gray-500' }
-];
+const categoryColors = {
+  harassment: 'bg-red-500',
+  discrimination: 'bg-orange-500',
+  workplace: 'bg-yellow-500',
+  management: 'bg-blue-500',
+  policy: 'bg-purple-500',
+  safety: 'bg-green-500',
+  other: 'bg-gray-500'
+};
 
 const priorityLevels = [
   { value: 'low', label: 'Low', color: 'bg-green-100 text-green-800' },
@@ -40,52 +45,21 @@ const priorityLevels = [
   { value: 'urgent', label: 'Urgent', color: 'bg-red-100 text-red-800' }
 ];
 
-const complaintHistory = [
-  {
-    id: 1,
-    title: 'Workplace Noise Issue',
-    category: 'Workplace Environment',
-    priority: 'medium',
-    status: 'resolved',
-    description: 'Excessive noise from construction work affecting productivity',
-    submittedAt: '2024-12-15',
-    resolvedAt: '2024-12-20',
-    assignedTo: 'Facilities Team',
-    resolution: 'Noise barriers installed and construction hours adjusted'
-  },
-  {
-    id: 2,
-    title: 'Overtime Policy Clarification',
-    category: 'Policy Violation',
-    priority: 'low',
-    status: 'in_progress',
-    description: 'Need clarification on overtime compensation policy',
-    submittedAt: '2024-12-10',
-    resolvedAt: null,
-    assignedTo: 'HR Department',
-    resolution: null
-  },
-  {
-    id: 3,
-    title: 'Team Communication Issues',
-    category: 'Management Issues',
-    priority: 'high',
-    status: 'open',
-    description: 'Lack of clear communication from project manager causing delays',
-    submittedAt: '2024-12-05',
-    resolvedAt: null,
-    assignedTo: 'HR Department',
-    resolution: null
-  }
-];
-
 export function Complaints() {
   const { user } = useAuth();
+  const createExitProcess = useCreateExitProcess();
+  const { data: exitProcess, isLoading: exitProcessLoading } = useExitProcess();
+  const { data: complaintCategories, isLoading: categoriesLoading } = useComplaintCategories();
+  const { data: complaints, isLoading: complaintsLoading } = useComplaints();
+  const { data: resolverOptions, isLoading: resolversLoading } = useResolverOptions();
+  const createComplaint = useCreateComplaint();
+  
   const [complaintType, setComplaintType] = useState('complaint');
   const [category, setCategory] = useState('');
   const [priority, setPriority] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [selectedResolver, setSelectedResolver] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedComplaint, setSelectedComplaint] = useState<any>(null);
 
@@ -97,25 +71,26 @@ export function Complaints() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!category || !priority || !title.trim() || !description.trim()) return;
+    if (!category || !priority || !title.trim() || !description.trim() || !selectedResolver || !user) return;
 
-    setIsSubmitting(true);
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Reset form
+    createComplaint.mutate({
+      user_id: user.id,
+      category_id: category,
+      title: title.trim(),
+      description: description.trim(),
+      priority,
+      status: 'open',
+      assigned_to: selectedResolver
+    }, {
+      onSuccess: () => {
+        // Reset form
       setCategory('');
       setPriority('');
       setTitle('');
       setDescription('');
-      
-      alert('Complaint submitted successfully!');
-    } catch (error) {
-      alert('Failed to submit complaint');
-    } finally {
-      setIsSubmitting(false);
-    }
+      setSelectedResolver('');
+      }
+    });
   };
 
   const handleResignationSubmit = async (e: React.FormEvent) => {
@@ -125,7 +100,16 @@ export function Complaints() {
     setIsSubmitting(true);
     try {
       // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // await new Promise(resolve => setTimeout(resolve, 1000));
+      createExitProcess.mutate({
+        user_id: user.id,
+        resignation_date: new Date().toISOString(),
+        last_working_day: lastWorkingDay,
+        notice_period_days: Number(noticePeriod),
+        reason_for_leaving: resignationReason,
+        exit_type: 'voluntary',
+        initiated_by: user.id,
+      });
       
       // Reset form
       setResignationReason('');
@@ -133,9 +117,15 @@ export function Complaints() {
       setNoticePeriod('');
       setAdditionalComments('');
       
-      alert('Resignation submitted successfully! HR will contact you soon.');
+      toast.success('Resignation submitted successfully! HR will contact you soon.');
+      
+      // Update user role to ex_employee to enable exit dashboard
+      await updateUser({
+        role_id: 'ex_employee',
+        status: 'resigned'
+      });
     } catch (error) {
-      alert('Failed to submit resignation');
+      toast.error('Failed to submit resignation');
     } finally {
       setIsSubmitting(false);
     }
@@ -235,11 +225,11 @@ export function Complaints() {
                             <SelectValue placeholder="Select complaint category" />
                           </SelectTrigger>
                           <SelectContent>
-                            {complaintCategories.map((cat) => (
-                              <SelectItem key={cat.value} value={cat.value}>
+                            {complaintCategories?.map((cat) => (
+                              <SelectItem key={cat.id} value={cat.id}>
                                 <div className="flex items-center gap-2">
-                                  <div className={`w-3 h-3 rounded-full ${cat.color}`} />
-                                  {cat.label}
+                                  <div className={`w-3 h-3 rounded-full ${categoryColors[cat.name as keyof typeof categoryColors] || 'bg-gray-500'}`} />
+                                  {cat.name}
                                 </div>
                               </SelectItem>
                             ))}
@@ -259,6 +249,36 @@ export function Complaints() {
                                 {level.label}
                               </SelectItem>
                             ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="resolver">Assign to Resolver *</Label>
+                        <Select value={selectedResolver} onValueChange={setSelectedResolver}>
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="Select who should resolve this complaint" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {resolversLoading ? (
+                              <div className="p-2">Loading resolvers...</div>
+                            ) : (
+                              resolverOptions?.map((resolver) => (
+                                <SelectItem key={resolver.id} value={resolver.id}>
+                                  <div className="flex items-center gap-2">
+                                    <span>{resolver.full_name}</span>
+                                    <Badge variant="outline" className="text-xs">
+                                      {resolver.role?.name?.replace('_', ' ')}
+                                    </Badge>
+                                    {resolver.department?.name && (
+                                      <span className="text-xs text-muted-foreground">
+                                        • {resolver.department.name}
+                                      </span>
+                                    )}
+                                  </div>
+                                </SelectItem>
+                              ))
+                            )}
                           </SelectContent>
                         </Select>
                       </div>
@@ -296,9 +316,9 @@ export function Complaints() {
                       <Button 
                         type="submit" 
                         className="w-full"
-                        disabled={!category || !priority || !title.trim() || !description.trim() || isSubmitting}
+                        disabled={!category || !priority || !title.trim() || !description.trim() || !selectedResolver || createComplaint.isPending}
                       >
-                        {isSubmitting ? 'Submitting...' : 'Submit Complaint'}
+                        {createComplaint.isPending ? 'Submitting...' : 'Submit Complaint'}
                       </Button>
                     </form>
                   ) : (
@@ -366,9 +386,9 @@ export function Complaints() {
                       <Button 
                         type="submit" 
                         className="w-full bg-orange-600 hover:bg-orange-700"
-                        disabled={!resignationReason.trim() || !lastWorkingDay || !noticePeriod || isSubmitting}
+                        disabled={!resignationReason.trim() || !lastWorkingDay || !noticePeriod || createExitProcess.isPending}
                       >
-                        {isSubmitting ? 'Submitting...' : 'Submit Resignation'}
+                        {createExitProcess.isPending ? 'Submitting...' : 'Submit Resignation'}
                       </Button>
                     </form>
                   )}
@@ -426,43 +446,68 @@ export function Complaints() {
         <TabsContent value="history" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>My Complaints History</CardTitle>
+              <CardTitle>My Complaints & Resignation History</CardTitle>
               <CardDescription>
-                Track the status of your submitted complaints and issues
+                Track the status of your submitted complaints, issues, and resignation
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Priority</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Submitted</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {complaintHistory.map((complaint) => (
-                    <TableRow key={complaint.id}>
-                      <TableCell className="font-medium">{complaint.title}</TableCell>
-                      <TableCell>{complaint.category}</TableCell>
-                      <TableCell>
-                        <Badge className={getPriorityBadge(complaint.priority)}>
-                          {complaint.priority}
+              {(complaintsLoading) ? (
+                <LoadingSpinner size="sm" />
+              ) : (complaints && complaints.length > 0) || exitProcess ? (
+                <div className="space-y-4">
+                  {/* Show resignation if exists */}
+                  {exitProcess && (
+                    <div className="border rounded-lg p-4 space-y-3 bg-orange-50">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1">
+                          <h3 className="font-semibold flex items-center gap-2">
+                            <LogOut className="h-4 w-4" />
+                            Resignation Request
+                          </h3>
+                          <p className="text-sm text-muted-foreground">
+                            {exitProcess.reason_for_leaving}
+                          </p>
+                        </div>
+                        <Badge className={getStatusBadge(exitProcess.status)}>
+                          {exitProcess.status.replace('_', ' ')}
                         </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {getStatusIcon(complaint.status)}
-                          <Badge className={getStatusBadge(complaint.status)}>
-                            {complaint.status.replace('_', ' ')}
+                      </div>
+                      <div className="flex items-center justify-between text-sm text-muted-foreground">
+                        <div className="flex items-center gap-4">
+                          <span>Type: Resignation</span>
+                          <span>Notice Period: {exitProcess.notice_period_days} days</span>
+                          <span>Last Working Day: {format(new Date(exitProcess.last_working_day), 'MMM dd, yyyy')}</span>
+                        </div>
+                        <span>Submitted: {format(new Date(exitProcess.created_at), 'MMM dd, yyyy')}</span>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Show complaints */}
+                  {complaints?.map((complaint: any) => (
+                    <div key={complaint.id} className="border rounded-lg p-2 space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1">
+                          <h3 className="font-semibold">{complaint.title}</h3>
+                          <p className="text-sm text-muted-foreground">
+                            {complaint.description}
+                          </p>
+                        </div>
+                        <Badge className={getStatusBadge(complaint.status)}>
+                          {complaint.status}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between text-sm text-muted-foreground">
+                        <div className="flex items-center gap-4">
+                          <span>Category: {complaint.category?.name}</span>
+                          <Badge className={getPriorityBadge(complaint.priority)}>
+                            {complaint.priority}
                           </Badge>
                         </div>
-                      </TableCell>
-                      <TableCell>{format(new Date(complaint.submittedAt), 'MMM dd, yyyy')}</TableCell>
-                      <TableCell>
+                        <span>Submitted: {format(new Date(complaint.created_at), 'MMM dd, yyyy')}</span>
+                      </div>
+                      <div className="flex justify-end">
                         <Dialog>
                           <DialogTrigger asChild>
                             <Button 
@@ -485,7 +530,7 @@ export function Complaints() {
                                 <div className="grid grid-cols-2 gap-4 text-sm">
                                   <div>
                                     <p className="font-medium">Category:</p>
-                                    <p className="text-muted-foreground">{selectedComplaint.category}</p>
+                                    <p className="text-muted-foreground">{selectedComplaint.category?.name}</p>
                                   </div>
                                   <div>
                                     <p className="font-medium">Priority:</p>
@@ -501,7 +546,7 @@ export function Complaints() {
                                   </div>
                                   <div>
                                     <p className="font-medium">Assigned To:</p>
-                                    <p className="text-muted-foreground">{selectedComplaint.assignedTo}</p>
+                                    <p className="text-muted-foreground">{selectedComplaint.assignedTo || 'Unassigned'}</p>
                                   </div>
                                 </div>
                                 
@@ -518,20 +563,24 @@ export function Complaints() {
                                 )}
 
                                 <div className="flex justify-between text-xs text-muted-foreground pt-4 border-t">
-                                  <span>Submitted: {format(new Date(selectedComplaint.submittedAt), 'MMM dd, yyyy')}</span>
-                                  {selectedComplaint.resolvedAt && (
-                                    <span>Resolved: {format(new Date(selectedComplaint.resolvedAt), 'MMM dd, yyyy')}</span>
+                                  <span>Submitted: {format(new Date(selectedComplaint.created_at), 'MMM dd, yyyy HH:mm')}</span>
+                                  {selectedComplaint.updated_at && (
+                                    <span>Last Updated: {format(new Date(selectedComplaint.updated_at), 'MMM dd, yyyy HH:mm')}</span>
                                   )}
                                 </div>
                               </div>
                             )}
                           </DialogContent>
                         </Dialog>
-                      </TableCell>
-                    </TableRow>
+                      </div>
+                    </div>
                   ))}
-                </TableBody>
-              </Table>
+                </div>
+              ) : (
+                <p className="text-center text-muted-foreground py-8">
+                  No complaints or resignation requests submitted yet
+                </p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
