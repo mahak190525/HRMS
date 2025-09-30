@@ -1,4 +1,4 @@
-import { secondSupabase } from './secondSupabase';
+import { secondSupabase } from '@/services/secondSupabase';
 
 // Explicitly export interfaces
 export interface TimeEntry {
