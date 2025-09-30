@@ -6,8 +6,10 @@ export const msalConfig = {
         authority: 'https://login.microsoftonline.com/85707f27-830a-4b92-aa8c-3830bfb6c6f5/',
         // redirectUri: 'http://localhost:5173/',
         // postLogoutRedirectUri: 'http://localhost:5173/',
-        redirectUri: 'https://dev.hrms.mechlintech.com/',
-        postLogoutRedirectUri: 'https://dev.hrms.mechlintech.com/',
+        redirectUri: 'https://mechlinhrms.netlify.app/',
+        postLogoutRedirectUri: 'https://mechlinhrms.netlify.app/',
+        // redirectUri: 'https://dev.hrms.mechlintech.com/',
+        // postLogoutRedirectUri: 'https://dev.hrms.mechlintech.com/',
         navigateToLoginRequestUrl: false,
     },
     cache: {
