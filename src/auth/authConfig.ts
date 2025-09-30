@@ -4,8 +4,10 @@ export const msalConfig = {
     auth: {
         clientId: 'cabdbfaf-b291-4927-b676-6d96f3c189c3',
         authority: 'https://login.microsoftonline.com/85707f27-830a-4b92-aa8c-3830bfb6c6f5/',
-        redirectUri: '/',
-        postLogoutRedirectUri: '/',
+        // redirectUri: 'http://localhost:5173/',
+        // postLogoutRedirectUri: 'http://localhost:5173/',
+        redirectUri: 'https://dev.hrms.mechlintech.com/',
+        postLogoutRedirectUri: 'https://dev.hrms.mechlintech.com/',
         navigateToLoginRequestUrl: false,
     },
     cache: {
@@ -40,5 +42,6 @@ export const msalConfig = {
 };
 
 export const loginRequest = {
-    scopes: [],
+    scopes: ['User.Read','openid', 'profile', 'email'],
+    prompt: 'select_account',
 };
