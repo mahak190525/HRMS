@@ -63,6 +63,7 @@ export const DASHBOARD_CONFIG = [
       { id: 'documents', name: 'Documents', slug: 'documents', path: '/dashboard/documents', icon: 'FileText' },
       { id: 'complaints', name: 'Complaints', slug: 'complaints', path: '/dashboard/complaints', icon: 'MessageSquare' },
       { id: 'performance', name: 'Performance', slug: 'performance', path: '/dashboard/performance', icon: 'Target' },
+      { id: 'feedback', name: 'HRMS Feedback', slug: 'feedback', path: '/dashboard/feedback', icon: 'MessageSquare' },
       { id: 'referrals', name: 'Refer Someone', slug: 'referrals', path: '/dashboard/referrals', icon: 'UserPlus' },
       { id: 'settings', name: 'Settings', slug: 'settings', path: '/dashboard/settings', icon: 'Settings' },
     ],
@@ -82,6 +83,7 @@ export const DASHBOARD_CONFIG = [
       { id: 'exit', name: 'Exit Process', slug: 'exit', path: '/employees/exit', icon: 'LogOut' },
       { id: 'attendance', name: 'Attendance Reports', slug: 'attendance', path: '/employees/attendance', icon: 'Clock' },
       { id: 'projects', name: 'Project Management', slug: 'projects', path: '/employees/projects', icon: 'Building' },
+      { id: 'feedback', name: 'HRMS Feedback', slug: 'feedback', path: '/employees/feedback', icon: 'MessageSquare' },
     ],
   },
   {
