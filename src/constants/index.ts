@@ -95,11 +95,11 @@ export const DASHBOARD_CONFIG = [
     color: 'purple',
     pages: [
       { id: 'overview', name: 'Performance Overview', slug: 'overview', path: '/performance', icon: 'Target' },
-      { id: 'goals', name: 'Goals Management', slug: 'goals', path: '/performance/goals', icon: 'Target' },
-      { id: 'evaluations', name: 'Evaluations', slug: 'evaluations', path: '/performance/evaluations', icon: 'BarChart3' },
-      { id: 'feedback', name: 'Feedback', slug: 'feedback', path: '/performance/feedback', icon: 'MessageCircle' },
+      // { id: 'goals', name: 'Goals Management', slug: 'goals', path: '/performance/goals', icon: 'Target' },
+      // { id: 'evaluations', name: 'Evaluations', slug: 'evaluations', path: '/performance/evaluations', icon: 'BarChart3' },
+      // { id: 'feedback', name: 'Feedback', slug: 'feedback', path: '/performance/feedback', icon: 'MessageCircle' },
       { id: 'KRA', name: 'KRA', slug: 'kra', path: '/performance/kra', icon: 'SquareChartGantt' },
-      { id: 'appraisals', name: 'Appraisals', slug: 'appraisals', path: '/performance/appraisals', icon: 'BanknoteArrowUp' },
+      // { id: 'appraisals', name: 'Appraisals', slug: 'appraisals', path: '/performance/appraisals', icon: 'BanknoteArrowUp' },
     ],
   },
   {

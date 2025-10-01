@@ -272,12 +272,13 @@ export function EmployeeDetailsModal({
     },
   });
 
-  // Track previous mode to only reset when switching to edit mode
+  // Track previous employee and mode to reset form when needed
   const prevModeRef = React.useRef(mode);
+  const prevEmployeeRef = React.useRef(employee?.id);
   
-  // Reset form only when switching to edit mode, not on every employee update
+  // Reset form when switching to edit mode OR when employee changes
   React.useEffect(() => {
-    if (employee && mode === 'edit' && prevModeRef.current !== 'edit') {
+    if (employee && mode === 'edit' && (prevModeRef.current !== 'edit' || prevEmployeeRef.current !== employee.id)) {
       form.reset({
         id: employee.id,
         full_name: employee.full_name,
@@ -333,8 +334,9 @@ export function EmployeeDetailsModal({
       });
     }
     
-    // Update the previous mode reference
+    // Update the previous references
     prevModeRef.current = mode;
+    prevEmployeeRef.current = employee?.id;
   }, [employee, mode, form]);
 
 
@@ -574,6 +576,8 @@ export function EmployeeDetailsModal({
 
   const handleClose = () => {
     setActiveTab('basic');
+    // Reset form to clear any previous employee data
+    form.reset();
     onClose();
   };
 
@@ -937,6 +941,7 @@ function EditMode({
                 roleOptions={roleOptions}
                 userOptions={userOptions}
                 employee={employee}
+                permissions={permissions}
               />
             </TabsContent>
 
@@ -1953,7 +1958,21 @@ function PersonalInfoEdit({ form }: any) {
   );
 }
 
-function WorkInfoEdit({ form, departmentOptions, roleOptions, userOptions, employee }: any) {
+function WorkInfoEdit({ form, departmentOptions, roleOptions, userOptions, employee, permissions }: any) {
+  // Filter out admin role for non-admin users
+  const filteredRoleOptions = roleOptions?.filter((role: any) => {
+    // If user can't manage roles (i.e., not admin), hide admin role
+    if (!permissions.canManageRoles && role.name === 'admin') {
+      return false;
+    }
+    return true;
+  });
+
+  // Check if the employee being edited is an admin
+  const isEmployeeAdmin = employee?.role?.name === 'admin';
+  
+  // HR users cannot change admin roles at all
+  const isRoleDisabled = !permissions.canManageRoles && isEmployeeAdmin;
   return (
     <div className="space-y-4 pb-4">
       <div className="grid grid-cols-2 gap-4">
@@ -1991,15 +2010,26 @@ function WorkInfoEdit({ form, departmentOptions, roleOptions, userOptions, emplo
           name="role_id"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-sm font-medium text-gray-700">Role</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <FormLabel className="text-sm font-medium text-gray-700">
+                Role
+                {isRoleDisabled && (
+                  <span className="text-xs text-muted-foreground ml-2">
+                    (Admin role cannot be changed by HR)
+                  </span>
+                )}
+              </FormLabel>
+              <Select 
+                onValueChange={field.onChange} 
+                defaultValue={field.value}
+                disabled={isRoleDisabled}
+              >
                 <FormControl>
                   <SelectTrigger className="mt-1">
                     <SelectValue placeholder="Select role" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {roleOptions?.map((role: any) => (
+                  {filteredRoleOptions?.map((role: any) => (
                     <SelectItem key={role.id} value={role.id}>
                       {getRoleDisplayName(role.name)}
                     </SelectItem>
