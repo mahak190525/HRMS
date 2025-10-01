@@ -336,10 +336,8 @@ export function EmployeeManagement() {
                             <Eye className="h-4 w-4" />
                           </Button>
                           
-                          {/* Edit button - permissions check */}
-                          {(permissions.canEditAllEmployees || 
-                            (permissions.canEditTeamEmployees && employee.manager_id === user?.id) ||
-                            (permissions.canEditOwnProfile && employee.id === user?.id)) && (
+                          {/* Edit button - only HR and Admin can edit */}
+                          {permissions.canEditAllEmployees && (
                             <Button 
                               size="sm" 
                               variant="outline"

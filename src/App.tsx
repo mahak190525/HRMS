@@ -17,6 +17,7 @@ const Complaints = lazy(() => import('@/pages/dashboard/Complaints').then(m => (
 const Performance = lazy(() => import('@/pages/dashboard/Performance').then(m => ({ default: m.Performance })));
 const HRMSFeedback = lazy(() => import('@/pages/dashboard/HRMSFeedback').then(m => ({ default: m.HRMSFeedback })));
 const KRA = lazy(() => import('@/pages/performance/KRA').then(m => ({ default: m.KRA })));
+const PerformanceOverview = lazy(() => import('@/pages/performance/PerformanceOverview').then(m => ({ default: m.PerformanceOverview })));
 const ReferSomeone = lazy(() => import('@/pages/dashboard/ReferSomeone').then(m => ({ default: m.ReferSomeone })));
 const Settings = lazy(() => import('@/pages/dashboard/Settings').then(m => ({ default: m.Settings })));
 const EmployeeManagement = lazy(() => import('@/pages/employees/EmployeeManagement').then(m => ({ default: m.EmployeeManagement })));
@@ -133,6 +134,11 @@ function AppRoutes() {
         <Route path="dashboard/feedback" element={
           <GuardedRoute>
             <HRMSFeedback />
+          </GuardedRoute>
+        } />
+        <Route path="performance" element={
+          <GuardedRoute>
+            <PerformanceOverview />
           </GuardedRoute>
         } />
         <Route path="performance/kra" element={
