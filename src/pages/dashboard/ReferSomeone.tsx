@@ -20,7 +20,8 @@ import {
   XCircle,
   DollarSign,
   Users,
-  TrendingUp
+  TrendingUp,
+  IndianRupee
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -211,12 +212,12 @@ export function ReferSomeone() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <DollarSign className="h-4 w-4" />
+              <IndianRupee className="h-4 w-4" />
               Bonus Earned
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalBonusEarned.toLocaleString()}</div>
+            <div className="text-2xl font-bold">₹{totalBonusEarned.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">Total paid out</p>
           </CardContent>
         </Card>
@@ -229,7 +230,7 @@ export function ReferSomeone() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${pendingBonus.toLocaleString()}</div>
+            <div className="text-2xl font-bold">₹{pendingBonus.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">To be processed</p>
           </CardContent>
         </Card>
@@ -289,7 +290,7 @@ export function ReferSomeone() {
                           id="candidatePhone"
                           value={candidatePhone}
                           onChange={(e) => setCandidatePhone(e.target.value)}
-                          placeholder="+1 (555) 123-4567"
+                          placeholder="+91 1234567890"
                           className="mt-1"
                         />
                       </div>
@@ -539,7 +540,7 @@ export function ReferSomeone() {
                     <Alert>
                       <Gift className="h-4 w-4" />
                       <AlertDescription>
-                        <strong>Referral Bonus:</strong> Earn $3,000-$5,000 for successful hires based on position level. 
+                        <strong>Referral Bonus:</strong> Earn ₹5,000 - ₹25,000 for successful hires based on position level. 
                         Bonus is paid after the candidate completes 90 days of employment.
                       </AlertDescription>
                     </Alert>
@@ -568,16 +569,20 @@ export function ReferSomeone() {
                     <h4 className="font-medium mb-2">Bonus Structure:</h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
+                        <span>Strategic/Hard to Fill Roles</span>
+                        <span className="font-medium">₹25,000</span>
+                      </div>
+                      <div className="flex justify-between">
                         <span>Senior Roles</span>
-                        <span className="font-medium">$5,000</span>
+                        <span className="font-medium">₹15,000</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Mid-level Roles</span>
-                        <span className="font-medium">$4,000</span>
+                        <span className="font-medium">₹10,000</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Junior Roles</span>
-                        <span className="font-medium">$3,000</span>
+                        <span>Entry Level Roles</span>
+                        <span className="font-medium">₹5,000</span>
                       </div>
                     </div>
                   </div>
