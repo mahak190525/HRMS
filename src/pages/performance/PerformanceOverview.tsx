@@ -14,7 +14,8 @@ import {
   CartesianGrid, 
   Tooltip, 
   Legend, 
-  ResponsiveContainer
+  ResponsiveContainer,
+  Cell
 } from 'recharts';
 import { 
   BarChart3, 
@@ -195,32 +196,53 @@ export function PerformanceOverview() {
   }, [assignments, filters]);
 
   // Helper function to recalculate KRA percentage using correct logic
-  const recalculateKRAPercentage = (assignment: any): number => {
-    // Temporarily disabled - will re-enable after migration is applied
-    return assignment.overall_percentage || 0;
+  // Currently disabled - will re-enable after migration is applied
+  // const recalculateKRAPercentage = (assignment: any): number => {
+  //   return assignment.overall_percentage || 0;
+  // };
+
+  // Create a map to store unique strategic goal titles and their assigned colors
+  const goalColorMap = useMemo(() => {
+    const colors = [
+      '#dc2626', // red-600
+      '#2563eb', // blue-600
+      '#16a34a', // green-600
+      '#ca8a04', // yellow-600
+      '#9333ea', // purple-600
+      '#ea580c', // orange-600
+      '#0891b2', // cyan-600
+      '#be185d', // pink-600
+      '#059669', // emerald-600
+      '#7c3aed', // violet-600
+      '#0d9488', // teal-600
+      '#f59e0b', // amber-500
+    ];
+
+    const uniqueGoalTitles = new Set<string>();
     
-    /* TODO: Re-enable after migration
-    if (!assignment.evaluations || assignment.evaluations.length === 0) {
-      return assignment.overall_percentage || 0;
-    }
+    // Collect all unique strategic goal titles from assignments
+    filteredAssignments.forEach(assignment => {
+      if (assignment.evaluations) {
+        assignment.evaluations.forEach((evaluation: any) => {
+          if (evaluation.goal?.strategic_goal_title) {
+            uniqueGoalTitles.add(evaluation.goal.strategic_goal_title);
+          }
+        });
+      }
+    });
 
-    try {
-      const evaluationData = assignment.evaluations.map((evaluation: any) => ({
-        goal: {
-          goal_id: evaluation.goal?.goal_id || '',
-          weight: evaluation.goal?.weight || 0,
-          level_5_points: evaluation.goal?.max_score || evaluation.goal?.level_5_points || 100
-        },
-        awarded_points: evaluation.awarded_points || 0
-      }));
+    // Create a map with sequential color assignment
+    const colorMap = new Map<string, string>();
+    Array.from(uniqueGoalTitles).sort().forEach((title, index) => {
+      colorMap.set(title, colors[index % colors.length]);
+    });
 
-      const calculatedPercentage = calculateKRAPercentage(evaluationData);
-      return calculatedPercentage;
-    } catch (error) {
-      console.warn('Error recalculating KRA percentage:', error);
-      return assignment.overall_percentage || 0;
-    }
-    */
+    return colorMap;
+  }, [filteredAssignments]);
+
+  // Helper function to get color for a strategic goal title
+  const getGoalColor = (strategicGoalTitle: string): string => {
+    return goalColorMap.get(strategicGoalTitle) || '#6b7280'; // fallback to gray
   };
 
   // Process data for KRA percentage overview chart
@@ -271,7 +293,7 @@ export function PerformanceOverview() {
       const kraPeriod = assignment.template?.template_name || 'Unknown';
       const employeeName = assignment.employee?.full_name || 'Unknown';
       
-      assignment.evaluations.forEach((evaluation: any) => {
+        assignment.evaluations.forEach((evaluation: any) => {
         
         if (!evaluation.goal) return;
 
@@ -298,7 +320,8 @@ export function PerformanceOverview() {
           percentage: percentage,
           weight: evaluation.goal.weight || 0,
           assignmentId: assignment.id,
-          evaluationId: evaluation.id
+          evaluationId: evaluation.id,
+          color: getGoalColor(goalTitle) // Add color based on strategic goal title
         });
       });
     });
@@ -314,28 +337,7 @@ export function PerformanceOverview() {
         return a.kraPeriod.localeCompare(b.kraPeriod);
       })
       .slice(0, 25); // Show more data points to see progression
-  }, [filteredAssignments]);
-
-  // Helper function to assign colors to goals
-  const getGoalColor = (goalId: string) => {
-    const colors = [
-      '#f97316', // orange-500
-      '#fb923c', // orange-400
-      '#f59e0b', // amber-500
-      '#fbbf24', // amber-400
-      '#ea580c', // orange-600
-      '#d97706', // amber-600
-      '#fb7185', // rose-400
-      '#f472b6', // pink-400
-    ];
-    
-    // Simple hash function to assign consistent colors
-    let hash = 0;
-    for (let i = 0; i < goalId.length; i++) {
-      hash = goalId.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return colors[Math.abs(hash) % colors.length];
-  };
+  }, [filteredAssignments, getGoalColor]);
 
   // Process progression over time data - showing how each goal performs across different KRA periods
   const progressionData = useMemo(() => {
@@ -414,7 +416,7 @@ export function PerformanceOverview() {
       return {
         goalId,
         goalTitle: firstEntry.goalTitle,
-        color: getGoalColor(goalId)
+        color: getGoalColor(firstEntry.goalTitle) // Use strategic goal title for color
       };
     });
     
@@ -643,7 +645,7 @@ export function PerformanceOverview() {
                       <stop offset="100%" stopColor="#f59e0b" stopOpacity={0.7} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#fed7aa" opacity={0.3} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
                   <XAxis 
                     dataKey="kraSheet" 
                     angle={-45}
@@ -651,24 +653,24 @@ export function PerformanceOverview() {
                     height={80}
                     fontSize={11}
                     interval={0}
-                    stroke="#ea580c"
-                    tick={{ fill: '#ea580c' }}
+                    stroke="#000000"
+                    tick={{ fill: '#000000' }}
                   />
                   <YAxis 
                     domain={[0, 100]} 
-                    label={{ value: 'Performance %', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: '#ea580c' } }}
-                    stroke="#ea580c"
-                    tick={{ fill: '#ea580c' }}
+                    label={{ value: 'Performance %', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: '#000000' } }}
+                    stroke="#000000"
+                    tick={{ fill: '#000000' }}
                   />
                   <Tooltip 
                     formatter={(value: number) => [`${value.toFixed(1)}%`, 'Performance']}
                     labelFormatter={(label) => `KRA Sheet: ${label}`}
                     contentStyle={{
                       backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                      border: '1px solid #fed7aa',
+                      border: '1px solid #e5e7eb',
                       borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(251, 146, 60, 0.1)',
-                      color: '#ea580c'
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                      color: '#000000'
                     }}
                   />
                   <Legend />
@@ -711,13 +713,7 @@ export function PerformanceOverview() {
                   data={goalComparisonData} 
                   margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
                 >
-                  <defs>
-                    <linearGradient id="colorGradientSecondary" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#fb923c" stopOpacity={0.9} />
-                      <stop offset="100%" stopColor="#fbbf24" stopOpacity={0.7} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#fed7aa" opacity={0.3} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
                   <XAxis 
                     dataKey="displayName" 
                     angle={-45}
@@ -725,28 +721,43 @@ export function PerformanceOverview() {
                     height={80}
                     fontSize={9}
                     interval={0}
-                    stroke="#ea580c"
-                    tick={{ fill: '#ea580c' }}
+                    stroke="#000000"
+                    tick={{ fill: '#000000' }}
                   />
                   <YAxis 
-                    label={{ value: 'Points', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: '#ea580c' } }}
-                    stroke="#ea580c"
-                    tick={{ fill: '#ea580c' }}
+                    label={{ value: 'Points', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: '#000000' } }}
+                    stroke="#000000"
+                    tick={{ fill: '#000000' }}
                   />
                   <Tooltip 
-                    content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
+                    cursor={{ fill: 'rgba(0, 0, 0, 0.1)' }}
+                    allowEscapeViewBox={{ x: false, y: true }}
+                    content={({ active, payload, coordinate }) => {
+                      if (active && payload && payload.length && coordinate) {
                         const data = payload[0].payload;
+                        
+                        // Position tooltip above chart area if mouse is in lower half, below if in upper half
+                        const isLowerHalf = coordinate.y > 200; // Approximate middle of chart
+                        
                         return (
-                          <div className="bg-white/95 p-3 border border-orange-200 rounded-lg shadow-lg shadow-orange-100/50 max-w-sm">
-                            <p className="font-medium text-orange-800 mb-1">{`Goal ${data.goalId}`}</p>
-                            <p className="text-sm text-orange-900 mb-2">{data.goalTitle}</p>
-                            <div className="border-t border-orange-200 pt-2 space-y-1">
-                              <p className="text-sm text-orange-600">{`KRA Period: ${data.kraPeriod}`}</p>
-                              <p className="text-sm text-orange-500">{`Employee: ${data.employeeName}`}</p>
-                              <p className="text-sm font-medium text-orange-700">{`Points: ${data.points}/${data.maxPoints}`}</p>
-                              <p className="text-sm text-orange-700">{`Percentage: ${data.percentage.toFixed(1)}%`}</p>
-                              <p className="text-xs text-orange-600">{`Weight: ${data.weight}%`}</p>
+                          <div 
+                            className="bg-white/95 p-3 border border-gray-200 rounded-lg shadow-lg max-w-sm fixed z-50"
+                            style={{
+                              left: `${coordinate.x - 150}px`, // Center horizontally around cursor
+                              top: isLowerHalf ? '20px' : 'auto', // Top area if cursor in lower half
+                              bottom: isLowerHalf ? 'auto' : '20px', // Bottom area if cursor in upper half
+                              transform: 'translateX(0)', // Remove any default transforms
+                              pointerEvents: 'none' // Prevent tooltip from interfering with mouse events
+                            }}
+                          >
+                            <p className="font-medium text-gray-800 mb-1">{`Goal ${data.goalId}`}</p>
+                            <p className="text-sm text-gray-900 mb-2">{data.goalTitle}</p>
+                            <div className="border-t border-gray-200 pt-2 space-y-1">
+                              <p className="text-sm text-gray-600">{`KRA Period: ${data.kraPeriod}`}</p>
+                              <p className="text-sm text-gray-500">{`Employee: ${data.employeeName}`}</p>
+                              <p className="text-sm font-medium text-gray-700">{`Points: ${data.points}/${data.maxPoints}`}</p>
+                              <p className="text-sm text-gray-700">{`Percentage: ${data.percentage.toFixed(1)}%`}</p>
+                              <p className="text-xs text-gray-600">{`Weight: ${data.weight}%`}</p>
                             </div>
                           </div>
                         );
@@ -757,10 +768,13 @@ export function PerformanceOverview() {
                   <Legend />
                   <Bar 
                     dataKey="points" 
-                    fill="url(#colorGradientSecondary)" 
                     name="Points Awarded"
                     radius={[2, 2, 0, 0]}
-                  />
+                  >
+                    {goalComparisonData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color || '#6b7280'} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -795,36 +809,28 @@ export function PerformanceOverview() {
                   data={progressionData.chartData} 
                   margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
                 >
-                  <defs>
-                    {progressionData.goalsList.map(goal => (
-                      <linearGradient key={`gradient-${goal.goalId}`} id={`lineGradient-${goal.goalId}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={goal.color} stopOpacity={0.8} />
-                        <stop offset="100%" stopColor={goal.color} stopOpacity={0.3} />
-                      </linearGradient>
-                    ))}
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#fed7aa" opacity={0.3} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
                   <XAxis 
                     dataKey="kraSheet" 
                     angle={-45}
                     textAnchor="end"
                     height={60}
                     fontSize={11}
-                    stroke="#ea580c"
-                    tick={{ fill: '#ea580c' }}
+                    stroke="#000000"
+                    tick={{ fill: '#000000' }}
                   />
                   <YAxis 
                     domain={[0, 100]}
-                    label={{ value: 'Performance %', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: '#ea580c' } }}
-                    stroke="#ea580c"
-                    tick={{ fill: '#ea580c' }}
+                    label={{ value: 'Performance %', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: '#000000' } }}
+                    stroke="#000000"
+                    tick={{ fill: '#000000' }}
                   />
                   <Tooltip 
                     content={({ active, payload, label }) => {
                       if (active && payload && payload.length) {
                         return (
-                          <div className="bg-white/95 p-3 border border-orange-200 rounded-lg shadow-lg shadow-orange-100/50 max-w-xs">
-                            <p className="font-medium text-orange-800 mb-2">{`KRA Period: ${label}`}</p>
+                          <div className="bg-white/95 p-3 border border-gray-200 rounded-lg shadow-lg max-w-xs">
+                            <p className="font-medium text-gray-800 mb-2">{`KRA Period: ${label}`}</p>
                             {payload.map((entry: any, index: number) => {
                               const goalId = entry.dataKey;
                               const goalTitle = entry.payload[`${goalId}_goalTitle`] || goalId;
@@ -836,7 +842,7 @@ export function PerformanceOverview() {
                                   <p className="text-sm font-medium" style={{ color: entry.color }}>
                                     {goalTitle}
                                   </p>
-                                  <p className="text-xs text-orange-700">
+                                  <p className="text-xs text-gray-700">
                                     {`${entry.value?.toFixed(1)}% (${points}/${maxPoints} points)`}
                                   </p>
                                 </div>
@@ -849,7 +855,7 @@ export function PerformanceOverview() {
                     }}
                   />
                   <Legend 
-                    wrapperStyle={{ paddingTop: '20px' }}
+                    wrapperStyle={{ paddingTop: '20px', color: '#000000' }}
                     formatter={(value) => {
                       const goal = progressionData.goalsList.find(g => g.goalId === value);
                       return goal ? goal.goalTitle : value;
@@ -861,9 +867,9 @@ export function PerformanceOverview() {
                       type="monotone"
                       dataKey={goal.goalId}
                       stroke={goal.color}
-                      strokeWidth={2}
-                      dot={{ fill: goal.color, r: 4 }}
-                      activeDot={{ r: 6 }}
+                      strokeWidth={3}
+                      dot={{ fill: goal.color, r: 5, stroke: goal.color, strokeWidth: 2 }}
+                      activeDot={{ r: 7, stroke: goal.color, strokeWidth: 2 }}
                       connectNulls={false}
                       name={goal.goalId}
                     />
