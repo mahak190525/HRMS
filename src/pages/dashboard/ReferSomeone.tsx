@@ -314,10 +314,10 @@ export function ReferSomeone() {
                         type="file"
                         onChange={(e) => setResumeFile(e.target.files?.[0] || null)}
                         className="mt-1"
-                        accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png"
+                        accept=".pdf,.doc,.docx"
                       />
                       <p className="text-xs text-muted-foreground mt-1">
-                        Supported formats: PDF, DOC, DOCX, TXT, JPEG, PNG (Max 10MB)
+                        Supported formats: PDF, DOC, DOCX
                       </p>
                       {resumeFile && (
                         <p className="text-xs text-green-600 mt-1">
@@ -724,7 +724,7 @@ export function ReferSomeone() {
                         <TableCell>
                           <div className="text-sm">
                             <div className="font-medium">
-                              ${(referral.bonus_amount || 0).toLocaleString()}
+                              ₹{(referral.bonus_amount || 0).toLocaleString()}
                             </div>
                             {referral.bonus_amount > 0 && (
                               <div className={`text-xs ${referral.bonus_paid ? 'text-green-600' : 'text-yellow-600'}`}>

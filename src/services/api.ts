@@ -625,6 +625,58 @@ export const performanceApi = {
   }
 };
 
+// Helper function to get HR and Admin users for notifications
+async function getHRAndAdminUsers(): Promise<{ id: string; full_name: string }[]> {
+  try {
+    console.log('Fetching HR and Admin users for referral notifications...');
+    
+    // Get all active users with their role and department info
+    const { data: allUsers, error } = await supabase
+      .from('users')
+      .select(`
+        id, 
+        full_name,
+        role:roles(name),
+        department:departments!users_department_id_fkey(name),
+        "isSA"
+      `)
+      .eq('status', 'active');
+
+    if (error) {
+      console.error('Error fetching users:', error);
+      return [];
+    }
+
+    console.log(`Found ${allUsers?.length || 0} active users`);
+
+    // Filter to find HR and Admin users
+    const hrAdminUsers = allUsers?.filter(user => {
+      const isHRRole = user.role?.name && ['hr', 'hrm', 'admin', 'super_admin'].includes(user.role.name);
+      const isSuperAdmin = user.isSA === true;
+      const isHRDepartment = user.department?.name && 
+        user.department.name.toLowerCase().includes('hr');
+      
+      const isHRAdminUser = isHRRole || isSuperAdmin || isHRDepartment;
+      
+      if (isHRAdminUser) {
+        console.log(`HR/Admin User found: ${user.full_name} - Role: ${user.role?.name}, Super Admin: ${user.isSA}, Department: ${user.department?.name}`);
+      }
+      
+      return isHRAdminUser;
+    }) || [];
+
+    console.log(`Filtered to ${hrAdminUsers.length} HR/Admin users:`, hrAdminUsers.map(u => u.full_name));
+
+    return hrAdminUsers.map(user => ({
+      id: user.id,
+      full_name: user.full_name
+    }));
+  } catch (error) {
+    console.error('Failed to get HR and Admin users:', error);
+    return [];
+  }
+}
+
 // Referrals API
 export const referralsApi = {
   async getJobPositions() {
@@ -635,6 +687,7 @@ export const referralsApi = {
         department:departments(name)
       `)
       .eq('status', 'open')
+      .eq('referral_encouraged', true)
       .order('job_title');
     
     if (error) throw error;
@@ -656,10 +709,58 @@ export const referralsApi = {
     const { data, error } = await supabase
       .from('referrals')
       .insert(referralData)
-      .select()
+      .select(`
+        *,
+        referred_by_user:users!referred_by(full_name, employee_id, email)
+      `)
       .single();
     
     if (error) throw error;
+    
+    // Send notifications to HR and Admin users
+    try {
+      const hrAdminUsers = await getHRAndAdminUsers();
+      
+      if (hrAdminUsers.length === 0) {
+        console.warn('No HR/Admin users found to notify about referral submission');
+      } else {
+        console.log(`Sending referral notifications to ${hrAdminUsers.length} HR/Admin users`);
+        
+        const notificationPromises = hrAdminUsers.map(async (hrUser) => {
+          try {
+            const result = await notificationApi.createNotification({
+              user_id: hrUser.id,
+              title: 'New Employee Referral Submitted',
+              message: `${data.referred_by_user?.full_name || 'An employee'} has referred ${data.candidate_name} for the position "${data.position}".`,
+              type: 'referral_submitted',
+              data: {
+                referral_id: data.id,
+                candidate_name: data.candidate_name,
+                candidate_email: data.candidate_email,
+                position: data.position,
+                referred_by: data.referred_by_user?.full_name,
+                referred_by_employee_id: data.referred_by_user?.employee_id,
+                action: 'review_referral',
+                target: 'employees/referrals'
+              }
+            });
+            console.log(`Referral notification sent to HR/Admin user ${hrUser.full_name}:`, result);
+            return result;
+          } catch (error) {
+            console.error(`Failed to send referral notification to HR/Admin user ${hrUser.full_name}:`, error);
+            return null;
+          }
+        });
+
+        const results = await Promise.allSettled(notificationPromises);
+        const successful = results.filter(r => r.status === 'fulfilled' && r.value !== null).length;
+        console.log(`Referral notifications: ${successful}/${hrAdminUsers.length} sent successfully`);
+      }
+    } catch (notificationError) {
+      console.error('Failed to send referral notifications:', notificationError);
+      // Don't throw error here - referral was created successfully, notification failure shouldn't break the flow
+    }
+    
     return data;
   },
 
@@ -683,7 +784,10 @@ export const referralsApi = {
     const { data, error } = await supabase
       .from('referrals')
       .insert(finalReferralData)
-      .select()
+      .select(`
+        *,
+        referred_by_user:users!referred_by(full_name, employee_id, email)
+      `)
       .single();
     
     if (error) {
@@ -696,6 +800,52 @@ export const referralsApi = {
         }
       }
       throw error;
+    }
+    
+    // Send notifications to HR and Admin users
+    try {
+      const hrAdminUsers = await getHRAndAdminUsers();
+      
+      if (hrAdminUsers.length === 0) {
+        console.warn('No HR/Admin users found to notify about referral submission');
+      } else {
+        console.log(`Sending referral with resume notifications to ${hrAdminUsers.length} HR/Admin users`);
+        
+        const notificationPromises = hrAdminUsers.map(async (hrUser) => {
+          try {
+            const result = await notificationApi.createNotification({
+              user_id: hrUser.id,
+              title: 'New Employee Referral with Resume Submitted',
+              message: `${data.referred_by_user?.full_name || 'An employee'} has referred ${data.candidate_name} for the position "${data.position}" with resume attached.`,
+              type: 'referral_submitted',
+              data: {
+                referral_id: data.id,
+                candidate_name: data.candidate_name,
+                candidate_email: data.candidate_email,
+                position: data.position,
+                referred_by: data.referred_by_user?.full_name,
+                referred_by_employee_id: data.referred_by_user?.employee_id,
+                has_resume: !!data.resume_url,
+                resume_url: data.resume_url,
+                action: 'review_referral',
+                target: 'employees/referrals'
+              }
+            });
+            console.log(`Referral with resume notification sent to HR/Admin user ${hrUser.full_name}:`, result);
+            return result;
+          } catch (error) {
+            console.error(`Failed to send referral notification to HR/Admin user ${hrUser.full_name}:`, error);
+            return null;
+          }
+        });
+
+        const results = await Promise.allSettled(notificationPromises);
+        const successful = results.filter(r => r.status === 'fulfilled' && r.value !== null).length;
+        console.log(`Referral with resume notifications: ${successful}/${hrAdminUsers.length} sent successfully`);
+      }
+    } catch (notificationError) {
+      console.error('Failed to send referral notifications:', notificationError);
+      // Don't throw error here - referral was created successfully, notification failure shouldn't break the flow
     }
     
     return data;
@@ -2133,14 +2283,36 @@ export const hrReferralsApi = {
     return data;
   },
 
-  async updateReferralStatus(id: string, status: string, hrNotes?: string) {
+  async updateReferralStatus(
+    id: string, 
+    status: string, 
+    hrNotes?: string, 
+    bonusEligible?: boolean, 
+    bonusAmount?: number | null, 
+    bonusPaid?: boolean
+  ) {
+    const updateData: any = { 
+      status, 
+      hr_notes: hrNotes,
+      updated_at: new Date().toISOString() 
+    };
+
+    // Handle bonus fields
+    if (bonusEligible !== undefined) {
+      updateData.bonus_eligible = bonusEligible;
+    }
+    
+    if (bonusAmount !== undefined) {
+      updateData.bonus_amount = bonusAmount;
+    }
+    
+    if (bonusPaid !== undefined) {
+      updateData.bonus_paid = bonusPaid;
+    }
+
     const { data, error } = await supabase
       .from('referrals')
-      .update({ 
-        status, 
-        hr_notes: hrNotes,
-        updated_at: new Date().toISOString() 
-      })
+      .update(updateData)
       .eq('id', id)
       .select(`
         *,

@@ -47,11 +47,16 @@ export function ReferralDashboard() {
   const { data: allPositions } = useAllJobPositions();
   
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [selectedReferral, setSelectedReferral] = useState<any>(null);
   const [newStatus, setNewStatus] = useState('');
   const [hrNotes, setHrNotes] = useState('');
   const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false);
+  
+  // Bonus fields for update dialog
+  const [bonusEligible, setBonusEligible] = useState(false);
+  const [bonusAmount, setBonusAmount] = useState('');
+  const [bonusPaid, setBonusPaid] = useState(false);
 
   // Create Job Position form state
   const [isCreatePositionOpen, setIsCreatePositionOpen] = useState(false);
@@ -198,7 +203,7 @@ export function ReferralDashboard() {
     const matchesSearch = referral.candidate_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          referral.candidate_email.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          referral.referred_by_user?.full_name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = !statusFilter || referral.status === statusFilter;
+    const matchesStatus = !statusFilter || statusFilter === 'all' || referral.status === statusFilter;
     
     return matchesSearch && matchesStatus;
   });
@@ -236,12 +241,18 @@ export function ReferralDashboard() {
     updateReferralStatus.mutate({
       id: selectedReferral.id,
       status: newStatus,
-      hrNotes: hrNotes.trim() || undefined
+      hrNotes: hrNotes.trim() || undefined,
+      bonusEligible,
+      bonusAmount: bonusEligible && bonusAmount ? parseFloat(bonusAmount) : null,
+      bonusPaid: bonusEligible ? bonusPaid : false
     }, {
       onSuccess: () => {
         setIsUpdateDialogOpen(false);
         setNewStatus('');
         setHrNotes('');
+        setBonusEligible(false);
+        setBonusAmount('');
+        setBonusPaid(false);
         setSelectedReferral(null);
       }
     });
@@ -314,7 +325,7 @@ export function ReferralDashboard() {
                 <CardTitle className="text-sm font-medium">Bonus Paid</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">${totalBonusPaid.toLocaleString()}</div>
+                <div className="text-2xl font-bold">₹{totalBonusPaid.toLocaleString()}</div>
                 <p className="text-xs text-muted-foreground">Total distributed</p>
               </CardContent>
             </Card>
@@ -357,7 +368,7 @@ export function ReferralDashboard() {
                     variant="outline" 
                     onClick={() => {
                       setSearchTerm('');
-                      setStatusFilter('');
+                      setStatusFilter('all');
                     }}
                   >
                     Clear Filters
@@ -448,7 +459,7 @@ export function ReferralDashboard() {
                       <TableCell>
                         <div className="text-sm">
                           <div className="font-medium">
-                            ${(referral.bonus_amount || 0).toLocaleString()}
+                            ₹{(referral.bonus_amount || 0).toLocaleString()}
                           </div>
                           {referral.bonus_amount > 0 && (
                             <div className={`text-xs ${referral.bonus_paid ? 'text-green-600' : 'text-yellow-600'}`}>
@@ -502,9 +513,9 @@ export function ReferralDashboard() {
                                       <div>
                                         <p className="font-medium">LinkedIn Profile:</p>
                                         {selectedReferral.linkedin_profile ? (
-                                          <a href={selectedReferral.linkedin_profile} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm break-all">
-                                            View Profile
-                                          </a>
+                                          <p className="text-muted-foreground">
+                                            {selectedReferral.linkedin_profile}
+                                          </p>
                                         ) : (
                                           <p className="text-muted-foreground">Not provided</p>
                                         )}
@@ -681,7 +692,7 @@ export function ReferralDashboard() {
                                       <div>
                                         <p className="font-medium">Bonus Amount:</p>
                                         <p className="text-muted-foreground font-semibold">
-                                          ${(selectedReferral.bonus_amount || 0).toLocaleString()}
+                                          ₹{(selectedReferral.bonus_amount || 0).toLocaleString()}
                                         </p>
                                       </div>
                                       <div>
@@ -776,6 +787,9 @@ export function ReferralDashboard() {
                                   setSelectedReferral(referral);
                                   setNewStatus(referral.status);
                                   setHrNotes(referral.hr_notes || '');
+                                  setBonusEligible(referral.bonus_eligible || false);
+                                  setBonusAmount(referral.bonus_amount ? String(referral.bonus_amount) : '');
+                                  setBonusPaid(referral.bonus_paid || false);
                                 }}
                               >
                                 Update
@@ -815,6 +829,47 @@ export function ReferralDashboard() {
                                     className="mt-1"
                                     rows={3}
                                   />
+                                </div>
+
+                                {/* Bonus Management Section */}
+                                <div className="space-y-4 border-t pt-4">
+                                  <h4 className="font-medium text-sm">Bonus Management</h4>
+                                  
+                                  <div className="flex items-center space-x-2">
+                                    <Switch 
+                                      checked={bonusEligible} 
+                                      onCheckedChange={setBonusEligible}
+                                      className="data-[state=unchecked]:bg-gray-300"
+                                    />
+                                    <Label className="text-sm">Bonus Eligible</Label>
+                                  </div>
+
+                                  {bonusEligible && (
+                                    <div className="space-y-3">
+                                      <div>
+                                        <Label htmlFor="bonusAmount" className="text-sm">Bonus Amount (₹)</Label>
+                                        <Input
+                                          id="bonusAmount"
+                                          type="number"
+                                          value={bonusAmount}
+                                          onChange={(e) => setBonusAmount(e.target.value)}
+                                          placeholder="Enter bonus amount"
+                                          className="mt-1"
+                                          min="0"
+                                          step="100"
+                                        />
+                                      </div>
+
+                                      <div className="flex items-center space-x-2">
+                                        <Switch 
+                                          checked={bonusPaid} 
+                                          onCheckedChange={setBonusPaid} 
+                                          className="data-[state=unchecked]:bg-gray-300"
+                                        />
+                                        <Label className="text-sm">Bonus Paid</Label>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div className="flex justify-end gap-2">
@@ -1088,6 +1143,7 @@ export function ReferralDashboard() {
                     <TableHead>Type</TableHead>
                     <TableHead>Location</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Referrals</TableHead>
                     <TableHead>Posted</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -1110,6 +1166,11 @@ export function ReferralDashboard() {
                       <TableCell>
                         <Badge className={pos.status === 'open' ? 'bg-green-100 text-green-800' : pos.status === 'on_hold' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800'}>
                           {pos.status.replace('_', ' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={pos.referral_encouraged ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'}>
+                          {pos.referral_encouraged ? 'Encouraged' : 'Not Encouraged'}
                         </Badge>
                       </TableCell>
                       <TableCell>{format(new Date(pos.created_at), 'MMM dd, yyyy')}</TableCell>
