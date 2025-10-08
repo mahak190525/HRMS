@@ -580,8 +580,15 @@ export function useUpdateReferralStatus() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ id, status, hrNotes }: { id: string; status: string; hrNotes?: string }) =>
-      hrReferralsApi.updateReferralStatus(id, status, hrNotes),
+    mutationFn: (params: { 
+      id: string; 
+      status: string; 
+      hrNotes?: string;
+      bonusEligible?: boolean;
+      bonusAmount?: number | null;
+      bonusPaid?: boolean;
+    }) =>
+      hrReferralsApi.updateReferralStatus(params.id, params.status, params.hrNotes, params.bonusEligible, params.bonusAmount, params.bonusPaid),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['all-referrals'] });
       toast.success('Referral status updated!');

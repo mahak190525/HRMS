@@ -409,22 +409,26 @@ export const atsApi = {
       .single();
     
     if (error) throw error;
-    try {
-      const { data: allUsers } = await supabase
-        .from('users')
-        .select('id')
-        .eq('status', 'active');
-      const notifyTitle = 'New Job Position Posted';
-      const notifyMessage = `${data.job_title} in ${data.department?.name || 'Company'}${data.location ? ' - ' + data.location : ''}`;
-      await Promise.all((allUsers || []).map((u: any) => notificationApi.createNotification({
-        user_id: u.id,
-        title: notifyTitle,
-        message: notifyMessage,
-        type: 'general',
-        data: { position_id: data.id, status: data.status || 'open' }
-      })));
-    } catch (e) {
-      console.error('Failed to broadcast new job position notification:', e);
+    
+    // Only send notifications if referrals are encouraged for this position
+    if (data.referral_encouraged) {
+      try {
+        const { data: allUsers } = await supabase
+          .from('users')
+          .select('id')
+          .eq('status', 'active');
+        const notifyTitle = 'New Job Position Posted';
+        const notifyMessage = `${data.job_title} in ${data.department?.name || 'Company'}${data.location ? ' - ' + data.location : ''} - Referrals encouraged!`;
+        await Promise.all((allUsers || []).map((u: any) => notificationApi.createNotification({
+          user_id: u.id,
+          title: notifyTitle,
+          message: notifyMessage,
+          type: 'general',
+          data: { position_id: data.id, status: data.status || 'open', referral_encouraged: true }
+        })));
+      } catch (e) {
+        console.error('Failed to broadcast new job position notification:', e);
+      }
     }
     return data;
   },
@@ -478,21 +482,40 @@ export const atsApi = {
     if (error) throw error;
     try {
       const statusChanged = updates?.status && existing?.status !== updates.status;
-      if (statusChanged) {
+      const referralToggled = updates?.referral_encouraged !== undefined && 
+                             existing?.referral_encouraged === false && 
+                             updates.referral_encouraged === true;
+      
+      if (statusChanged || referralToggled) {
         const { data: allUsers } = await supabase
           .from('users')
           .select('id')
           .eq('status', 'active');
-        const isClosed = updates.status === 'closed';
-        const notifyTitle = isClosed ? 'Job Position Closed' : 'Job Position Updated';
-        const notifyMessage = `${data.job_title} is now ${updates.status.replace('_',' ')}${data.location ? ' - ' + data.location : ''}`;
-        await Promise.all((allUsers || []).map((u: any) => notificationApi.createNotification({
-          user_id: u.id,
-          title: notifyTitle,
-          message: notifyMessage,
-          type: 'general',
-          data: { position_id: data.id, status: data.status }
-        })));
+        
+        if (statusChanged) {
+          const isClosed = updates.status === 'closed';
+          const notifyTitle = isClosed ? 'Job Position Closed' : 'Job Position Updated';
+          const notifyMessage = `${data.job_title} is now ${updates.status.replace('_',' ')}${data.location ? ' - ' + data.location : ''}`;
+          await Promise.all((allUsers || []).map((u: any) => notificationApi.createNotification({
+            user_id: u.id,
+            title: notifyTitle,
+            message: notifyMessage,
+            type: 'general',
+            data: { position_id: data.id, status: data.status }
+          })));
+        }
+        
+        if (referralToggled) {
+          const notifyTitle = 'New Job Position Available for Referrals';
+          const notifyMessage = `${data.job_title} in ${data.department?.name || 'Company'}${data.location ? ' - ' + data.location : ''} - Referrals now encouraged!`;
+          await Promise.all((allUsers || []).map((u: any) => notificationApi.createNotification({
+            user_id: u.id,
+            title: notifyTitle,
+            message: notifyMessage,
+            type: 'general',
+            data: { position_id: data.id, status: data.status || 'open', referral_encouraged: true, action: 'referral_enabled' }
+          })));
+        }
       }
     } catch (e) {
       console.error('Failed to broadcast job position update notification:', e);
