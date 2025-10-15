@@ -1,4 +1,5 @@
-import { addDays, format, isWeekend, parseISO, isAfter, isEqual } from 'date-fns';
+import { addDays, isWeekend, isAfter, isEqual } from 'date-fns';
+import { parseToISTDate, formatDateForDisplay } from './dateUtils';
 
 // Types for the calculation
 export interface LeaveApplication {
@@ -48,7 +49,7 @@ function isMonday(date: Date): boolean {
  * Checks if a date is a national holiday
  */
 function isHoliday(date: Date, holidays: Holiday[]): boolean {
-  const dateStr = format(date, 'yyyy-MM-dd');
+  const dateStr = formatDateForDisplay(date, 'yyyy-MM-dd');
   return holidays.some(holiday => holiday.date === dateStr && !holiday.is_optional);
 }
 
@@ -94,25 +95,25 @@ function countHolidays(dates: Date[], holidays: Holiday[]): number {
  */
 function hasIndividualFridayMondayLeaves(applications: LeaveApplication[]): boolean {
   const fridayApplications = applications.filter(app => {
-    const startDate = parseISO(app.start_date);
-    const endDate = parseISO(app.end_date);
-    return isFriday(startDate) && format(startDate, 'yyyy-MM-dd') === format(endDate, 'yyyy-MM-dd');
+    const startDate = parseToISTDate(app.start_date);
+    const endDate = parseToISTDate(app.end_date);
+    return isFriday(startDate) && formatDateForDisplay(startDate, 'yyyy-MM-dd') === formatDateForDisplay(endDate, 'yyyy-MM-dd');
   });
   
   const mondayApplications = applications.filter(app => {
-    const startDate = parseISO(app.start_date);
-    const endDate = parseISO(app.end_date);
-    return isMonday(startDate) && format(startDate, 'yyyy-MM-dd') === format(endDate, 'yyyy-MM-dd');
+    const startDate = parseToISTDate(app.start_date);
+    const endDate = parseToISTDate(app.end_date);
+    return isMonday(startDate) && formatDateForDisplay(startDate, 'yyyy-MM-dd') === formatDateForDisplay(endDate, 'yyyy-MM-dd');
   });
   
   // Check if there are Friday and Monday applications that are consecutive
   for (const fridayApp of fridayApplications) {
     for (const mondayApp of mondayApplications) {
-      const fridayDate = parseISO(fridayApp.start_date);
-      const mondayDate = parseISO(mondayApp.start_date);
+      const fridayDate = parseToISTDate(fridayApp.start_date);
+      const mondayDate = parseToISTDate(mondayApp.start_date);
       const expectedMonday = addDays(fridayDate, 3); // Friday + 3 days = Monday
       
-      if (format(mondayDate, 'yyyy-MM-dd') === format(expectedMonday, 'yyyy-MM-dd')) {
+      if (formatDateForDisplay(mondayDate, 'yyyy-MM-dd') === formatDateForDisplay(expectedMonday, 'yyyy-MM-dd')) {
         return true;
       }
     }
@@ -125,8 +126,8 @@ function hasIndividualFridayMondayLeaves(applications: LeaveApplication[]): bool
  * Checks if an application was submitted without prior approval (sudden leave)
  */
 function isSuddenLeave(application: LeaveApplication): boolean {
-  const appliedDate = parseISO(application.applied_at);
-  const leaveStartDate = parseISO(application.start_date);
+  const appliedDate = parseToISTDate(application.applied_at);
+  const leaveStartDate = parseToISTDate(application.start_date);
   
   // If applied on the same day or after the leave start date, consider it sudden
   return isAfter(appliedDate, leaveStartDate) || isEqual(appliedDate, leaveStartDate);
@@ -140,8 +141,8 @@ export function calculateSandwichLeave(
   holidays: Holiday[],
   allUserApplications?: LeaveApplication[]
 ): SandwichLeaveResult {
-  const startDate = parseISO(application.start_date);
-  const endDate = parseISO(application.end_date);
+  const startDate = parseToISTDate(application.start_date);
+  const endDate = parseToISTDate(application.end_date);
   const dates = getDateRange(startDate, endDate);
   
   // Get day of week (0=Sunday, 1=Monday, ..., 5=Friday, 6=Saturday)
@@ -199,7 +200,7 @@ export function calculateSandwichLeave(
   
   // Case 4: Individual Friday and Monday leaves (non-continuous with 3-day gap)
   else if ((startDayOfWeek === 5 || startDayOfWeek === 1) && 
-           format(startDate, 'yyyy-MM-dd') === format(endDate, 'yyyy-MM-dd')) {
+           formatDateForDisplay(startDate, 'yyyy-MM-dd') === formatDateForDisplay(endDate, 'yyyy-MM-dd')) {
     
     // Check if there's a corresponding Friday/Monday application exactly 3 days apart
     const hasPairApplication = allUserApplications && hasIndividualFridayMondayLeaves([application, ...allUserApplications]);
@@ -230,7 +231,7 @@ export function calculateSandwichLeave(
   }
   
   // For other single days, use actual working days
-  else if (format(startDate, 'yyyy-MM-dd') === format(endDate, 'yyyy-MM-dd')) {
+  else if (formatDateForDisplay(startDate, 'yyyy-MM-dd') === formatDateForDisplay(endDate, 'yyyy-MM-dd')) {
     deductedDays = actualWorkingDays;
     reason = 'Single day leave (actual working days)';
   }

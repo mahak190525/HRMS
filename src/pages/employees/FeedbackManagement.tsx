@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAllFeedback, useUpdateFeedbackStatus, type EmployeeFeedback } from '@/hooks/useFeedback';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { MessageSquare, Eye, Clock, AlertCircle, CheckCircle, User, Calendar } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay } from '@/utils/dateUtils';
 
 const getStatusIcon = (status: string) => {
   switch (status) {
@@ -105,7 +105,7 @@ function FeedbackDetailModal({ feedback, onStatusUpdate, isUpdating }: FeedbackD
         <div className="flex items-center justify-between text-sm text-gray-500 pt-4 border-t">
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4" />
-            Submitted: {format(new Date(feedback.created_at), 'MMM dd yyyy, hh:mm a')}
+            Submitted: {formatDateForDisplay(feedback.created_at, 'MMM dd yyyy, hh:mm a')}
           </div>
           <div className="flex items-center gap-2">
             Current Status: 
@@ -300,7 +300,7 @@ export function FeedbackManagement() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-gray-500">
-                        {format(new Date(item.created_at), 'MMM dd, yyyy')}
+                        {formatDateForDisplay(item.created_at, 'MMM dd, yyyy')}
                       </TableCell>
                       <TableCell>
                         <Dialog>

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useAllLeaveApplications, useUpdateLeaveApplicationStatus, useLeaveApplicationPermissions } from '@/hooks/useLeaveManagement';
 import { useWithdrawLeaveApplication } from '@/hooks/useLeave';
-import { useAllEmployeesLeaveBalances, useAllEmployeesLeaveBalancesWithManager, useAdjustLeaveBalance, useLeaveBalanceAdjustments } from '@/hooks/useLeaveBalanceManagement';
+import { useAllEmployeesLeaveBalancesWithManager, useAdjustLeaveBalance, useLeaveBalanceAdjustments } from '@/hooks/useLeaveBalanceManagement';
 import { useLeaveWithdrawalLogs } from '@/hooks/useLeave';
-import { useRecalculateAllApprovedLeaveBalances } from '@/hooks/useSandwichLeave';
+// import { useRecalculateAllApprovedLeaveBalances } from '@/hooks/useSandwichLeave';
 import { useHolidays, useCreateHoliday, useDeleteHoliday } from '@/hooks/useHolidays';
 import { useEmployeePermissions } from '@/hooks/useEmployeePermissions';
 import { useQueryClient } from '@tanstack/react-query';
@@ -30,7 +30,6 @@ import {
   Clock,
   AlertTriangle,
   Download,
-  Mail,
   Plus,
   Minus,
   TrendingUp,
@@ -41,10 +40,15 @@ import {
   CalendarPlus,
   Trash2
 } from 'lucide-react';
-import { format, differenceInDays } from 'date-fns';
+import { differenceInDays } from 'date-fns';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { cn } from '@/lib/utils';
-import { isPastDate } from '@/utils/dateUtils';
+import { 
+  isPastDate, 
+  getCurrentISTDate, 
+  formatDateForDisplay,
+  parseToISTDate
+} from '@/utils/dateUtils';
 import { toast } from 'sonner';
 
 // Helper functions
@@ -126,6 +130,18 @@ function LeaveApplicationActions({ application }: { application: any }) {
     return !isPastDate(application.start_date);
   };
 
+  const handleWithdrawAttempt = () => {
+    if (!canWithdrawLeave()) {
+      if (isPastDate(application.start_date)) {
+        toast.error('Cannot withdraw past leave applications');
+      } else if (!['pending', 'approved'].includes(application.status)) {
+        toast.error('Cannot withdraw leave applications that are not pending or approved');
+      }
+      return;
+    }
+    setIsWithdrawDialogOpen(true);
+  };
+
   return (
     <div className="flex gap-2">
       {/* View button - always visible */}
@@ -174,11 +190,11 @@ function LeaveApplicationActions({ application }: { application: any }) {
               </div>
               <div>
                 <p className="font-medium">Start Date:</p>
-                <p className="text-muted-foreground">{format(new Date(application.start_date), 'MMM dd, yyyy')}</p>
+                <p className="text-muted-foreground">{formatDateForDisplay(application.start_date, 'MMM dd, yyyy')}</p>
               </div>
               <div>
                 <p className="font-medium">End Date:</p>
-                <p className="text-muted-foreground">{format(new Date(application.end_date), 'MMM dd, yyyy')}</p>
+                <p className="text-muted-foreground">{formatDateForDisplay(application.end_date, 'MMM dd, yyyy')}</p>
               </div>
               <div>
                 <p className="font-medium">Status:</p>
@@ -190,7 +206,7 @@ function LeaveApplicationActions({ application }: { application: any }) {
                 <div>
                   <p className="font-medium">Reviewed At:</p>
                   <p className="text-muted-foreground">
-                    {format(new Date(application.approved_at), 'MMM dd yyyy, HH:mm')}
+                    {formatDateForDisplay(application.approved_at, 'MMM dd yyyy, HH:mm')}
                   </p>
                 </div>
               )}
@@ -274,8 +290,8 @@ function LeaveApplicationActions({ application }: { application: any }) {
         </DialogContent>
       </Dialog>
       
-      {/* Review button - for users with edit permissions */}
-      {permissions?.canEdit && (
+      {/* Review button - for users with edit permissions, disabled if already approved/rejected */}
+      {permissions?.canEdit && !['approved', 'rejected'].includes(application.status) && (
         <Dialog open={isUpdateDialogOpen} onOpenChange={setIsUpdateDialogOpen}>
           <DialogTrigger asChild>
             <Button size="sm">
@@ -310,11 +326,11 @@ function LeaveApplicationActions({ application }: { application: any }) {
                   </div>
                   <div>
                     <span className="font-medium">Start Date:</span>
-                    <span className="ml-2">{format(new Date(application.start_date), 'MMM dd, yyyy')}</span>
+                    <span className="ml-2">{formatDateForDisplay(application.start_date, 'MMM dd, yyyy')}</span>
                   </div>
                   <div>
                     <span className="font-medium">End Date:</span>
-                    <span className="ml-2">{format(new Date(application.end_date), 'MMM dd, yyyy')}</span>
+                    <span className="ml-2">{formatDateForDisplay(application.end_date, 'MMM dd, yyyy')}</span>
                   </div>
                 </div>
                 <div className="mt-3">
@@ -366,11 +382,16 @@ function LeaveApplicationActions({ application }: { application: any }) {
         </Dialog>
       )}
       
-      {/* Withdraw button - for admin/HR or specific permissions */}
+      {/* Withdraw button - for admin/HR or specific permissions, only for future leaves */}
       {permissions?.canEdit && canWithdrawLeave() && (
         <Dialog open={isWithdrawDialogOpen} onOpenChange={setIsWithdrawDialogOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700 hover:bg-red-50">
+            <Button 
+              size="sm" 
+              variant="outline" 
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              onClick={handleWithdrawAttempt}
+            >
               <RotateCcw className="h-4 w-4 mr-1" />
               Withdraw
             </Button>
@@ -413,11 +434,11 @@ function LeaveApplicationActions({ application }: { application: any }) {
                   </div>
                   <div>
                     <span className="font-medium">Start Date:</span>
-                    <span className="ml-2">{format(new Date(application.start_date), 'MMM dd, yyyy')}</span>
+                    <span className="ml-2">{formatDateForDisplay(application.start_date, 'MMM dd, yyyy')}</span>
                   </div>
                   <div>
                     <span className="font-medium">End Date:</span>
-                    <span className="ml-2">{format(new Date(application.end_date), 'MMM dd, yyyy')}</span>
+                    <span className="ml-2">{formatDateForDisplay(application.end_date, 'MMM dd, yyyy')}</span>
                   </div>
                 </div>
                 <div className="mt-3">
@@ -473,6 +494,7 @@ function LeaveApplicationActions({ application }: { application: any }) {
           disabled 
           className="text-gray-400 cursor-not-allowed"
           title="Cannot withdraw past leave applications"
+          onClick={() => toast.error('Cannot withdraw past leave applications')}
         >
           <RotateCcw className="h-4 w-4 mr-1" />
           Past Leave
@@ -596,8 +618,8 @@ export function LeaveManagement() {
   const { data: leaveApplications, isLoading: applicationsLoading } = useAllLeaveApplications();
   
   // Leave Balances data
-  const { data: leaveBalances, isLoading: balancesLoading, refetch: refetchBalances } = useAllEmployeesLeaveBalancesWithManager();
-  const { data: adjustmentHistory, isLoading: historyLoading, refetch: refetchHistory } = useLeaveBalanceAdjustments(undefined, 100);
+  const { data: leaveBalances, isLoading: balancesLoading } = useAllEmployeesLeaveBalancesWithManager();
+  const { data: adjustmentHistory, isLoading: historyLoading } = useLeaveBalanceAdjustments(undefined, 100);
   
   // Withdrawal logs data
   const { data: withdrawalLogs, isLoading: withdrawalLogsLoading } = useLeaveWithdrawalLogs();
@@ -605,22 +627,22 @@ export function LeaveManagement() {
   // Filter data based on permissions
   const filteredLeaveBalances = permissions.canViewAllEmployees 
     ? leaveBalances 
-    : leaveBalances?.filter(balance => balance.user?.manager_id === user?.id);
+    : leaveBalances?.filter((balance: any) => balance.user?.manager_id === user?.id);
 
   const filteredAdjustmentHistory = permissions.canViewAllEmployees 
     ? adjustmentHistory 
-    : adjustmentHistory?.filter(adj => adj.user?.manager_id === user?.id);
+    : adjustmentHistory?.filter((adj: any) => adj.user?.manager_id === user?.id);
 
   const filteredWithdrawalLogs = permissions.canViewAllEmployees 
     ? withdrawalLogs 
-    : withdrawalLogs?.filter(log => log.leave_application?.user?.manager_id === user?.id);
+    : withdrawalLogs?.filter((log: any) => log.leave_application?.user?.manager_id === user?.id);
 
   const filteredLeaveApplications = permissions.canViewAllEmployees 
     ? leaveApplications 
-    : leaveApplications?.filter(app => app.user?.manager_id === user?.id);
+    : leaveApplications?.filter((app: any) => app.user?.manager_id === user?.id);
   
-  // Recalculation mutation
-  const recalculateBalances = useRecalculateAllApprovedLeaveBalances();
+  // Recalculation mutation (commented out for now)
+  // const recalculateBalances = useRecalculateAllApprovedLeaveBalances();
   
   // Search and filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -648,7 +670,7 @@ export function LeaveManagement() {
   const deleteHoliday = useDeleteHoliday();
 
   // Filter leave applications
-  const filteredApplications = filteredLeaveApplications?.filter(application => {
+  const filteredApplications = filteredLeaveApplications?.filter((application: any) => {
     const matchesSearch = application.user?.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          application.user?.employee_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          application.user?.email.toLowerCase().includes(searchTerm.toLowerCase());
@@ -660,17 +682,17 @@ export function LeaveManagement() {
       (sandwichFilter === 'sandwich' && application.is_sandwich_leave) ||
       (sandwichFilter === 'standard' && !application.is_sandwich_leave);
     
-    // Date filter
-    const applicationDate = new Date(application.start_date);
-    const matchesStartDate = !startDate || applicationDate >= new Date(startDate);
-    const matchesEndDate = !endDate || applicationDate <= new Date(endDate);
+    // Date filter - using IST for consistent comparison
+    const applicationDate = parseToISTDate(application.start_date);
+    const matchesStartDate = !startDate || applicationDate >= parseToISTDate(startDate);
+    const matchesEndDate = !endDate || applicationDate <= parseToISTDate(endDate);
     const matchesDate = matchesStartDate && matchesEndDate;
     
     return matchesSearch && matchesStatus && matchesType && matchesSandwich && matchesDate;
   });
 
   // Filter leave balances
-  const filteredBalances = filteredLeaveBalances?.filter(balance => {
+  const filteredBalances = filteredLeaveBalances?.filter((balance: any) => {
     const matchesSearch = balance.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          balance.employee_id?.toLowerCase().includes(searchTerm.toLowerCase());
     
@@ -683,7 +705,7 @@ export function LeaveManagement() {
   });
 
   const getPriorityLevel = (application: any) => {
-    const daysUntilStart = differenceInDays(new Date(application.start_date), new Date());
+    const daysUntilStart = differenceInDays(parseToISTDate(application.start_date), getCurrentISTDate());
     if (daysUntilStart <= 3 && application.status === 'pending') return 'urgent';
     if (daysUntilStart <= 7 && application.status === 'pending') return 'high';
     return 'normal';
@@ -695,7 +717,7 @@ export function LeaveManagement() {
     const headers = ['Employee Name', 'Employee ID', 'Email', 'Leave Type', 'Start Date', 'End Date', 'Days', 'Reason', 'Status', 'Applied Date', 'Reviewed Date', 'Reviewed Time', 'Reviewed By', 'Comments'];
     const csvContent = [
       headers.join(','),
-      ...filteredApplications.map(app => [
+      ...filteredApplications.map((app: any) => [
         `"${app.user?.full_name || ''}"`,
         app.user?.employee_id || '',
         app.user?.email || '',
@@ -705,9 +727,9 @@ export function LeaveManagement() {
         app.days_count,
         `"${app.reason}"`,
         app.status,
-        format(new Date(app.applied_at), 'yyyy-MM-dd'),
-        app.approved_at ? format(new Date(app.approved_at), 'yyyy-MM-dd') : '',
-        app.approved_at ? format(new Date(app.approved_at), 'HH:mm') : '',
+        formatDateForDisplay(app.applied_at, 'yyyy-MM-dd'),
+        app.approved_at ? formatDateForDisplay(app.approved_at, 'yyyy-MM-dd') : '',
+        app.approved_at ? formatDateForDisplay(app.approved_at, 'HH:mm') : '',
         `"${app.approved_by_user?.full_name || ''}"`,
         `"${app.comments || ''}"`
       ].join(','))
@@ -717,7 +739,7 @@ export function LeaveManagement() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `leave_applications_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.download = `leave_applications_${formatDateForDisplay(getCurrentISTDate(), 'yyyy-MM-dd')}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -730,7 +752,7 @@ export function LeaveManagement() {
     const headers = ['Employee Name', 'Employee ID', 'Tenure (Months)', 'Monthly Rate', 'Allocated Days', 'Used Days', 'Remaining Days', 'Can Carry Forward', 'Anniversary Reset Date'];
     const csvContent = [
       headers.join(','),
-      ...filteredBalances.map(balance => [
+      ...filteredBalances.map((balance: any) => [
         `"${balance.full_name || ''}"`,
         balance.employee_id || '',
         balance.tenure_months || 0,
@@ -747,7 +769,7 @@ export function LeaveManagement() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `leave_balances_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.download = `leave_balances_${formatDateForDisplay(getCurrentISTDate(), 'yyyy-MM-dd')}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -773,15 +795,15 @@ export function LeaveManagement() {
 
   // Calculate stats
   const totalApplications = filteredLeaveApplications?.length || 0;
-  const pendingApplications = filteredLeaveApplications?.filter(app => app.status === 'pending').length || 0;
-  const approvedApplications = filteredLeaveApplications?.filter(app => app.status === 'approved').length || 0;
-  const urgentApplications = filteredLeaveApplications?.filter(app => getPriorityLevel(app) === 'urgent').length || 0;
+  const pendingApplications = filteredLeaveApplications?.filter((app: any) => app.status === 'pending').length || 0;
+  const approvedApplications = filteredLeaveApplications?.filter((app: any) => app.status === 'approved').length || 0;
+  const urgentApplications = filteredLeaveApplications?.filter((app: any) => getPriorityLevel(app) === 'urgent').length || 0;
 
   const totalEmployees = filteredLeaveBalances?.length || 0;
-  const negativeBalances = filteredLeaveBalances?.filter(balance => (balance.remaining_days || 0) < 0).length || 0;
-  const zeroBalances = filteredLeaveBalances?.filter(balance => (balance.remaining_days || 0) === 0).length || 0;
+  const negativeBalances = filteredLeaveBalances?.filter((balance: any) => (balance.remaining_days || 0) < 0).length || 0;
+  const zeroBalances = filteredLeaveBalances?.filter((balance: any) => (balance.remaining_days || 0) === 0).length || 0;
   const averageBalance = totalEmployees > 0 
-    ? (filteredLeaveBalances?.reduce((sum, balance) => sum + (balance.remaining_days || 0), 0) || 0) / totalEmployees 
+    ? (filteredLeaveBalances?.reduce((sum: number, balance: any) => sum + (balance.remaining_days || 0), 0) || 0) / totalEmployees 
     : 0;
 
   // Check if user has permission to access leave management
@@ -1058,21 +1080,14 @@ export function LeaveManagement() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredApplications?.map((application) => {
+                    {filteredApplications?.map((application: any) => {
                       const priority = getPriorityLevel(application);
                       return (
                         <TableRow key={application.id}>
                           <TableCell>
                             <div className="flex items-center gap-3">
-                              <Avatar className="h-8 w-8">
-                                <AvatarFallback>{application.user?.full_name.charAt(0)}</AvatarFallback>
-                              </Avatar>
                               <div>
                                 <div className="font-medium">{application.user?.full_name}</div>
-                                <div className="text-sm text-muted-foreground flex items-center gap-1">
-                                  <Mail className="h-3 w-3" />
-                                  {application.user?.email}
-                                </div>
                               </div>
                             </div>
                           </TableCell>
@@ -1096,8 +1111,8 @@ export function LeaveManagement() {
                           </TableCell>
                           <TableCell>
                             <div className="text-sm">
-                              <div>{format(new Date(application.start_date), 'MMM dd')}</div>
-                              <div className="text-muted-foreground">to {format(new Date(application.end_date), 'MMM dd, yyyy')}</div>
+                              <div>{formatDateForDisplay(application.start_date, 'MMM dd')}</div>
+                              <div className="text-muted-foreground">to {formatDateForDisplay(application.end_date, 'MMM dd, yyyy')}</div>
                             </div>
                           </TableCell>
                           <TableCell>
@@ -1136,13 +1151,13 @@ export function LeaveManagement() {
                               </Badge>
                             )}
                           </TableCell>
-                          <TableCell>{format(new Date(application.applied_at), 'MMM dd, yyyy')}</TableCell>
+                          <TableCell>{formatDateForDisplay(application.applied_at, 'MMM dd, yyyy')}</TableCell>
                           <TableCell>
                             {application.approved_at ? (
                               <div className="text-sm">
-                                <div>{format(new Date(application.approved_at), 'MMM dd, yyyy')}</div>
+                                <div>{formatDateForDisplay(application.approved_at, 'MMM dd, yyyy')}</div>
                                 <div className="text-muted-foreground text-xs">
-                                  {format(new Date(application.approved_at), 'HH:mm')}
+                                  {formatDateForDisplay(application.approved_at, 'HH:mm')}
                                 </div>
                               </div>
                             ) : (
@@ -1299,13 +1314,12 @@ export function LeaveManagement() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredBalances?.map((balance) => {
+                    {filteredBalances?.map((balance: any) => {
                       // Data validation and cleanup
                       const allocatedDays = Number(balance.allocated_days) || 0;
                       const usedDays = Number(balance.used_days) || 0;
                       const remainingDays = Number(balance.remaining_days) || 0;
                       const tenureMonths = Number(balance.tenure_months) || 0;
-                      const monthlyRate = Number(balance.monthly_rate) || 0;
                       
                       // Calculate actual remaining if data seems inconsistent
                       const calculatedRemaining = allocatedDays - usedDays;
@@ -1512,7 +1526,7 @@ export function LeaveManagement() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {format(new Date(adjustment.created_at), 'MMM dd, yyyy HH:mm')}
+                          {formatDateForDisplay(adjustment.created_at, 'MMM dd, yyyy HH:mm')}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1589,7 +1603,7 @@ export function LeaveManagement() {
                               </span>
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              {format(new Date(log.leave_application?.start_date), 'MMM dd')} - {format(new Date(log.leave_application?.end_date), 'MMM dd, yyyy')}
+                              {formatDateForDisplay(log.leave_application?.start_date, 'MMM dd')} - {formatDateForDisplay(log.leave_application?.end_date, 'MMM dd, yyyy')}
                             </div>
                           </div>
                         </TableCell>
@@ -1610,7 +1624,7 @@ export function LeaveManagement() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {format(new Date(log.withdrawn_at), 'MMM dd, yyyy HH:mm')}
+                          {formatDateForDisplay(log.withdrawn_at, 'MMM dd, yyyy HH:mm')}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1731,7 +1745,7 @@ export function LeaveManagement() {
                   />
                   <div className="flex gap-2">
                     {[-1, 0, 1].map((offset) => {
-                      const year = new Date().getFullYear() + offset;
+                      const year = getCurrentISTDate().getFullYear() + offset;
                       return (
                         <Button
                           key={year}
@@ -1765,7 +1779,7 @@ export function LeaveManagement() {
                   </TableHeader>
                   <TableBody>
                     {holidays.map((holiday: any) => {
-                      const holidayDate = new Date(holiday.date);
+                      const holidayDate = parseToISTDate(holiday.date);
                       const dayName = holidayDate.toLocaleDateString('en-US', { weekday: 'long' });
                       
                       return (
@@ -1774,7 +1788,7 @@ export function LeaveManagement() {
                             <div className="font-medium">{holiday.name}</div>
                           </TableCell>
                           <TableCell>
-                            {format(holidayDate, 'MMM dd, yyyy')}
+                            {formatDateForDisplay(holidayDate, 'MMM dd, yyyy')}
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">{dayName}</Badge>

@@ -20,7 +20,7 @@ import {
   Send,
   Edit
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate, parseToISTDate } from '@/utils/dateUtils';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import type { KRAAssignment } from '@/hooks/useKRA';
@@ -99,8 +99,8 @@ export function KRAModal({
 
   // Determine edit capabilities based on dashboard context and assignment status
   const determineEditCapabilities = () => {
-    const dueDate = currentAssignment.due_date ? new Date(currentAssignment.due_date) : null;
-    const isNotOverdue = !dueDate || new Date() <= dueDate;
+    const dueDate = currentAssignment.due_date ? parseToISTDate(currentAssignment.due_date) : null;
+    const isNotOverdue = !dueDate || getCurrentISTDate() <= dueDate;
     const isCompleted = ['evaluated', 'approved'].includes(currentAssignment.status || '');
     
     switch (viewContext) {
@@ -241,7 +241,7 @@ export function KRAModal({
 
     setIsSubmitting(true);
     try {
-      const now = new Date().toISOString();
+      const now = getCurrentISTDate().toISOString();
       
       for (const goal of currentAssignment.template.goals) {
         const evaluation = evaluations[goal.id];
@@ -299,7 +299,7 @@ export function KRAModal({
 
     setIsSubmitting(true);
     try {
-      const now = new Date().toISOString();
+      const now = getCurrentISTDate().toISOString();
       
       for (const goal of currentAssignment.template.goals) {
         const evaluation = evaluations[goal.id];
@@ -353,14 +353,14 @@ export function KRAModal({
   const updateAssignmentStatus = async (status: string) => {
     const updates: any = { 
       status: status,
-      updated_at: new Date().toISOString()
+      updated_at: getCurrentISTDate().toISOString()
     };
 
     if (status === 'submitted') {
-      updates.submitted_at = new Date().toISOString();
+      updates.submitted_at = getCurrentISTDate().toISOString();
       updates.submitted_by = user?.id;
     } else if (status === 'evaluated') {
-      updates.evaluated_at = new Date().toISOString();
+      updates.evaluated_at = getCurrentISTDate().toISOString();
       updates.evaluated_by = user?.id;
     }
 
@@ -409,8 +409,8 @@ export function KRAModal({
   const getDueStatus = (dueDate?: string, status?: string) => {
     if (!dueDate || ['submitted', 'evaluated', 'approved'].includes(status || '')) return null;
     
-    const now = new Date();
-    const due = new Date(dueDate);
+    const now = getCurrentISTDate();
+    const due = parseToISTDate(dueDate);
     const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     
     if (daysUntilDue < 0) return { status: 'overdue', days: Math.abs(daysUntilDue), color: 'text-red-600' };
@@ -450,13 +450,13 @@ export function KRAModal({
                     </div>
                     <div className="flex items-center gap-1">
                       <Calendar className="h-4 w-4" />
-                      <span>Assigned: {format(new Date(currentAssignment.assigned_date || new Date()), 'MMM dd, yyyy')}</span>
+                      <span>Assigned: {formatDateForDisplay(currentAssignment.assigned_date || getCurrentISTDate(), 'MMM dd, yyyy')}</span>
                     </div>
                     {currentAssignment.due_date && (
                       <div className="flex items-center gap-1">
                         <Clock className={`h-4 w-4 ${dueStatus?.color || ''}`} />
                         <span className={dueStatus?.color}>
-                          Due: {format(new Date(currentAssignment.due_date), 'MMM dd, yyyy')}
+                          Due: {formatDateForDisplay(currentAssignment.due_date, 'MMM dd, yyyy')}
                           {dueStatus && (
                             <span className="ml-1">
                               ({dueStatus.status === 'overdue' ? `${dueStatus.days} days overdue` :
@@ -470,7 +470,7 @@ export function KRAModal({
                     {currentAssignment.submitted_at && (
                       <div className="flex items-center gap-1">
                         <CheckCircle className="h-4 w-4 text-green-600" />
-                        <span>Submitted: {format(new Date(currentAssignment.submitted_at), 'MMM dd, yyyy')}</span>
+                        <span>Submitted: {formatDateForDisplay(currentAssignment.submitted_at, 'MMM dd, yyyy')}</span>
                       </div>
                     )}
                   </div>
@@ -529,7 +529,7 @@ export function KRAModal({
                     {assignment.evaluated_at && (
                       <div className="mt-1">
                         <span className="font-medium text-blue-800">Evaluated on: </span>
-                        <span className="text-blue-700">{format(new Date(assignment.evaluated_at), 'MMM dd, yyyy')}</span>
+                        <span className="text-blue-700">{formatDateForDisplay(assignment.evaluated_at, 'MMM dd, yyyy')}</span>
                       </div>
                     )}
                   </div>
@@ -676,7 +676,7 @@ export function KRAModal({
                                 <p className="text-sm whitespace-pre-wrap">{evaluation.employee_comments}</p>
                                 {evaluation.employee_submitted_at && (
                                   <p className="text-xs text-green-600 mt-2">
-                                    Submitted on {format(new Date(evaluation.employee_submitted_at), 'MMM dd, yyyy')}
+                                    Submitted on {formatDateForDisplay(evaluation.employee_submitted_at, 'MMM dd, yyyy')}
                                   </p>
                                 )}
                               </div>
@@ -717,7 +717,7 @@ export function KRAModal({
                                 <p className="text-sm whitespace-pre-wrap">{evaluation.manager_evaluation_comments}</p>
                                 {evaluation.manager_evaluated_at && (
                                   <p className="text-xs text-purple-600 mt-2">
-                                    Evaluated on {format(new Date(evaluation.manager_evaluated_at), 'MMM dd, yyyy')}
+                                    Evaluated on {formatDateForDisplay(evaluation.manager_evaluated_at, 'MMM dd, yyyy')}
                                   </p>
                                 )}
                               </div>
@@ -771,7 +771,7 @@ export function KRAModal({
                 <CheckCircle className="h-8 w-8 text-green-600 mx-auto mb-2" />
                 <p className="text-green-800 font-medium">Evaluation Completed</p>
                 <p className="text-sm text-green-600">
-                  {currentAssignment.evaluated_at && `Completed on ${format(new Date(currentAssignment.evaluated_at), 'MMM dd, yyyy')}`}
+                  {currentAssignment.evaluated_at && `Completed on ${formatDateForDisplay(currentAssignment.evaluated_at, 'MMM dd, yyyy')}`}
                 </p>
               </div>
             </div>

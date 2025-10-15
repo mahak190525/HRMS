@@ -1,4 +1,3 @@
-import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLMSDashboardStats, useUserModules } from '@/hooks/useLMS';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
-  GraduationCap,
   BookOpen,
   Target,
   Award,
@@ -16,14 +14,12 @@ import {
   Play,
   FileText,
   TrendingUp,
-  Calendar,
-  Users,
   BarChart3,
   Upload
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
+import { formatDateForDisplay } from '@/utils/dateUtils';
 
 export function LMSDashboard() {
   const { user } = useAuth();
@@ -210,7 +206,7 @@ export function LMSDashboard() {
                             <p className="text-xs text-muted-foreground">
                               {module.category} • {module.estimated_duration_hours}h
                               {progress?.last_accessed_at && (
-                                <span> • Last accessed {format(new Date(progress.last_accessed_at), 'MMM dd')}</span>
+                                <span> • Last accessed {formatDateForDisplay(progress.last_accessed_at, 'MMM dd')}</span>
                               )}
                             </p>
                           </div>
@@ -298,9 +294,9 @@ export function LMSDashboard() {
                   <div>
                     <div className="flex justify-between text-sm mb-1">
                       <span>Document Approval</span>
-                      <span>{stats?.totalDocuments > 0 ? Math.round((stats.approvedDocuments / stats.totalDocuments) * 100) : 0}%</span>
+                      <span>{stats?.totalDocuments && stats?.totalDocuments > 0 ? Math.round(((stats.approvedDocuments || 0) / stats.totalDocuments) * 100) : 0}%</span>
                     </div>
-                    <Progress value={stats?.totalDocuments > 0 ? Math.round((stats.approvedDocuments / stats.totalDocuments) * 100) : 0} />
+                    <Progress value={stats?.totalDocuments && stats?.totalDocuments > 0 ? Math.round(((stats.approvedDocuments || 0) / stats.totalDocuments) * 100) : 0} />
                   </div>
                 </div>
               </div>
@@ -343,28 +339,28 @@ export function LMSDashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {stats?.inProgressModules > 0 && (
+                {(stats?.inProgressModules || 0) > 0 && (
                   <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg">
                     <Play className="h-4 w-4 text-blue-600" />
-                    <span className="text-sm">Continue {stats.inProgressModules} module{stats.inProgressModules > 1 ? 's' : ''}</span>
+                    <span className="text-sm">Continue {stats?.inProgressModules || 0} module{(stats?.inProgressModules || 0) > 1 ? 's' : ''}</span>
                   </div>
                 )}
                 
-                {stats?.totalDocuments < 5 && (
+                {(stats?.totalDocuments || 0) < 5 && (
                   <div className="flex items-center gap-2 p-2 bg-orange-50 rounded-lg">
                     <Upload className="h-4 w-4 text-orange-600" />
                     <span className="text-sm">Upload required documents</span>
                   </div>
                 )}
                 
-                {stats?.completionRate >= 80 && (
+                {(stats?.completionRate || 0) >= 80 && (
                   <div className="flex items-center gap-2 p-2 bg-green-50 rounded-lg">
                     <CheckCircle className="h-4 w-4 text-green-600" />
                     <span className="text-sm">Almost done! Complete remaining modules</span>
                   </div>
                 )}
                 
-                {stats?.averageScore < 70 && stats?.totalQuizzes > 0 && (
+                {(stats?.averageScore || 0) < 70 && (stats?.totalQuizzes || 0) > 0 && (
                   <div className="flex items-center gap-2 p-2 bg-red-50 rounded-lg">
                     <Target className="h-4 w-4 text-red-600" />
                     <span className="text-sm">Retake quizzes to improve scores</span>

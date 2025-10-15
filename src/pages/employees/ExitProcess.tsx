@@ -1,40 +1,29 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAllExitProcesses, useExitProcessById, useUpdateExitProcess, useDeleteExitProcess } from '@/hooks/useEmployees';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { AlertDialog } from '@/components/ui/alert-dialog';
 import { ConfirmDelete } from '@/components/ui/confirm-delete';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Progress } from '@/components/ui/progress';
 import {
-  LogOut,
-  Search,
   Filter,
   Eye,
-  Calendar,
   Clock,
   CheckCircle,
   AlertCircle,
-  User,
   Building,
-  Phone,
-  Mail,
   FileText,
-  ClipboardCheck,
   Edit,
-  Trash2,
-  Save
+  Trash2
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -313,8 +302,8 @@ export function ExitProcess() {
                       {process.exit_type.replace('_', ' ')}
                     </Badge>
                   </TableCell>
-                  <TableCell>{format(new Date(process.resignation_date), 'MMM dd, yyyy')}</TableCell>
-                  <TableCell>{format(new Date(process.last_working_day), 'MMM dd, yyyy')}</TableCell>
+                  <TableCell>{formatDateForDisplay(process.resignation_date, 'MMM dd, yyyy')}</TableCell>
+                  <TableCell>{formatDateForDisplay(process.last_working_day, 'MMM dd, yyyy')}</TableCell>
                   <TableCell>
                     <Badge variant="outline">{process.notice_period_days} days</Badge>
                   </TableCell>
@@ -393,13 +382,13 @@ export function ExitProcess() {
                                   <div>
                                     <p className="font-medium">Resignation Date:</p>
                                     <p className="text-muted-foreground">
-                                      {format(new Date(processDetails.resignation_date), 'MMM dd, yyyy')}
+                                      {formatDateForDisplay(processDetails.resignation_date, 'MMM dd, yyyy')}
                                     </p>
                                   </div>
                                   <div>
                                     <p className="font-medium">Last Working Day:</p>
                                     <p className="text-muted-foreground">
-                                      {format(new Date(processDetails.last_working_day), 'MMM dd, yyyy')}
+                                      {formatDateForDisplay(processDetails.last_working_day, 'MMM dd, yyyy')}
                                     </p>
                                   </div>
                                 </div>

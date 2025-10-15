@@ -10,7 +10,6 @@ import {
   useCreateAsset,
   useAllEmployees,
   useUpdateAsset,
-  useDeleteAsset,
   useUpdateAssetAssignment,
   useDeleteAssetAssignment,
   useCreateVM,
@@ -26,7 +25,6 @@ import {
   useUsersWithAssignmentHistory,
   useUserAssignmentLogs,
   useAllAssetAssignments,
-  useBackfillAssignmentLogs,
   useAllAssetComplaints,
   useUpdateAssetComplaint,
   useAllAssetRequests,
@@ -80,7 +78,7 @@ import {
   Archive,
   CheckCircle2
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay as formatDateForDisplayUtil, getCurrentISTDate, parseToISTDate } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -228,7 +226,6 @@ export function AssetManagement() {
   const createAssignment = useCreateAssetAssignment();
   const createAsset = useCreateAsset();
   const updateAsset = useUpdateAsset();
-  const deleteAsset = useDeleteAsset();
   const updateAssignment = useUpdateAssetAssignment();
   const deleteAssignment = useDeleteAssetAssignment();
   const createVM = useCreateVM();
@@ -240,7 +237,6 @@ export function AssetManagement() {
   const createNotesGuidance = useCreateNotesGuidance();
   const updateNotesGuidance = useUpdateNotesGuidance();
   const deleteNotesGuidance = useDeleteNotesGuidance();
-  const backfillAssignmentLogs = useBackfillAssignmentLogs();
   const { data: allComplaints } = useAllAssetComplaints();
   const updateComplaint = useUpdateAssetComplaint();
   // Use conditional hooks based on user permissions
@@ -265,7 +261,7 @@ export function AssetManagement() {
   // Filter employees based on permissions
   const filteredEmployees = permissions.canViewAllEmployees 
     ? employees 
-    : employees?.filter(emp => emp.manager_id === user?.id);
+    : employees?.filter((emp: any) => emp.manager_id === user?.id);
 
   // Filter assignments data based on permissions
   const assignmentsData = permissions.canViewAllEmployees 
@@ -283,7 +279,7 @@ export function AssetManagement() {
           return true;
         }
         // Show assets assigned to team members
-        return asset.current_assignment?.some(assignment => 
+        return asset.current_assignment?.some((assignment: any) => 
           assignment.user?.manager_id === user?.id
         );
       });
@@ -305,7 +301,6 @@ export function AssetManagement() {
   
   // For VM data, we'll need to fetch directly from the API
   const [vmData, setVMData] = useState<any[]>([]);
-  const [isLoadingVMs, setIsLoadingVMs] = useState(false);
 
   // Fetch VM data when component loads
   useEffect(() => {
@@ -327,7 +322,6 @@ export function AssetManagement() {
   const [isEditGuidanceDialogOpen, setIsEditGuidanceDialogOpen] = useState(false);
   const [selectedGuidance, setSelectedGuidance] = useState<any>(null);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
-  const [selectedUserData, setSelectedUserData] = useState<any>(null);
   const [selectedAssetRequest, setSelectedAssetRequest] = useState<any>(null);
   const [isViewAssetRequestDialogOpen, setIsViewAssetRequestDialogOpen] = useState(false);
   const [isAssetRequestActionDialogOpen, setIsAssetRequestActionDialogOpen] = useState(false);
@@ -409,7 +403,6 @@ export function AssetManagement() {
     if (usersWithHistory && employees) {
       enhancedUsersWithHistory = usersWithHistory.map((userHistoryData: any) => {
         // Get current employee data for status and other details
-        const currentEmployeeData = employees.find((emp: any) => emp.id === userHistoryData.user_id);
         
         return {
           userId: userHistoryData.user_id,
@@ -608,12 +601,7 @@ export function AssetManagement() {
 
   // Update selected user data when user ID changes
   useEffect(() => {
-    if (selectedUserId && employees) {
-      const userData = employees.find((emp: any) => emp.id === selectedUserId);
-      setSelectedUserData(userData);
-    } else {
-      setSelectedUserData(null);
-    }
+    // This effect is no longer needed since selectedUserData was removed
   }, [selectedUserId, employees]);
 
   // Populate edit form when VM data is fetched
@@ -661,7 +649,7 @@ export function AssetManagement() {
       user_ids: data.user_ids,
       assigned_by: user.id,
       assignment_type: data.assignment_type,
-      assignment_expiry_date: data.assignment_expiry_date?.toISOString().split('T')[0],
+      assignment_expiry_date: data.assignment_expiry_date ? getCurrentISTDate().toISOString().split('T')[0] : undefined,
       condition_at_issuance: data.condition_at_issuance,
       issuance_condition_notes: data.issuance_condition_notes,
       notes: data.notes
@@ -704,11 +692,11 @@ export function AssetManagement() {
     const assetData = {
       ...data,
       category_id: finalCategoryId,
-      purchase_date: data.purchase_date?.toISOString().split('T')[0],
-      warranty_expiry: data.warranty_expiry?.toISOString().split('T')[0],
-      insurance_warranty_extended: data.insurance_warranty_extended?.toISOString().split('T')[0],
-      previous_audit_date: data.previous_audit_date?.toISOString().split('T')[0],
-      hardware_image_date: data.hardware_image_date?.toISOString().split('T')[0],
+      purchase_date: data.purchase_date ? getCurrentISTDate().toISOString().split('T')[0] : undefined,
+      warranty_expiry: data.warranty_expiry ? getCurrentISTDate().toISOString().split('T')[0] : undefined,
+      insurance_warranty_extended: data.insurance_warranty_extended ? getCurrentISTDate().toISOString().split('T')[0] : undefined,
+      previous_audit_date: data.previous_audit_date ? getCurrentISTDate().toISOString().split('T')[0] : undefined,
+      hardware_image_date: data.hardware_image_date ? getCurrentISTDate().toISOString().split('T')[0] : undefined,
       current_value: data.purchase_cost || 0,
       status: finalStatus,
       // Remove the new_category_name from the final data
@@ -734,28 +722,23 @@ export function AssetManagement() {
   // Helper function to create date from string in IST timezone
   const createISTDate = (dateString: string | null | undefined) => {
     if (!dateString) return undefined;
-    // Parse date as IST date to ensure consistent timezone
-    const [year, month, day] = dateString.split('-').map(num => parseInt(num, 10));
-    // Create date in IST (UTC+5:30)
-    const istDate = new Date(year, month - 1, day);
-    return istDate;
+    return parseToISTDate(dateString);
   };
 
   // Helper function to format date for display in IST
   const formatDateForDisplay = (date: Date | string | null | undefined) => {
     if (!date) return '';
-    const dateObj = typeof date === 'string' ? createISTDate(date) : date;
-    if (!dateObj) return '';
-    return format(dateObj, 'MMM dd, yyyy');
+    return formatDateForDisplayUtil(date, 'MMM dd, yyyy');
   };
 
   // Helper function to convert Date to IST date string for database
   const formatDateForDatabase = (date: Date | null | undefined) => {
     if (!date) return undefined;
-    // Format date as YYYY-MM-DD in local time (treating input as IST)
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    // Format date as YYYY-MM-DD in IST timezone
+    const istDate = getCurrentISTDate();
+    const year = istDate.getFullYear();
+    const month = String(istDate.getMonth() + 1).padStart(2, '0');
+    const day = String(istDate.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
 
@@ -892,8 +875,8 @@ export function AssetManagement() {
 
     const vmData = {
       ...data,
-      approval_date: data.approval_date?.toISOString().split('T')[0],
-      expiry_date: data.expiry_date?.toISOString().split('T')[0],
+      approval_date: data.approval_date ? getCurrentISTDate().toISOString().split('T')[0] : undefined,
+      expiry_date: data.expiry_date ? getCurrentISTDate().toISOString().split('T')[0] : undefined,
       // Add created_by as current user's name or ID
       created_by: user.full_name || user.email || 'System',
     };
@@ -908,19 +891,6 @@ export function AssetManagement() {
     });
   };
 
-  const handleViewVM = (asset: any) => {
-    // First set the asset ID to trigger VM data fetch
-    setVMAssetId(asset.id);
-    setSelectedAsset(asset);
-    setIsViewVMDialogOpen(true);
-  };
-
-  const handleEditVM = (asset: any) => {
-    // Set asset ID to trigger VM data fetch
-    setVMAssetId(asset.id);
-    setSelectedAsset(asset);
-    setIsEditVMDialogOpen(true);
-  };
 
   // New handlers for direct VM data (used in VM table)
   const handleViewVMDirect = (vm: any) => {
@@ -1092,19 +1062,19 @@ export function AssetManagement() {
     // Add appropriate fields based on status
     if (data.status === 'approved') {
       updates.approved_by = user.id;
-      updates.approved_at = new Date().toISOString();
+      updates.approved_at = getCurrentISTDate().toISOString();
       if (data.approval_notes) {
         updates.approval_notes = data.approval_notes;
       }
     } else if (data.status === 'rejected') {
       updates.rejected_by = user.id;
-      updates.rejected_at = new Date().toISOString();
+      updates.rejected_at = getCurrentISTDate().toISOString();
       if (data.rejection_reason) {
         updates.rejection_reason = data.rejection_reason;
       }
     } else if (data.status === 'fulfilled') {
       updates.fulfilled_by = user.id;
-      updates.fulfilled_at = new Date().toISOString();
+      updates.fulfilled_at = getCurrentISTDate().toISOString();
       if (data.fulfilled_asset_id) {
         updates.fulfilled_asset_id = data.fulfilled_asset_id;
       }
@@ -1164,7 +1134,6 @@ export function AssetManagement() {
   };
 
   const fetchVMData = async () => {
-    setIsLoadingVMs(true);
     try {
       // Import vmApi dynamically to avoid circular dependencies
       const { vmApi } = await import('@/services/api');
@@ -1173,8 +1142,6 @@ export function AssetManagement() {
     } catch (error) {
       console.error('Error fetching VM data:', error);
       setVMData([]);
-    } finally {
-      setIsLoadingVMs(false);
     }
   };
 
@@ -1354,10 +1321,10 @@ export function AssetManagement() {
                             <CardTitle className="text-md">{guidance.title}</CardTitle>
                             <CardDescription className="text-sm">
                               Created by {guidance.created_by_user?.full_name || guidance.updated_by_user?.full_name || 'Unknown'} on{' '}
-                              {new Date(guidance.created_at).toLocaleDateString()}
+                              {formatDateForDisplayUtil(guidance.created_at, 'MMM dd, yyyy')}
                               {guidance.updated_at !== guidance.created_at && (
                                 <span className="text-muted-foreground">
-                                  {' '}• Updated by {guidance.updated_by_user?.full_name || 'Unknown'} on {new Date(guidance.updated_at).toLocaleDateString()}
+                                  {' '}• Updated by {guidance.updated_by_user?.full_name || 'Unknown'} on {formatDateForDisplayUtil(guidance.updated_at, 'MMM dd, yyyy')}
                                 </span>
                               )}
                             </CardDescription>
@@ -1956,7 +1923,7 @@ export function AssetManagement() {
                                     )}
                                   >
                                     <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {field.value ? format(field.value, "PPP") : "Pick approval date"}
+                                    {field.value ? formatDateForDisplayUtil(field.value, "PPP") : "Pick approval date"}
                                   </Button>
                                 </FormControl>
                               </PopoverTrigger>
@@ -1965,7 +1932,7 @@ export function AssetManagement() {
                                   mode="single"
                                   selected={field.value}
                                   onSelect={field.onChange}
-                                  disabled={(date) => date > new Date()}
+                                  disabled={(date) => date > getCurrentISTDate()}
                                   initialFocus
                                 />
                               </PopoverContent>
@@ -1992,7 +1959,7 @@ export function AssetManagement() {
                                     )}
                                   >
                                     <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {field.value ? format(field.value, "PPP") : "Pick expiry date"}
+                                    {field.value ? formatDateForDisplayUtil(field.value, "PPP") : "Pick expiry date"}
                                   </Button>
                                 </FormControl>
                               </PopoverTrigger>
@@ -2001,7 +1968,7 @@ export function AssetManagement() {
                                   mode="single"
                                   selected={field.value}
                                   onSelect={field.onChange}
-                                  disabled={(date) => date < new Date()}
+                                  disabled={(date) => date < getCurrentISTDate()}
                                   initialFocus
                                 />
                               </PopoverContent>
@@ -2288,7 +2255,7 @@ export function AssetManagement() {
                                   )}
                                 >
                                   <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {field.value ? format(field.value, "PPP") : "Pick purchase date"}
+                                  {field.value ? formatDateForDisplayUtil(field.value, "PPP") : "Pick purchase date"}
                                 </Button>
                               </FormControl>
                             </PopoverTrigger>
@@ -2345,7 +2312,7 @@ export function AssetManagement() {
                                 )}
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {field.value ? format(field.value, "PPP") : "Pick warranty expiry date"}
+                                {field.value ? formatDateForDisplayUtil(field.value, "PPP") : "Pick warranty expiry date"}
                               </Button>
                             </FormControl>
                           </PopoverTrigger>
@@ -2383,7 +2350,7 @@ export function AssetManagement() {
                                   )}
                                 >
                                   <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {field.value ? format(field.value, "PPP") : "Pick extended warranty date"}
+                                  {field.value ? formatDateForDisplayUtil(field.value, "PPP") : "Pick extended warranty date"}
                                 </Button>
                               </FormControl>
                             </PopoverTrigger>
@@ -2418,7 +2385,7 @@ export function AssetManagement() {
                                   )}
                                 >
                                   <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {field.value ? format(field.value, "PPP") : "Pick audit date"}
+                                  {field.value ? formatDateForDisplayUtil(field.value, "PPP") : "Pick audit date"}
                                 </Button>
                               </FormControl>
                             </PopoverTrigger>
@@ -2455,7 +2422,7 @@ export function AssetManagement() {
                                 )}
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {field.value ? format(field.value, "PPP") : "Pick hardware image date"}
+                                {field.value ? formatDateForDisplayUtil(field.value, "PPP") : "Pick hardware image date"}
                               </Button>
                             </FormControl>
                           </PopoverTrigger>
@@ -2738,7 +2705,7 @@ export function AssetManagement() {
                                     )}
                                   >
                                     <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {field.value ? format(field.value, "PPP") : "Pick expiry date"}
+                                    {field.value ? formatDateForDisplayUtil(field.value, "PPP") : "Pick expiry date"}
                                   </Button>
                                 </FormControl>
                               </PopoverTrigger>
@@ -2747,7 +2714,7 @@ export function AssetManagement() {
                                   mode="single"
                                   selected={field.value}
                                   onSelect={field.onChange}
-                                  disabled={(date) => date < new Date()}
+                                  disabled={(date) => date < getCurrentISTDate()}
                                   initialFocus
                                 />
                               </PopoverContent>
@@ -3026,7 +2993,7 @@ export function AssetManagement() {
                         return <Badge className={getEmployeeStatusBadge(status)}>{status}</Badge>;
                       })()}
                     </TableCell>
-                    <TableCell>{format(new Date(assignment.assigned_date), 'MMM dd, yyyy')}</TableCell>
+                    <TableCell>{formatDateForDisplay(assignment.assigned_date)}</TableCell>
                     <TableCell>{assignment.assigned_by_user?.full_name}</TableCell>
                     <TableCell>
                       {(() => {
@@ -3166,7 +3133,7 @@ export function AssetManagement() {
                                       <div>
                                         <p className="font-medium">Return Date:</p>
                                         <p className="text-muted-foreground">
-                                          {format(new Date(selectedAssignment.return_date), 'MMM dd, yyyy')}
+                                          {formatDateForDisplay(selectedAssignment.return_date)}
                                         </p>
                                       </div>
                                     )}
@@ -3210,7 +3177,7 @@ export function AssetManagement() {
                                     </Badge>
                                     {!selectedAssignment.is_active && selectedAssignment.return_date && (
                                       <span className="text-sm text-muted-foreground">
-                                        (Returned on {format(new Date(selectedAssignment.return_date), 'MMM dd, yyyy')})
+                                        (Returned on {formatDateForDisplay(selectedAssignment.return_date)})
                                       </span>
                                     )}
                                   </div>
@@ -3478,7 +3445,7 @@ export function AssetManagement() {
                         )}
                         {asset.purchase_date && (
                           <div className="text-muted-foreground">
-                            {format(new Date(asset.purchase_date), 'MMM yyyy')}
+                            {formatDateForDisplay(asset.purchase_date)}
                           </div>
                         )}
                       </div>
@@ -3813,7 +3780,7 @@ export function AssetManagement() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            {asset.updated_at ? format(new Date(asset.updated_at), 'PPP') : 'N/A'}
+                            {asset.updated_at ? formatDateForDisplayUtil(asset.updated_at, 'PPP') : 'N/A'}
                           </TableCell>
                           <TableCell>
                             <span className="text-sm text-muted-foreground">
@@ -3940,7 +3907,7 @@ export function AssetManagement() {
                           </TableCell>
                           <TableCell>
                             <div className="text-sm">
-                              {format(new Date(request.created_at), 'PPP')}
+                              {formatDateForDisplayUtil(request.created_at, 'PPP')}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -4198,7 +4165,7 @@ export function AssetManagement() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              {format(new Date(complaint.created_at), 'PPP')}
+                              {formatDateForDisplayUtil(complaint.created_at)}
                             </TableCell>
                             <TableCell>
                               {complaint.resolved_by_user?.full_name || '-'}
@@ -4433,14 +4400,14 @@ export function AssetManagement() {
                                             <div>
                                               <span className="text-muted-foreground">Action Date:</span>{' '}
                                               <span className="font-medium">
-                                                {format(new Date(log.action_date), 'MMM dd, yyyy')}
+                                                {formatDateForDisplayUtil(log.action_date, 'MMM dd, yyyy')}
                                               </span>
                                             </div>
                                             {log.assignment_expiry_date && (
                                               <div>
                                                 <span className="text-muted-foreground">Expiry:</span>{' '}
                                                 <span className="font-medium">
-                                                  {format(new Date(log.assignment_expiry_date), 'MMM dd, yyyy')}
+                                                  {formatDateForDisplayUtil(log.assignment_expiry_date, 'MMM dd, yyyy')}
                                                 </span>
                                               </div>
                                             )}
@@ -4915,7 +4882,7 @@ export function AssetManagement() {
                               )}
                             >
                               <CalendarIcon className="mr-2 h-4 w-4" />
-                              {field.value ? format(field.value, "PPP") : "Pick purchase date"}
+                              {field.value ? formatDateForDisplayUtil(field.value, "PPP") : "Pick purchase date"}
                             </Button>
                           </FormControl>
                         </PopoverTrigger>
@@ -4972,7 +4939,7 @@ export function AssetManagement() {
                             )}
                           >
                             <CalendarIcon className="mr-2 h-4 w-4" />
-                            {field.value ? format(field.value, "PPP") : "Pick warranty expiry date"}
+                            {field.value ? formatDateForDisplayUtil(field.value, "PPP") : "Pick warranty expiry date"}
                           </Button>
                         </FormControl>
                       </PopoverTrigger>
@@ -5010,7 +4977,7 @@ export function AssetManagement() {
                               )}
                             >
                               <CalendarIcon className="mr-2 h-4 w-4" />
-                              {field.value ? format(field.value, "PPP") : "Pick extended warranty date"}
+                              {field.value ? formatDateForDisplayUtil(field.value, "PPP") : "Pick extended warranty date"}
                             </Button>
                           </FormControl>
                         </PopoverTrigger>
@@ -5045,7 +5012,7 @@ export function AssetManagement() {
                               )}
                             >
                               <CalendarIcon className="mr-2 h-4 w-4" />
-                              {field.value ? format(field.value, "PPP") : "Pick audit date"}
+                              {field.value ? formatDateForDisplayUtil(field.value, "PPP") : "Pick audit date"}
                             </Button>
                           </FormControl>
                         </PopoverTrigger>
@@ -5082,7 +5049,7 @@ export function AssetManagement() {
                             )}
                           >
                             <CalendarIcon className="mr-2 h-4 w-4" />
-                            {field.value ? format(field.value, "PPP") : "Pick hardware image date"}
+                            {field.value ? formatDateForDisplayUtil(field.value, "PPP") : "Pick hardware image date"}
                           </Button>
                         </FormControl>
                       </PopoverTrigger>
@@ -5323,7 +5290,7 @@ export function AssetManagement() {
                                 )}
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {field.value ? format(field.value, "PPP") : "Pick expiry date"}
+                                {field.value ? formatDateForDisplayUtil(field.value, "PPP") : "Pick expiry date"}
                               </Button>
                             </FormControl>
                           </PopoverTrigger>
@@ -5937,7 +5904,7 @@ export function AssetManagement() {
                                 )}
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {field.value ? format(field.value, "PPP") : "Pick approval date"}
+                                {field.value ? formatDateForDisplayUtil(field.value, "PPP") : "Pick approval date"}
                               </Button>
                             </FormControl>
                           </PopoverTrigger>
@@ -5973,7 +5940,7 @@ export function AssetManagement() {
                                 )}
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {field.value ? format(field.value, "PPP") : "Pick expiry date"}
+                                {field.value ? formatDateForDisplayUtil(field.value, "PPP") : "Pick expiry date"}
                               </Button>
                             </FormControl>
                           </PopoverTrigger>
@@ -6288,7 +6255,7 @@ export function AssetManagement() {
                     <div>
                       <p className="font-medium text-sm text-gray-600">Approval Date</p>
                       <p className="text-sm">
-                        {currentVM.approval_date ? format(new Date(currentVM.approval_date), 'PPP') : 'Not specified'}
+                        {currentVM.approval_date ? formatDateForDisplayUtil(currentVM.approval_date, 'PPP') : 'Not specified'}
                       </p>
                     </div>
                   </div>
@@ -6296,7 +6263,7 @@ export function AssetManagement() {
                     <div>
                       <p className="font-medium text-sm text-gray-600">Expiry Date</p>
                       <p className="text-sm">
-                        {currentVM.expiry_date ? format(new Date(currentVM.expiry_date), 'PPP') : 'Not specified'}
+                        {currentVM.expiry_date ? formatDateForDisplayUtil(currentVM.expiry_date, 'PPP') : 'Not specified'}
                       </p>
                     </div>
                   </div>
@@ -6397,14 +6364,14 @@ export function AssetManagement() {
                   <div>
                     <p className="font-medium">Submitted Date:</p>
                     <p className="text-muted-foreground">
-                      {format(new Date(selectedComplaint.created_at), 'PPP')}
+                      {formatDateForDisplayUtil(selectedComplaint.created_at, 'PPP')}
                     </p>
                   </div>
                   {selectedComplaint.resolved_at && (
                     <div>
                       <p className="font-medium">Resolved Date:</p>
                       <p className="text-muted-foreground">
-                        {format(new Date(selectedComplaint.resolved_at), 'PPP')}
+                        {formatDateForDisplayUtil(selectedComplaint.resolved_at, 'PPP')}
                       </p>
                     </div>
                   )}
@@ -6644,7 +6611,7 @@ export function AssetManagement() {
                   <div>
                     <p className="font-medium">Submitted:</p>
                     <p className="text-muted-foreground">
-                      {format(new Date(selectedAssetRequest.created_at), 'PPP')}
+                      {formatDateForDisplayUtil(selectedAssetRequest.created_at, 'PPP')}
                     </p>
                   </div>
                 </div>
@@ -6711,7 +6678,7 @@ export function AssetManagement() {
                         <p className="font-medium">Fulfilled Date:</p>
                         <p className="text-muted-foreground">
                           {selectedAssetRequest.fulfilled_at ? 
-                            format(new Date(selectedAssetRequest.fulfilled_at), 'PPP') : 'N/A'}
+                            formatDateForDisplayUtil(selectedAssetRequest.fulfilled_at, 'PPP') : 'N/A'}
                         </p>
                       </div>
                     </div>

@@ -1,4 +1,4 @@
-import React, { useState, lazy, Suspense, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDashboardStats, useUpcomingHolidays, useTodayTimeEntries } from '@/hooks/useDashboard';
 import { secondTimeApi } from '@/services/secondTimeApi';
@@ -20,19 +20,10 @@ import {
   Clock,
   Target,
   Users,
-  TrendingUp,
-  CheckCircle,
-  AlertCircle,
   Plus,
-  Timer,
-  Play,
-  Pause,
-  Square,
-  MessageSquare,
-  FileText,
-  UserPlus
+  Timer
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate, parseToISTDate } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { toast } from 'sonner';
 import {supabase} from '@/services/supabase'
@@ -42,7 +33,7 @@ export function DashboardOverview() {
   const { user } = useAuth();
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
   const { data: holidays, isLoading: holidaysLoading } = useUpcomingHolidays();
-  const { data: timeEntries, refetch: refetchTimeEntries } = useTodayTimeEntries();
+  const { refetch: refetchTimeEntries } = useTodayTimeEntries();
   
   // State for second time data
   const [secondTimeData, setSecondTimeData] = useState<UserTimeData | null>(null);
@@ -129,7 +120,7 @@ export function DashboardOverview() {
           .in('id', projectIds);
 
         if (projectsError) throw projectsError;
-        setAssignedProjects((projects || []) as Array<{ id: string; name: string }>);
+        setAssignedProjects((projects || []) as Array<{ id: string; project_name: string }>);
       } catch (err) {
         console.error('Failed to fetch assigned projects:', err);
         setAssignedProjects([]);
@@ -247,7 +238,7 @@ export function DashboardOverview() {
             Welcome {user?.full_name?.split(' ')[0]}!
           </h1>
           <p className="text-muted-foreground">
-            {format(new Date(), 'EEEE, MMMM do, yyyy')}
+            {formatDateForDisplay(getCurrentISTDate(), 'EEEE, MMMM do, yyyy')}
           </p>
         </div>
         <div className="flex items-center gap-4">
@@ -340,18 +331,10 @@ export function DashboardOverview() {
                     <div className="mt-2 p-2 bg-blue-50/50 rounded-lg border border-blue-200/30">
                       <p className="text-xs font-medium text-blue-700 mb-1">Tracker Started</p>
                       <p className="text-sm font-mono text-blue-800">
-                        {new Date(secondTimeData.todayEntries[0].start_time).toLocaleTimeString([], { 
-                          hour: '2-digit', 
-                          minute: '2-digit',
-                          hour12: true 
-                        })}
+                        {formatDateForDisplay(secondTimeData.todayEntries[0].start_time, 'h:mm a')}
                       </p>
                       <p className="text-xs text-blue-600">
-                        {new Date(secondTimeData.todayEntries[0].start_time).toLocaleDateString([], {
-                          weekday: 'short',
-                          month: 'short',
-                          day: 'numeric'
-                        })}
+                        {formatDateForDisplay(secondTimeData.todayEntries[0].start_time, 'EEE, MMM d')}
                       </p>
                     </div>
                   )}
@@ -431,7 +414,7 @@ export function DashboardOverview() {
                                 value={p.project_name}
                                 onSelect={() => {
                                   setSelectedProjectIds((prev) =>
-                                    checked ? prev.filter((id) => prev !== p.id) : [...prev, p.id]
+                                    checked ? prev.filter((id) => id !== p.id) : [...prev, p.id]
                                   );
                                 }}
                                 className="flex items-center gap-2"
@@ -531,8 +514,7 @@ export function DashboardOverview() {
               ) : secondTimeData?.todayEntries && secondTimeData.todayEntries.length > 0 ? (
                 <div className="space-y-3">
                   {secondTimeData.todayEntries.map((entry: any) => {
-                    const startTime = new Date(entry.start_time);
-                    const now = new Date();
+                    const startTime = parseToISTDate(entry.start_time);
                     
                     // Get comprehensive duration information using database duration
                     const duration = secondTimeApi.getDurationInfo(entry);
@@ -565,14 +547,14 @@ export function DashboardOverview() {
                             </Badge>
                           </div>
                           <p className="text-sm font-medium text-gray-800">
-                            {startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {
+                            {formatDateForDisplay(startTime, 'h:mm a')} - {
                               duration.isOngoing 
                                 ? 'Now (ongoing)' 
-                                : endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                : formatDateForDisplay(endTime, 'h:mm a')
                             }
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
-                            Entry ID: {entry.id.slice(0, 8)} • {startTime.toLocaleDateString()}
+                            Entry ID: {entry.id.slice(0, 8)} • {formatDateForDisplay(startTime, 'MMM d, yyyy')}
                             {duration.isOngoing && <span className="text-orange-600 font-medium"> • Live Session</span>}
                           </p>
                         </div>
@@ -586,10 +568,7 @@ export function DashboardOverview() {
                             {duration.isOngoing ? 'Live' : 'Total'} • {duration.seconds}s
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            Started: {startTime.toLocaleDateString([], { 
-                              month: 'short', 
-                              day: 'numeric' 
-                            })}
+                            Started: {formatDateForDisplay(startTime, 'MMM d')}
                           </p>
                         </div>
                       </div>
@@ -628,7 +607,7 @@ export function DashboardOverview() {
                         </p>
                       </div>
                       <Badge variant="outline" className="border-orange-200/50">
-                        {format(new Date(holiday.date), 'MMM dd')}
+                        {formatDateForDisplay(holiday.date, 'MMM dd')}
                       </Badge>
                     </div>
                   ))}

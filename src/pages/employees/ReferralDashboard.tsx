@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAllReferrals, useUpdateReferralStatus } from '@/hooks/useEmployees';
 import { useCreateJobPosition, useDepartmentsBasic, useAllJobPositions, useUpdateJobPosition, useDeleteJobPosition } from '@/hooks/useATS';
 import { useAuth } from '@/contexts/AuthContext';
@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -16,7 +16,6 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   UserPlus,
-  Search,
   Filter,
   Eye,
   Edit,
@@ -32,7 +31,7 @@ import {
   Plus,
   Minus
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { ConfirmDelete } from '@/components/ui/confirm-delete';
 
@@ -76,14 +75,7 @@ export function ReferralDashboard() {
   const [howToApply, setHowToApply] = useState('');
   const [applicationDeadline, setApplicationDeadline] = useState('');
   const [referralEncouraged, setReferralEncouraged] = useState(true);
-  // Legacy fields (keeping for backward compatibility)
-  const [positionDescription, setPositionDescription] = useState('');
-  const [positionRequirements, setPositionRequirements] = useState('');
-  const [experienceLevel, setExperienceLevel] = useState('mid');
-  const [employmentType, setEmploymentType] = useState('full_time');
-  const [salaryMin, setSalaryMin] = useState('');
-  const [salaryMax, setSalaryMax] = useState('');
-  const [jobStatus, setJobStatus] = useState('open');
+  // Legacy fields (keeping for backward compatibility) - removed unused variables
 
   // Positions tab filters and editing
   const [positionsSearch, setPositionsSearch] = useState('');
@@ -93,8 +85,6 @@ export function ReferralDashboard() {
   const [editingPosition, setEditingPosition] = useState<any>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editDepartmentId, setEditDepartmentId] = useState('');
-  const [editDescription, setEditDescription] = useState('');
-  const [editRequirements, setEditRequirements] = useState('');
   const [editExperienceLevel, setEditExperienceLevel] = useState('mid');
   const [editEmploymentType, setEditEmploymentType] = useState('full_time');
   const [editSalaryMin, setEditSalaryMin] = useState('');
@@ -111,6 +101,7 @@ export function ReferralDashboard() {
   const [editApplicationDeadline, setEditApplicationDeadline] = useState('');
   const [editReferralEncouraged, setEditReferralEncouraged] = useState(true);
   const [editWorkType, setEditWorkType] = useState('full_time');
+  // Removed unused editDescription and editRequirements
 
   // Bullet point helper functions
   const addBulletPoint = () => {
@@ -137,14 +128,7 @@ export function ReferralDashboard() {
       .join('\n');
   };
 
-  const stringToBullets = (str: string) => {
-    if (!str) return [''];
-    return str
-      .split('\n')
-      .map(line => line.replace(/^[•\-\*]\s*/, '').trim())
-      .filter(line => line)
-      .concat(['']); // Add empty bullet for new input
-  };
+  // Removed unused stringToBullets function
 
   const handleCreatePosition = () => {
     if (!user?.id || !jobTitle.trim() || !positionDepartmentId) return;
@@ -187,14 +171,7 @@ export function ReferralDashboard() {
         setHowToApply('');
         setApplicationDeadline('');
         setReferralEncouraged(true);
-        // Reset legacy fields
-        setPositionDescription('');
-        setPositionRequirements('');
-        setExperienceLevel('mid');
-        setEmploymentType('full_time');
-        setSalaryMin('');
-        setSalaryMax('');
-        setJobStatus('open');
+        // Reset legacy fields - removed unused variables
       }
     });
   };
@@ -468,7 +445,7 @@ export function ReferralDashboard() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>{format(new Date(referral.created_at), 'MMM dd, yyyy')}</TableCell>
+                      <TableCell>{formatDateForDisplay(referral.created_at, 'MMM dd, yyyy')}</TableCell>
                       <TableCell>
                         <div className="flex gap-2">
                           <Dialog>
@@ -743,13 +720,13 @@ export function ReferralDashboard() {
                                       <div>
                                         <p className="font-medium">Submitted On:</p>
                                         <p className="text-muted-foreground">
-                                          {format(new Date(selectedReferral.created_at), 'MMM dd, yyyy HH:mm')}
+                                          {formatDateForDisplay(selectedReferral.created_at, 'MMM dd, yyyy HH:mm')}
                                         </p>
                                       </div>
                                       <div>
                                         <p className="font-medium">Last Updated:</p>
                                         <p className="text-muted-foreground">
-                                          {format(new Date(selectedReferral.updated_at), 'MMM dd, yyyy HH:mm')}
+                                          {formatDateForDisplay(selectedReferral.updated_at, 'MMM dd, yyyy HH:mm')}
                                         </p>
                                       </div>
                                       <div>
@@ -1173,7 +1150,7 @@ export function ReferralDashboard() {
                           {pos.referral_encouraged ? 'Encouraged' : 'Not Encouraged'}
                         </Badge>
                       </TableCell>
-                      <TableCell>{format(new Date(pos.created_at), 'MMM dd, yyyy')}</TableCell>
+                      <TableCell>{formatDateForDisplay(pos.created_at, 'MMM dd, yyyy')}</TableCell>
                       <TableCell>
                         <div className="flex gap-2">
                           <Dialog>
@@ -1285,7 +1262,7 @@ export function ReferralDashboard() {
                                           <div>
                                             <p className="font-medium">Application Deadline:</p>
                                             <p className="text-muted-foreground">
-                                              {format(new Date(pos.application_deadline), 'MMM dd, yyyy')}
+                                              {formatDateForDisplay(pos.application_deadline, 'MMM dd, yyyy')}
                                             </p>
                                           </div>
                                         )}
@@ -1350,11 +1327,11 @@ export function ReferralDashboard() {
                                     </div>
                                     <div>
                                       <p className="font-medium">Created At:</p>
-                                      <p className="text-muted-foreground">{pos.created_at ? format(new Date(pos.created_at), 'MMM dd, yyyy HH:mm') : '—'}</p>
+                                      <p className="text-muted-foreground">{pos.created_at ? formatDateForDisplay(pos.created_at, 'MMM dd, yyyy HH:mm') : '—'}</p>
                                     </div>
                                     <div>
                                       <p className="font-medium">Updated At:</p>
-                                      <p className="text-muted-foreground">{pos.updated_at ? format(new Date(pos.updated_at), 'MMM dd, yyyy HH:mm') : '—'}</p>
+                                      <p className="text-muted-foreground">{pos.updated_at ? formatDateForDisplay(pos.updated_at, 'MMM dd, yyyy HH:mm') : '—'}</p>
                                     </div>
                                   </div>
                                 </div>
@@ -1382,9 +1359,7 @@ export function ReferralDashboard() {
                                 setEditLocation(pos.location || '');
                                 setEditIsRemote(!!pos.is_remote);
                                 setEditStatus(pos.status || 'open');
-                                // Legacy fields for backward compatibility
-                                setEditDescription(pos.description || '');
-                                setEditRequirements(pos.requirements || '');
+                                // Legacy fields for backward compatibility - removed unused variables
                               }}>
                                 <Edit className="h-4 w-4"/>
                               </Button>

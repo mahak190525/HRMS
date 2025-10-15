@@ -1,10 +1,8 @@
-import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useExitProcess } from '@/hooks/useExit';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   LogOut,
@@ -17,13 +15,12 @@ import {
   TrendingUp,
   AlertTriangle,
   User,
-  Building,
-  Target,
   Award
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useNavigate } from 'react-router-dom';
-import { format, differenceInDays } from 'date-fns';
+import { differenceInDays } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate, parseToISTDate } from '@/utils/dateUtils';
 
 export function ExitDashboard() {
   const { user } = useAuth();
@@ -35,7 +32,7 @@ export function ExitDashboard() {
               ['super_admin', 'admin'].includes(user?.role?.name || user?.role_id || '');
 
   const daysRemaining = exitProcess ? 
-    Math.max(0, differenceInDays(new Date(exitProcess.last_working_day), new Date())) : 0;
+    Math.max(0, differenceInDays(parseToISTDate(exitProcess.last_working_day), getCurrentISTDate())) : 0;
 
   const dashboardCards = [
     {
@@ -170,7 +167,7 @@ export function ExitDashboard() {
               <div className="text-2xl font-bold text-orange-600">{daysRemaining}</div>
               <div className="text-sm text-muted-foreground">days remaining</div>
               <div className="text-xs text-muted-foreground mt-1">
-                Last day: {format(new Date(exitProcess.last_working_day), 'MMM dd, yyyy')}
+                Last day: {formatDateForDisplay(exitProcess.last_working_day, 'MMM dd, yyyy')}
               </div>
             </div>
           </div>
@@ -256,7 +253,7 @@ export function ExitDashboard() {
                   <div className="flex-1">
                     <p className="font-medium">Resignation Submitted</p>
                     <p className="text-sm text-muted-foreground">
-                      {format(new Date(exitProcess.resignation_date), 'MMM dd, yyyy')}
+                      {formatDateForDisplay(exitProcess.resignation_date, 'MMM dd, yyyy')}
                     </p>
                   </div>
                   <CheckCircle className="h-5 w-5 text-green-600" />
@@ -295,7 +292,7 @@ export function ExitDashboard() {
                   <div className="flex-1">
                     <p className="font-medium">Last Working Day</p>
                     <p className="text-sm text-muted-foreground">
-                      {format(new Date(exitProcess.last_working_day), 'MMM dd, yyyy')}
+                      {formatDateForDisplay(exitProcess.last_working_day, 'MMM dd, yyyy')}
                     </p>
                   </div>
                   <div className="text-sm font-medium text-orange-600">
@@ -330,11 +327,11 @@ export function ExitDashboard() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Resignation Date:</span>
-                  <span className="font-medium">{format(new Date(exitProcess.resignation_date), 'MMM dd, yyyy')}</span>
+                  <span className="font-medium">{formatDateForDisplay(exitProcess.resignation_date, 'MMM dd, yyyy')}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Last Working Day:</span>
-                  <span className="font-medium">{format(new Date(exitProcess.last_working_day), 'MMM dd, yyyy')}</span>
+                  <span className="font-medium">{formatDateForDisplay(exitProcess.last_working_day, 'MMM dd, yyyy')}</span>
                 </div>
                 {exitProcess.new_company && (
                   <div className="flex justify-between">

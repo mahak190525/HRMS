@@ -3,6 +3,8 @@
  * IST is UTC+5:30
  */
 
+import { format } from 'date-fns';
+
 // IST timezone offset in minutes (5 hours 30 minutes = 330 minutes)
 const IST_OFFSET_MINUTES = 5 * 60 + 30;
 
@@ -55,6 +57,7 @@ export function getISTDateOffset(daysOffset: number): string {
 
 /**
  * Parse a date string and return IST date
+ * This ensures the parsed date is always in IST timezone
  */
 export function parseToISTDate(dateString: string): Date {
   const date = new Date(dateString);
@@ -100,23 +103,22 @@ export function isPastDate(date: Date | string): boolean {
 }
 
 /**
- * Format date for display (keeping original date-fns format behavior)
- * This preserves the original date without timezone conversion for display
+ * Format date for display in IST timezone
+ * This ensures all displayed dates are consistently in IST
  */
 export function formatDateForDisplay(date: Date | string, formatStr?: string): string {
   const dateObj = typeof date === 'string' ? new Date(date) : date;
   
-  // For display purposes, we want to show the date as stored in the database
-  // without additional timezone conversion
+  // Convert to IST for consistent display
+  const istDate = convertToIST(dateObj);
+  
   if (formatStr) {
-    // If a specific format is requested, use date-fns format
-    const { format } = require('date-fns');
-    return format(dateObj, formatStr);
+    // If a specific format is requested, use date-fns format with IST date
+    return format(istDate, formatStr);
   }
   
   // Default format: MMM dd, yyyy
-  const { format } = require('date-fns');
-  return format(dateObj, 'MMM dd, yyyy');
+  return format(istDate, 'MMM dd, yyyy');
 }
 
 /**
@@ -138,6 +140,30 @@ export function dateToISOString(date: Date): string {
   return formatDateForDatabase(date);
 }
 
+/**
+ * Compare two dates in IST timezone
+ * Returns -1 if date1 < date2, 0 if equal, 1 if date1 > date2
+ */
+export function compareISTDates(date1: Date | string, date2: Date | string): number {
+  const istDate1 = typeof date1 === 'string' ? parseToISTDate(date1) : convertToIST(date1);
+  const istDate2 = typeof date2 === 'string' ? parseToISTDate(date2) : convertToIST(date2);
+  
+  if (istDate1 < istDate2) return -1;
+  if (istDate1 > istDate2) return 1;
+  return 0;
+}
+
+/**
+ * Get IST date range for a given start and end date
+ * Useful for filtering data by date ranges in IST
+ */
+export function getISTDateRange(startDate: string, endDate: string): { start: Date; end: Date } {
+  return {
+    start: parseToISTDate(startDate),
+    end: parseToISTDate(endDate)
+  };
+}
+
 export default {
   getCurrentISTDate,
   formatDateForDatabase,
@@ -151,5 +177,7 @@ export default {
   isPastDate,
   formatDateForDisplay,
   getCurrentISTTime,
-  dateToISOString
+  dateToISOString,
+  compareISTDates,
+  getISTDateRange
 };

@@ -1,31 +1,27 @@
-import React, { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   History,
-  Search,
   Filter,
   Download,
-  Calendar,
   DollarSign,
-  User,
   Edit,
   Plus,
   CheckCircle,
   AlertTriangle
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { usePayrollLogs } from '@/hooks/useFinance';
 
 export function PayrollLogs() {
-  const { user } = useAuth();
+  // Removed unused user variable
   const { data: payrollLogs, isLoading: logsLoading } = usePayrollLogs();
   const [searchTerm, setSearchTerm] = useState('');
   const [actionFilter, setActionFilter] = useState('');
@@ -58,7 +54,7 @@ export function PayrollLogs() {
     const csvContent = [
       headers.join(','),
       ...filteredLogs.map(log => [
-        format(new Date(log.adjusted_at), 'yyyy-MM-dd HH:mm:ss'),
+        formatDateForDisplay(log.adjusted_at, 'yyyy-MM-dd HH:mm:ss'),
         `"${log.employee.full_name}"`,
         log.employee.employee_id,
         'adjustment',
@@ -75,7 +71,7 @@ export function PayrollLogs() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `payroll_logs_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.download = `payroll_logs_${formatDateForDisplay(getCurrentISTDate(), 'yyyy-MM-dd')}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -219,7 +215,7 @@ export function PayrollLogs() {
                   <SelectItem value="all">All Months</SelectItem>
                   {Array.from({ length: 12 }, (_, i) => (
                     <SelectItem key={i + 1} value={(i + 1).toString()}>
-                      {format(new Date(2024, i, 1), 'MMMM')}
+                      {formatDateForDisplay(new Date(2024, i, 1), 'MMMM')}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -283,10 +279,10 @@ export function PayrollLogs() {
                   <TableRow key={log.id}>
                     <TableCell>
                       <div className="text-sm">
-                        {format(new Date(log.adjusted_at || log.created_at), 'MMM dd, yyyy')}
+                        {formatDateForDisplay(log.adjusted_at || log.created_at, 'MMM dd, yyyy')}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {format(new Date(log.adjusted_at || log.created_at), 'HH:mm:ss')}
+                        {formatDateForDisplay(log.adjusted_at || log.created_at, 'HH:mm:ss')}
                       </div>
                     </TableCell>
                     <TableCell>

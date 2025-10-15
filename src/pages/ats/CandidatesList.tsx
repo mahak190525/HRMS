@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAllCandidates, useCreateCandidate, useUpdateCandidate, useCreateInterview } from '@/hooks/useATS';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -13,18 +13,13 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Textarea } from '@/components/ui/textarea';
 import {
-  Users,
   Plus,
-  Search,
   Filter,
   Eye,
   Calendar as CalendarIcon,
   Mail,
   Phone,
-  Building,
-  User,
   FileText,
   Clock,
   CheckCircle,
@@ -33,7 +28,7 @@ import {
   Edit,
   UserPlus
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -59,7 +54,7 @@ const candidateSchema = z.object({
 
 const interviewSchema = z.object({
   interview_type: z.string().min(1, 'Interview type is required'),
-  scheduled_at: z.date({ required_error: 'Interview date is required' }),
+  scheduled_at: z.date({ message: 'Interview date is required' }),
   duration_minutes: z.number().min(15, 'Duration must be at least 15 minutes'),
   meeting_link: z.string().url().optional().or(z.literal('')),
 });
@@ -159,7 +154,7 @@ export function CandidatesList() {
       candidate_id: selectedCandidate.id,
       interviewer_id: user.id,
       interview_type: data.interview_type,
-      scheduled_at: data.scheduled_at.toISOString(),
+      scheduled_at: getCurrentISTDate().toISOString(),
       duration_minutes: data.duration_minutes,
       meeting_link: data.meeting_link || null,
       status: 'scheduled',
@@ -535,7 +530,7 @@ export function CandidatesList() {
                       </Badge>
                     </div>
                   </TableCell>
-                  <TableCell>{format(new Date(candidate.created_at), 'MMM dd, yyyy')}</TableCell>
+                  <TableCell>{formatDateForDisplay(candidate.created_at, 'MMM dd, yyyy')}</TableCell>
                   <TableCell>
                     {candidate.referred_by_user ? (
                       <div className="flex items-center gap-2">
@@ -739,7 +734,7 @@ export function CandidatesList() {
                                             )}
                                           >
                                             <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {field.value ? format(field.value, "PPP HH:mm") : "Pick date and time"}
+                                            {field.value ? formatDateForDisplay(field.value, "PPP HH:mm") : "Pick date and time"}
                                           </Button>
                                         </FormControl>
                                       </PopoverTrigger>
@@ -748,7 +743,7 @@ export function CandidatesList() {
                                           mode="single"
                                           selected={field.value}
                                           onSelect={field.onChange}
-                                          disabled={(date) => date < new Date()}
+                                          disabled={(date) => date < getCurrentISTDate()}
                                           initialFocus
                                         />
                                       </PopoverContent>

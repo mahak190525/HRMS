@@ -1,12 +1,12 @@
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { saveAs } from 'file-saver';
+import { formatDateForDisplay, getCurrentISTDate } from './dateUtils';
 
 // Helper function to format date for display
 const formatDate = (dateString: string | null) => {
   if (!dateString) return 'N/A';
-  return new Date(dateString).toLocaleDateString();
+  return formatDateForDisplay(dateString, 'MM/dd/yyyy');
 };
 
 // Helper function to format currency
@@ -42,7 +42,7 @@ export const exportAssetAssignmentsToExcel = (data: any[], filters?: any) => {
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Asset Assignments');
 
   // Generate filename with timestamp
-  const timestamp = new Date().toISOString().split('T')[0];
+  const timestamp = formatDateForDisplay(getCurrentISTDate(), 'yyyy-MM-dd');
   const filename = `Asset_Assignments_${timestamp}.xlsx`;
 
   // Write and download file
@@ -58,7 +58,7 @@ export const exportAssetAssignmentsToPDF = (data: any[], filters?: any) => {
   
   // Add generation date
   doc.setFontSize(10);
-  doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 32);
+  doc.text(`Generated on: ${formatDateForDisplay(getCurrentISTDate(), 'MMM dd, yyyy')}`, 14, 32);
   
   // Add filter information if any
   if (filters) {
@@ -97,7 +97,7 @@ export const exportAssetAssignmentsToPDF = (data: any[], filters?: any) => {
   });
 
   // Generate filename with timestamp
-  const timestamp = new Date().toISOString().split('T')[0];
+  const timestamp = formatDateForDisplay(getCurrentISTDate(), 'yyyy-MM-dd');
   const filename = `Asset_Assignments_${timestamp}.pdf`;
 
   doc.save(filename);
@@ -131,7 +131,7 @@ export const exportAssetsToExcel = (data: any[], filters?: any) => {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Assets');
 
-  const timestamp = new Date().toISOString().split('T')[0];
+  const timestamp = formatDateForDisplay(getCurrentISTDate(), 'yyyy-MM-dd');
   const filename = `Assets_${timestamp}.xlsx`;
   XLSX.writeFile(workbook, filename);
 };
@@ -148,7 +148,7 @@ export const exportAssetsToPDF = (data: any[], filters?: any) => {
   doc.text('Assets Report', 14, 22);
   
   doc.setFontSize(10);
-  doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 32);
+  doc.text(`Generated on: ${formatDateForDisplay(getCurrentISTDate(), 'MMM dd, yyyy')}`, 14, 32);
   
   if (filters) {
     let yPos = 42;
@@ -180,7 +180,7 @@ export const exportAssetsToPDF = (data: any[], filters?: any) => {
     headStyles: { fillColor: [71, 85, 105] }
   });
 
-  const timestamp = new Date().toISOString().split('T')[0];
+  const timestamp = formatDateForDisplay(getCurrentISTDate(), 'yyyy-MM-dd');
   const filename = `Assets_${timestamp}.pdf`;
   doc.save(filename);
 };
@@ -214,7 +214,7 @@ export const exportVMsToExcel = (data: any[], filters?: any) => {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Virtual Machines');
 
-  const timestamp = new Date().toISOString().split('T')[0];
+  const timestamp = formatDateForDisplay(getCurrentISTDate(), 'yyyy-MM-dd');
   const filename = `Virtual_Machines_${timestamp}.xlsx`;
   XLSX.writeFile(workbook, filename);
 };
@@ -226,7 +226,7 @@ export const exportVMsToPDF = (data: any[], filters?: any) => {
   doc.text('Virtual Machines Report', 14, 22);
   
   doc.setFontSize(10);
-  doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 32);
+  doc.text(`Generated on: ${formatDateForDisplay(getCurrentISTDate(), 'MMM dd, yyyy')}`, 14, 32);
   
   if (filters) {
     let yPos = 42;
@@ -258,7 +258,7 @@ export const exportVMsToPDF = (data: any[], filters?: any) => {
     headStyles: { fillColor: [71, 85, 105] }
   });
 
-  const timestamp = new Date().toISOString().split('T')[0];
+  const timestamp = formatDateForDisplay(getCurrentISTDate(), 'yyyy-MM-dd');
   const filename = `Virtual_Machines_${timestamp}.pdf`;
   doc.save(filename);
 };
@@ -387,7 +387,7 @@ export const exportComplaintsToExcel = (data: any[], filters?: any) => {
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Asset Complaints');
 
   // Generate filename with timestamp
-  const timestamp = new Date().toISOString().split('T')[0];
+  const timestamp = formatDateForDisplay(getCurrentISTDate(), 'yyyy-MM-dd');
   const filename = `Asset_Complaints_${timestamp}.xlsx`;
 
   // Write and download file
@@ -403,7 +403,7 @@ export const exportComplaintsToPDF = (data: any[], filters?: any) => {
   
   // Add export info
   doc.setFontSize(10);
-  doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 32);
+  doc.text(`Generated on: ${formatDateForDisplay(getCurrentISTDate(), 'MMM dd, yyyy')}`, 14, 32);
   doc.text(`Total Records: ${data.length}`, 14, 38);
   
   // Add filters info if provided
@@ -450,7 +450,7 @@ export const exportComplaintsToPDF = (data: any[], filters?: any) => {
   });
   
   // Generate filename with timestamp
-  const timestamp = new Date().toISOString().split('T')[0];
+  const timestamp = formatDateForDisplay(getCurrentISTDate(), 'yyyy-MM-dd');
   const filename = `Asset_Complaints_${timestamp}.pdf`;
   
   // Save file

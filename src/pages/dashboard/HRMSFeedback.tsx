@@ -9,8 +9,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Label } from '@/components/ui/label';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { MessageSquare, Plus, Calendar, AlertCircle, CheckCircle, Clock, Eye, User } from 'lucide-react';
-import { format } from 'date-fns';
+import { MessageSquare, Plus, Calendar, AlertCircle, CheckCircle, Clock, Eye } from 'lucide-react';
+import { formatDateForDisplay } from '@/utils/dateUtils';
 
 const getStatusIcon = (status: string) => {
   switch (status) {
@@ -88,7 +88,7 @@ function FeedbackViewModal({ feedback }: FeedbackViewModalProps) {
         <div className="flex items-center justify-between text-sm text-gray-500 pt-4 border-t">
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4" />
-            Submitted: {format(new Date(feedback.created_at), 'MMM dd yyyy, hh:mm a')}
+            Submitted: {formatDateForDisplay(feedback.created_at, 'MMM dd yyyy, hh:mm a')}
           </div>
           <div className="flex items-center gap-2">
             Status: 
@@ -103,7 +103,7 @@ function FeedbackViewModal({ feedback }: FeedbackViewModalProps) {
           <div className="text-sm text-gray-500 pt-2 border-t">
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4" />
-              Last updated: {format(new Date(feedback.updated_at), 'MMM dd yyyy, hh:mm a')}
+              Last updated: {formatDateForDisplay(feedback.updated_at, 'MMM dd yyyy, hh:mm a')}
             </div>
           </div>
         )}
@@ -286,7 +286,7 @@ export function HRMSFeedback() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-gray-500">
-                        {format(new Date(item.created_at), 'MMM dd, yyyy')}
+                        {formatDateForDisplay(item.created_at, 'MMM dd, yyyy')}
                       </TableCell>
                       <TableCell>
                         <Dialog>

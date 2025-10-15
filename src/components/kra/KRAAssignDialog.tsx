@@ -12,7 +12,7 @@ import {
   Send,
   User
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate } from '@/utils/dateUtils';
 
 import type { KRATemplate } from '@/hooks/useKRA';
 
@@ -77,7 +77,7 @@ export function KRAAssignDialog({ template, teamMembers, existingAssignments = [
             <div>
               <span className="text-muted-foreground">Evaluation Period:</span>
               <div className="font-medium">
-                {format(new Date(template.evaluation_period_start), 'MMM dd')} - {format(new Date(template.evaluation_period_end), 'MMM dd, yyyy')}
+                {formatDateForDisplay(template.evaluation_period_start, 'MMM dd')} - {formatDateForDisplay(template.evaluation_period_end, 'MMM dd, yyyy')}
               </div>
             </div>
             <div>
@@ -99,7 +99,7 @@ export function KRAAssignDialog({ template, teamMembers, existingAssignments = [
           type="date"
           value={dueDate}
           onChange={(e) => setDueDate(e.target.value)}
-          min={new Date().toISOString().split('T')[0]}
+          min={getCurrentISTDate().toISOString().split('T')[0]}
           required
         />
         <p className="text-xs text-muted-foreground">
@@ -223,7 +223,7 @@ export function KRAAssignDialog({ template, teamMembers, existingAssignments = [
                           {existingAssignment.status}
                         </Badge>
                         <span className="text-xs text-muted-foreground">
-                          {format(new Date(existingAssignment.assigned_date), 'MMM dd')}
+                          {formatDateForDisplay(existingAssignment.assigned_date, 'MMM dd')}
                         </span>
                       </div>
                     )}
@@ -255,7 +255,7 @@ export function KRAAssignDialog({ template, teamMembers, existingAssignments = [
             <div className="mt-2 text-sm text-blue-700">
               This KRA template will be assigned to <strong>{selectedEmployees.length}</strong> team member{selectedEmployees.length !== 1 ? 's' : ''} 
               {dueDate && (
-                <span> with a due date of <strong>{format(new Date(dueDate), 'MMMM dd, yyyy')}</strong></span>
+                <span> with a due date of <strong>{formatDateForDisplay(dueDate, 'MMMM dd, yyyy')}</strong></span>
               )}.
             </div>
             <div className="mt-2 text-xs text-blue-600">

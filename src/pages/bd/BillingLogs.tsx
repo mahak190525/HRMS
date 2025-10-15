@@ -4,13 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   History,
-  Search,
   Filter,
   Download,
   FileText,
@@ -18,10 +16,9 @@ import {
   Edit,
   Plus,
   User,
-  Calendar,
-  DollarSign
+  AlertTriangle
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 export function BillingLogs() {
@@ -55,7 +52,7 @@ export function BillingLogs() {
     const csvContent = [
       headers.join(','),
       ...filteredLogs.map(log => [
-        format(new Date(log.created_at), 'yyyy-MM-dd HH:mm:ss'),
+        formatDateForDisplay(log.created_at, 'yyyy-MM-dd HH:mm:ss'),
         `"${log.changed_by_user?.full_name || ''}"`,
         log.action_type,
         log.field_changed || '',
@@ -70,7 +67,7 @@ export function BillingLogs() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `billing_logs_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.download = `billing_logs_${formatDateForDisplay(getCurrentISTDate(), 'yyyy-MM-dd')}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -247,10 +244,10 @@ export function BillingLogs() {
                   <TableRow key={log.id}>
                     <TableCell>
                       <div className="text-sm">
-                        {format(new Date(log.created_at), 'MMM dd, yyyy')}
+                        {formatDateForDisplay(log.created_at, 'MMM dd, yyyy')}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {format(new Date(log.created_at), 'HH:mm:ss')}
+                        {formatDateForDisplay(log.created_at, 'HH:mm:ss')}
                       </div>
                     </TableCell>
                     <TableCell>

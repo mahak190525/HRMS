@@ -43,6 +43,7 @@ export function useEmployeePermissions(): EmployeePermissions {
     const isAdmin = user.isSA || roleName === 'admin' || roleName === 'super_admin';
     const isHR = roleName === 'hr' || roleName === 'hrm';
     const isManager = ['sdm', 'bdm', 'qam', 'hrm', 'manager'].includes(roleName);
+    const isFinance = roleName === 'finance' || roleName === 'finance_manager';
 
     // Admin has full access to everything
     if (isAdmin) {
@@ -97,6 +98,25 @@ export function useEmployeePermissions(): EmployeePermissions {
         canViewSalaryInfo: false, // Managers cannot view salary info
         canManageAccess: false,
         accessLevel: 'team',
+        isReadOnly: false,
+      };
+    }
+
+    // Finance can manage assets and view salary info
+    if (isFinance) {
+      return {
+        canViewAllEmployees: true,
+        canEditAllEmployees: false,
+        canViewTeamEmployees: false,
+        canEditTeamEmployees: false,
+        canViewOwnProfile: true,
+        canEditOwnProfile: true,
+        canManageAssets: true, // Finance can manage assets
+        canManageRoles: false,
+        canManageDepartments: false,
+        canViewSalaryInfo: true, // Finance can view salary info
+        canManageAccess: false,
+        accessLevel: 'all',
         isReadOnly: false,
       };
     }

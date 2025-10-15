@@ -1,16 +1,15 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
 import { useAllKRAAssignments } from '@/hooks/useKRA';
 import { useKRAPermissions } from '@/hooks/useKRAPermissions';
 import { KRAModal } from './KRAViewModal';
-import { format } from 'date-fns';
-import { Eye, Search, Filter, Users, BarChart3, Calendar, CheckCircle2, Clock, AlertCircle, UserCheck } from 'lucide-react';
+import { formatDateForDisplay } from '@/utils/dateUtils';
+import { Eye, Search, Users, BarChart3, CheckCircle2, Clock, AlertCircle, UserCheck } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export function AdminKRAOverview() {
@@ -245,7 +244,7 @@ export function AdminKRAOverview() {
                           <div>
                             <div className="font-medium">{assignment.employee?.full_name}</div>
                             <div className="text-sm text-muted-foreground">
-                              {assignment.employee?.employee_id} • {assignment.employee?.position}
+                              {assignment.employee?.employee_id}
                             </div>
                           </div>
                         </div>
@@ -256,9 +255,9 @@ export function AdminKRAOverview() {
                           </div>
                           <div className="text-xs text-muted-foreground">
                             Manager: {assignment.assigned_by_user?.full_name} • 
-                            Assigned: {format(new Date(assignment.created_at), 'MMM dd, yyyy')}
+                            Assigned: {formatDateForDisplay(assignment.assigned_date, 'MMM dd, yyyy')}
                             {assignment.template?.evaluation_period_start && assignment.template?.evaluation_period_end && (
-                              <> • Period: {format(new Date(assignment.template.evaluation_period_start), 'MMM dd')} - {format(new Date(assignment.template.evaluation_period_end), 'MMM dd, yyyy')}</>
+                              <> • Period: {formatDateForDisplay(assignment.template.evaluation_period_start, 'MMM dd')} - {formatDateForDisplay(assignment.template.evaluation_period_end, 'MMM dd, yyyy')}</>
                             )}
                           </div>
                         </div>

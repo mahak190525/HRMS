@@ -27,7 +27,7 @@ import {
   Edit,
   Camera,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -648,7 +648,7 @@ export function Assets() {
                             </TableCell>
                             <TableCell>
                               {assignment.assigned_date 
-                                ? format(new Date(assignment.assigned_date), 'PPP')
+                                ? formatDateForDisplay(assignment.assigned_date, 'PPP')
                                 : 'N/A'
                               }
                             </TableCell>
@@ -889,7 +889,7 @@ export function Assets() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            {format(new Date(request.created_at), 'PPP')}
+                            {formatDateForDisplay(request.created_at, 'PPP')}
                           </TableCell>
                           <TableCell>
                             {request.approved_by_user?.full_name || 
@@ -1032,7 +1032,7 @@ export function Assets() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            {format(new Date(complaint.created_at), 'PPP')}
+                            {formatDateForDisplay(complaint.created_at, 'PPP')}
                           </TableCell>
                           <TableCell>
                             {complaint.resolved_by_user?.full_name || '-'}
@@ -1053,7 +1053,7 @@ export function Assets() {
                           </TableCell>
                           <TableCell>
                             {complaint.resolved_at 
-                              ? format(new Date(complaint.resolved_at), 'PPP')
+                              ? formatDateForDisplay(complaint.resolved_at, 'PPP')
                               : '-'
                             }
                           </TableCell>
@@ -1118,7 +1118,7 @@ export function Assets() {
                 <div>
                   <p className="font-medium text-sm">Submitted:</p>
                   <p className="text-muted-foreground text-sm mt-1">
-                    {format(new Date(selectedComplaint.created_at), 'PPP')}
+                    {formatDateForDisplay(selectedComplaint.created_at, 'PPP')}
                   </p>
                 </div>
               </div>
@@ -1151,7 +1151,7 @@ export function Assets() {
                     <div>
                       <p className="font-medium text-sm">Resolution Date:</p>
                       <p className="text-muted-foreground text-sm mt-1">
-                        {format(new Date(selectedComplaint.resolved_at), 'PPP')}
+                        {formatDateForDisplay(selectedComplaint.resolved_at, 'PPP')}
                       </p>
                     </div>
                   )}

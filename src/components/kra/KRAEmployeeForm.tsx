@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -18,7 +18,7 @@ import {
   User,
   AlertTriangle
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate, parseToISTDate } from '@/utils/dateUtils';
 import { useAuth } from '@/contexts/AuthContext';
 import type { KRAAssignment } from '@/hooks/useKRA';
 import { useKRAAssignmentDetails, useUpdateKRAEvaluation } from '@/hooks/useKRA';
@@ -53,7 +53,7 @@ export function KRAEmployeeForm({ assignment, isReadOnly = false, onClose }: KRA
       .from('kra_assignments')
       .update({ 
         status: status,
-        submitted_at: status === 'submitted' ? new Date().toISOString() : undefined,
+        submitted_at: status === 'submitted' ? getCurrentISTDate().toISOString() : undefined,
         submitted_by: status === 'submitted' ? user?.id : undefined
       })
       .eq('id', assignment.id);
@@ -138,7 +138,7 @@ export function KRAEmployeeForm({ assignment, isReadOnly = false, onClose }: KRA
 
     setIsSubmitting(true);
     try {
-      const now = new Date().toISOString();
+      const now = getCurrentISTDate().toISOString();
       
       for (const goal of detailedAssignment.template.goals) {
         const evaluation = evaluations[goal.id];
@@ -180,8 +180,8 @@ export function KRAEmployeeForm({ assignment, isReadOnly = false, onClose }: KRA
   };
 
   const isCompleted = assignment.status === 'submitted' || assignment.status === 'evaluated';
-  const dueDate = assignment.due_date ? new Date(assignment.due_date) : null;
-  const isOverdue = dueDate && new Date() > dueDate && !isCompleted;
+  const dueDate = assignment.due_date ? parseToISTDate(assignment.due_date) : null;
+  const isOverdue = dueDate && getCurrentISTDate() > dueDate && !isCompleted;
 
   if (!detailedAssignment) {
     return <div>Loading...</div>;
@@ -205,7 +205,7 @@ export function KRAEmployeeForm({ assignment, isReadOnly = false, onClose }: KRA
                     {detailedAssignment.template?.evaluation_period_start && 
                      detailedAssignment.template?.evaluation_period_end && (
                       <>
-                        {format(new Date(detailedAssignment.template.evaluation_period_start), 'MMM dd')} - {format(new Date(detailedAssignment.template.evaluation_period_end), 'MMM dd, yyyy')}
+                        {formatDateForDisplay(detailedAssignment.template.evaluation_period_start, 'MMM dd')} - {formatDateForDisplay(detailedAssignment.template.evaluation_period_end, 'MMM dd, yyyy')}
                       </>
                     )}
                   </span>
@@ -218,7 +218,7 @@ export function KRAEmployeeForm({ assignment, isReadOnly = false, onClose }: KRA
                   <div className="flex items-center gap-1">
                     <Clock className="h-4 w-4" />
                     <span className={isOverdue ? 'text-red-600 font-medium' : ''}>
-                      Due: {format(dueDate, 'MMM dd, yyyy')}
+                      Due: {formatDateForDisplay(dueDate, 'MMM dd, yyyy')}
                       {isOverdue && ' (Overdue)'}
                     </span>
                   </div>
@@ -450,7 +450,7 @@ export function KRAEmployeeForm({ assignment, isReadOnly = false, onClose }: KRA
             <CheckCircle className="h-8 w-8 text-green-600 mx-auto mb-2" />
             <p className="text-green-800 font-medium">KRA Submitted Successfully</p>
             <p className="text-sm text-green-600">
-              {assignment.submitted_at && `Submitted on ${format(new Date(assignment.submitted_at), 'MMM dd, yyyy')}`}
+              {assignment.submitted_at && `Submitted on ${formatDateForDisplay(assignment.submitted_at, 'MMM dd, yyyy')}`}
             </p>
           </div>
         </div>

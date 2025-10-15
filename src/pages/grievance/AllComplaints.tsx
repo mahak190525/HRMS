@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAllComplaints, useComplaintCategories, useUpdateComplaintStatus, useRejectComplaint, useApproveComplaint, useReassignComplaint } from '@/hooks/useGrievance';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -13,7 +13,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
   List,
-  Search,
   Filter,
   Eye,
   CheckCircle,
@@ -22,11 +21,10 @@ import {
   AlertTriangle,
   AlertCircle,
   Download,
-  Calendar,
   UserCheck,
   RotateCcw
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 const categoryColors = {
@@ -62,7 +60,7 @@ export function AllComplaints() {
   const [selectedResolver, setSelectedResolver] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [reassignReason, setReassignReason] = useState('');
-  const [resolverOptions, setResolverOptions] = useState<any[]>([]);
+  const [resolverOptions] = useState<any[]>([]);
 
   const filteredComplaints = complaints?.filter(complaint => {
     const matchesSearch = complaint.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -193,7 +191,7 @@ export function AllComplaints() {
         complaint.category?.name || '',
         complaint.priority,
         complaint.status,
-        format(new Date(complaint.created_at), 'yyyy-MM-dd'),
+        formatDateForDisplay(complaint.created_at, 'yyyy-MM-dd'),
         `"${complaint.assigned_to_user?.full_name || 'Unassigned'}"`,
         `"${complaint.resolution || ''}"`
       ].join(','))
@@ -204,7 +202,7 @@ export function AllComplaints() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `complaints_report_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.download = `complaints_report_${formatDateForDisplay(getCurrentISTDate(), 'yyyy-MM-dd')}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -388,7 +386,7 @@ export function AllComplaints() {
                       <span className="text-sm text-muted-foreground">Unassigned</span>
                     )}
                   </TableCell>
-                  <TableCell>{format(new Date(complaint.created_at), 'MMM dd, yyyy')}</TableCell>
+                  <TableCell>{formatDateForDisplay(complaint.created_at, 'MMM dd, yyyy')}</TableCell>
                   <TableCell>
                     <div className="flex gap-2">
                       <Dialog>
@@ -462,9 +460,9 @@ export function AllComplaints() {
                               )}
 
                               <div className="flex justify-between text-xs text-muted-foreground pt-4 border-t">
-                                <span>Submitted: {format(new Date(selectedComplaint.created_at), 'MMM dd, yyyy HH:mm')}</span>
+                                <span>Submitted: {formatDateForDisplay(selectedComplaint.created_at, 'MMM dd, yyyy HH:mm')}</span>
                                 {selectedComplaint.resolved_at && (
-                                  <span>Resolved: {format(new Date(selectedComplaint.resolved_at), 'MMM dd, yyyy HH:mm')}</span>
+                                  <span>Resolved: {formatDateForDisplay(selectedComplaint.resolved_at, 'MMM dd, yyyy HH:mm')}</span>
                                 )}
                               </div>
                             </div>

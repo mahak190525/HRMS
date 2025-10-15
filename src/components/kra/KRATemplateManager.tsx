@@ -13,7 +13,7 @@ import {
   Target,
   FileText
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay } from '@/utils/dateUtils';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import type { KRATemplate } from '@/hooks/useKRA'
@@ -299,7 +299,7 @@ export function KRATemplateManager({ templates, isLoading, permissions }: KRATem
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4" />
                     <span>
-                      {format(new Date(template.evaluation_period_start), 'MMM dd')} - {format(new Date(template.evaluation_period_end), 'MMM dd, yyyy')}
+                      {formatDateForDisplay(template.evaluation_period_start, 'MMM dd')} - {formatDateForDisplay(template.evaluation_period_end, 'MMM dd, yyyy')}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">

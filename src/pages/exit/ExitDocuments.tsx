@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useExitProcess } from '@/hooks/useExit';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,16 +10,12 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   FileText,
   Download,
-  Eye,
   CheckCircle,
   Clock,
   AlertTriangle,
-  Calendar,
-  User,
-  Building,
   Mail
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 // Mock exit documents data
@@ -31,7 +27,7 @@ const mockExitDocuments = [
     description: 'Official experience certificate for your tenure',
     status: 'generated',
     file_url: 'https://example.com/experience-letter.pdf',
-    generated_at: new Date().toISOString(),
+    generated_at: getCurrentISTDate().toISOString(),
     is_required: true,
   },
   {
@@ -51,7 +47,7 @@ const mockExitDocuments = [
     description: 'Certificate showing your last drawn salary',
     status: 'generated',
     file_url: 'https://example.com/salary-certificate.pdf',
-    generated_at: new Date().toISOString(),
+    generated_at: getCurrentISTDate().toISOString(),
     is_required: true,
   },
   {
@@ -89,11 +85,7 @@ const mockExitDocuments = [
 export function ExitDocuments() {
   const { user } = useAuth();
   const { data: exitProcess, isLoading: exitProcessLoading } = useExitProcess();
-  const [selectedDocument, setSelectedDocument] = useState<any>(null);
-
-  // Check if user is HR
-  const isHR = user?.role?.name === 'hr' || user?.role_id === 'hr' || 
-              ['super_admin', 'admin'].includes(user?.role?.name || user?.role_id || '');
+  // Removed unused selectedDocument and isHR variables
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -265,7 +257,7 @@ export function ExitDocuments() {
                   </TableCell>
                   <TableCell>
                     {document.generated_at ? (
-                      format(new Date(document.generated_at), 'MMM dd, yyyy')
+                      formatDateForDisplay(document.generated_at, 'MMM dd, yyyy')
                     ) : (
                       <span className="text-muted-foreground">Pending</span>
                     )}
