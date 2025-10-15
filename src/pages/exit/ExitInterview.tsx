@@ -1,16 +1,13 @@
-import React, { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useState } from 'react';
 import { useExitProcess } from '@/hooks/useExit';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -21,14 +18,12 @@ import {
   Star,
   User,
   Video,
-  Phone,
-  MapPin,
   Send,
-  Eye,
   Edit,
   Save
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -75,7 +70,7 @@ const availableTimeSlots = [
 ];
 
 export function ExitInterview() {
-  const { user } = useAuth();
+  // Removed unused user variable
   const { data: exitProcess, isLoading: exitProcessLoading } = useExitProcess();
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedTime, setSelectedTime] = useState('');
@@ -97,9 +92,7 @@ export function ExitInterview() {
   const [additionalFeedback, setAdditionalFeedback] = useState('');
   const [testimonial, setTestimonial] = useState('');
 
-  // Check if user is HR
-  const isHR = user?.role?.name === 'hr' || user?.role_id === 'hr' || 
-              ['super_admin', 'admin'].includes(user?.role?.name || user?.role_id || '');
+  // Removed unused isHR variable
 
   const handleScheduleInterview = async () => {
     if (!selectedDate || !selectedTime) {
@@ -224,10 +217,10 @@ export function ExitInterview() {
             {interview.scheduled_at && (
               <div className="text-right">
                 <div className="font-semibold">
-                  {format(new Date(interview.scheduled_at), 'MMM dd, yyyy')}
+                  {formatDateForDisplay(interview.scheduled_at, 'MMM dd, yyyy')}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  {format(new Date(interview.scheduled_at), 'HH:mm')}
+                  {formatDateForDisplay(interview.scheduled_at, 'HH:mm')}
                 </div>
               </div>
             )}
@@ -260,7 +253,7 @@ export function ExitInterview() {
                     <Alert className="border-green-200 bg-green-50">
                       <CheckCircle className="h-4 w-4" />
                       <AlertDescription>
-                        Your exit interview is scheduled for {format(new Date(interview.scheduled_at), 'MMM dd, yyyy')} at {format(new Date(interview.scheduled_at), 'HH:mm')}.
+                        Your exit interview is scheduled for {formatDateForDisplay(interview.scheduled_at, 'MMM dd, yyyy')} at {formatDateForDisplay(interview.scheduled_at, 'HH:mm')}.
                       </AlertDescription>
                     </Alert>
                     
@@ -329,7 +322,7 @@ export function ExitInterview() {
                             mode="single"
                             selected={selectedDate}
                             onSelect={setSelectedDate}
-                            disabled={(date) => date < new Date() || date.getDay() === 0 || date.getDay() === 6}
+                            disabled={(date) => date < getCurrentISTDate() || date.getDay() === 0 || date.getDay() === 6}
                             initialFocus
                           />
                         </PopoverContent>

@@ -1,4 +1,3 @@
-import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useATSDashboardStats, useMyInterviews, useMyAssessments } from '@/hooks/useATS';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,20 +9,16 @@ import {
   Users,
   Calendar,
   Clock,
-  CheckCircle,
   TrendingUp,
   UserCheck,
   Code,
-  Award,
-  AlertCircle,
-  Eye,
   Play,
   FileText,
   Target
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useNavigate } from 'react-router-dom';
-import { format, isToday, isTomorrow, isPast } from 'date-fns';
+import { formatDateForDisplay, parseToISTDate, isToday, isPastDate } from '@/utils/dateUtils';
 
 export function ATSDashboard() {
   const { user } = useAuth();
@@ -36,7 +31,6 @@ export function ATSDashboard() {
   const isHR = user?.role?.name === 'hr' || user?.role_id === 'hr' || 
               ['super_admin', 'admin'].includes(user?.role?.name || user?.role_id || '');
   
-  const isCandidate = user?.role?.name === 'candidate' || user?.role_id === 'candidate';
 
   const dashboardCards = isHR ? [
     {
@@ -94,11 +88,11 @@ export function ATSDashboard() {
       description: 'Coding assessments',
       icon: Code,
       color: 'bg-gray-500',
-      trend: myAssessments?.filter(a => a.status === 'assigned').length + ' pending',
+      trend: (myAssessments?.filter(a => a.status === 'assigned').length || 0) + ' pending',
     },
     {
       title: 'Overall Score',
-      value: myAssessments?.length > 0 ? 
+      value: myAssessments && myAssessments.length > 0 ? 
         Math.round(myAssessments.reduce((sum, a) => sum + (a.score || 0), 0) / myAssessments.length) + '%' : 
         'N/A',
       description: 'Average assessment score',
@@ -155,13 +149,20 @@ export function ATSDashboard() {
   ];
 
   const getInterviewStatus = (interview: any) => {
-    const scheduledDate = new Date(interview.scheduled_at);
+    const scheduledDate = parseToISTDate(interview.scheduled_at);
     
     if (interview.status === 'completed') return { text: 'Completed', color: 'bg-green-100 text-green-800' };
     if (interview.status === 'cancelled') return { text: 'Cancelled', color: 'bg-red-100 text-red-800' };
-    if (isPast(scheduledDate)) return { text: 'Missed', color: 'bg-red-100 text-red-800' };
+    if (isPastDate(scheduledDate)) return { text: 'Missed', color: 'bg-red-100 text-red-800' };
     if (isToday(scheduledDate)) return { text: 'Today', color: 'bg-blue-100 text-blue-800' };
-    if (isTomorrow(scheduledDate)) return { text: 'Tomorrow', color: 'bg-yellow-100 text-yellow-800' };
+    
+    // Check if it's tomorrow by comparing with today + 1 day
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    const isTomorrow = scheduledDate.toDateString() === tomorrow.toDateString();
+    if (isTomorrow) return { text: 'Tomorrow', color: 'bg-yellow-100 text-yellow-800' };
+    
     return { text: 'Scheduled', color: 'bg-gray-100 text-gray-800' };
   };
 
@@ -277,7 +278,7 @@ export function ATSDashboard() {
                               {isHR ? `Interview with ${interview.candidate?.full_name}` : interview.interview_type} Interview
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              {format(new Date(interview.scheduled_at), 'MMM dd, yyyy HH:mm')} • {interview.duration_minutes}min
+                              {formatDateForDisplay(interview.scheduled_at, 'MMM dd, yyyy HH:mm')} • {interview.duration_minutes}min
                             </p>
                           </div>
                         </div>
@@ -447,7 +448,7 @@ export function ATSDashboard() {
                 <CardContent>
                   {assessmentsLoading ? (
                     <LoadingSpinner size="sm" />
-                  ) : myAssessments?.filter(a => a.status === 'assigned').length > 0 ? (
+                  ) : myAssessments && myAssessments.filter(a => a.status === 'assigned').length > 0 ? (
                     <div className="space-y-3">
                       {myAssessments.filter(a => a.status === 'assigned').map((assessment: any) => (
                         <div key={assessment.id} className="p-3 border rounded-lg">

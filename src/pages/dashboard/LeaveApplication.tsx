@@ -30,7 +30,8 @@ import {
   Calculator,
   RotateCcw
 } from 'lucide-react';
-import { format, differenceInDays } from 'date-fns';
+import { differenceInDays } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate } from '@/utils/dateUtils';
 import { cn } from '@/lib/utils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { toast } from 'sonner';
@@ -242,7 +243,8 @@ export function LeaveApplication() {
       is_half_day: isHalfDay,
       half_day_period: isHalfDay ? halfDayPeriod : undefined,
       reason: reason.trim(),
-      status: 'pending'
+      status: 'pending',
+      applied_at: getCurrentISTDate().toISOString()
     }, {
       onSuccess: () => {
         // Reset form
@@ -378,7 +380,7 @@ export function LeaveApplication() {
                               )}
                             >
                               <CalendarIcon className="mr-2 h-4 w-4" />
-                              {startDate ? format(startDate, "PPP") : (isHalfDay ? "Pick date" : "Pick start date")}
+                              {startDate ? formatDateForDisplay(startDate, "PPP") : (isHalfDay ? "Pick date" : "Pick start date")}
                             </Button>
                           </PopoverTrigger>
                           <PopoverContent className="w-auto p-0">
@@ -393,7 +395,7 @@ export function LeaveApplication() {
                                 }
                               }}
                               disabled={(date) => {
-                                const today = new Date();
+                                const today = getCurrentISTDate();
                                 today.setHours(0, 0, 0, 0);
                                 return date < today;
                               }}
@@ -416,7 +418,7 @@ export function LeaveApplication() {
                                 )}
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {endDate ? format(endDate, "PPP") : "Pick end date"}
+                                {endDate ? formatDateForDisplay(endDate, "PPP") : "Pick end date"}
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0">
@@ -424,7 +426,7 @@ export function LeaveApplication() {
                                 mode="single"
                                 selected={endDate}
                                 onSelect={setEndDate}
-                                disabled={(date) => date < (startDate || new Date())}
+                                disabled={(date) => date < (startDate || getCurrentISTDate())}
                                 initialFocus
                               />
                             </PopoverContent>
@@ -440,7 +442,7 @@ export function LeaveApplication() {
                           Total days requested: <strong>{calculateDays()} {calculateDays() === 1 ? 'day' : 'days'}</strong>
                           {isHalfDay && (
                             <span className="text-muted-foreground ml-2">
-                              ({halfDayPeriod === '1st_half' ? '1st Half' : '2nd Half'} on {format(startDate, "PPP")})
+                              ({halfDayPeriod === '1st_half' ? '1st Half' : '2nd Half'} on {formatDateForDisplay(startDate, "PPP")})
                             </span>
                           )}
                         </AlertDescription>
@@ -594,7 +596,7 @@ export function LeaveApplication() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => recalculateBalance.mutate()}
+                    onClick={() => recalculateBalance.mutate(user?.id || '')}
                     disabled={recalculateBalance.isPending}
                     className="h-8 w-8 p-0"
                   >
@@ -690,7 +692,7 @@ export function LeaveApplication() {
                       {holidays.slice(0, 3).map((holiday: any) => (
                         <div key={holiday.id} className="flex justify-between items-center">
                           <span className="text-sm">{holiday.name}</span>
-                          <Badge variant="outline">{format(new Date(holiday.date), 'MMM dd')}</Badge>
+                          <Badge variant="outline">{formatDateForDisplay(holiday.date, 'MMM dd')}</Badge>
                         </div>
                       ))}
                     </div>
@@ -745,7 +747,7 @@ export function LeaveApplication() {
                               {/* <span>{leave.leave_type?.name}</span>
                               <span>•</span> */}
                               <span>
-                                {format(new Date(leave.start_date), 'MMM dd')} - {format(new Date(leave.end_date), 'MMM dd')}
+                                {formatDateForDisplay(leave.start_date, 'MMM dd')} - {formatDateForDisplay(leave.end_date, 'MMM dd')}
                               </span>
                             </div>
                           </div>
@@ -883,7 +885,7 @@ export function LeaveApplication() {
                       <TableRow key={leave.id}>
                         <TableCell className="font-medium">{leave.leave_type?.name}</TableCell>
                         <TableCell>
-                          {format(new Date(leave.start_date), 'MMM dd')} - {format(new Date(leave.end_date), 'MMM dd, yyyy')}
+                          {formatDateForDisplay(leave.start_date, 'MMM dd')} - {formatDateForDisplay(leave.end_date, 'MMM dd, yyyy')}
                         </TableCell>
                         <TableCell>
                           {leave.days_count}
@@ -912,7 +914,7 @@ export function LeaveApplication() {
                             <span className="text-gray-400 text-sm">No comments</span>
                           )}
                         </TableCell>
-                        <TableCell>{format(new Date(leave.applied_at), 'MMM dd, yyyy')}</TableCell>
+                        <TableCell>{formatDateForDisplay(leave.applied_at, 'MMM dd, yyyy')}</TableCell>
                         <TableCell>
                           {canWithdrawLeave(leave) && (
                             <Button
@@ -1002,11 +1004,11 @@ export function LeaveApplication() {
                   </div>
                   <div>
                     <span className="font-medium">Start Date:</span>
-                    <span className="ml-2">{format(new Date(selectedLeaveForWithdraw.start_date), 'MMM dd, yyyy')}</span>
+                    <span className="ml-2">{formatDateForDisplay(selectedLeaveForWithdraw.start_date, 'MMM dd, yyyy')}</span>
                   </div>
                   <div>
                     <span className="font-medium">End Date:</span>
-                    <span className="ml-2">{format(new Date(selectedLeaveForWithdraw.end_date), 'MMM dd, yyyy')}</span>
+                    <span className="ml-2">{formatDateForDisplay(selectedLeaveForWithdraw.end_date, 'MMM dd, yyyy')}</span>
                   </div>
                 </div>
                 <div className="mt-3">

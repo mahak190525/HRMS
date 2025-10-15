@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   useAllComplaints, 
@@ -13,34 +13,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Progress } from '@/components/ui/progress';
 import {
   AlertTriangle,
-  Search,
   Filter,
   Eye,
   CheckCircle,
   XCircle,
   Clock,
   AlertCircle,
-  User,
-  Calendar,
-  MessageSquare,
   TrendingUp,
-  TrendingDown,
   BarChart3,
-  Users,
-  UserCheck,
   RotateCcw
 } from 'lucide-react';
-import { format, subDays, isAfter } from 'date-fns';
+import { subDays, isAfter } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate, parseToISTDate } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 const categoryColors = {
@@ -206,7 +199,7 @@ export function GrievanceDashboard() {
   
   // Recent complaints (last 7 days)
   const recentComplaints = complaints?.filter(c => 
-    isAfter(new Date(c.created_at), subDays(new Date(), 7))
+    isAfter(parseToISTDate(c.created_at), subDays(getCurrentISTDate(), 7))
   ).length || 0;
   
   // Average resolution time (mock calculation)
@@ -424,7 +417,7 @@ export function GrievanceDashboard() {
 
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
                       <span>Category: {complaint.category?.name}</span>
-                      <span>{format(new Date(complaint.created_at), 'MMM dd')}</span>
+                      <span>{formatDateForDisplay(complaint.created_at, 'MMM dd')}</span>
                     </div>
 
                     <div className="flex gap-2">
@@ -493,9 +486,9 @@ export function GrievanceDashboard() {
                               )}
 
                               <div className="flex justify-between text-xs text-muted-foreground pt-4 border-t">
-                                <span>Submitted: {format(new Date(selectedComplaint.created_at), 'MMM dd, yyyy HH:mm')}</span>
+                                <span>Submitted: {formatDateForDisplay(selectedComplaint.created_at, 'MMM dd, yyyy HH:mm')}</span>
                                 {selectedComplaint.resolved_at && (
-                                  <span>Resolved: {format(new Date(selectedComplaint.resolved_at), 'MMM dd, yyyy HH:mm')}</span>
+                                  <span>Resolved: {formatDateForDisplay(selectedComplaint.resolved_at, 'MMM dd, yyyy HH:mm')}</span>
                                 )}
                               </div>
                             </div>
@@ -549,11 +542,11 @@ export function GrievanceDashboard() {
                                           <div className="flex items-center gap-2">
                                             <span>{resolver.full_name}</span>
                                             <Badge variant="outline" className="text-xs">
-                                              {resolver.role?.name?.replace('_', ' ')}
+                                              {(resolver.role as any)?.name?.replace('_', ' ')}
                                             </Badge>
-                                            {resolver.department?.name && (
+                                            {(resolver.department as any)?.name && (
                                               <span className="text-xs text-muted-foreground">
-                                                • {resolver.department.name}
+                                                • {(resolver.department as any)?.name}
                                               </span>
                                             )}
                                           </div>
@@ -679,11 +672,11 @@ export function GrievanceDashboard() {
                                           <div className="flex items-center gap-2">
                                             <span>{resolver.full_name}</span>
                                             <Badge variant="outline" className="text-xs">
-                                              {resolver.role?.name?.replace('_', ' ')}
+                                              {(resolver.role as any)?.name?.replace('_', ' ')}
                                             </Badge>
-                                            {resolver.department?.name && (
+                                            {(resolver.department as any)?.name && (
                                               <span className="text-xs text-muted-foreground">
-                                                • {resolver.department.name}
+                                                • {(resolver.department as any)?.name}
                                               </span>
                                             )}
                                           </div>
@@ -952,7 +945,7 @@ export function GrievanceDashboard() {
                           <span className="text-sm text-muted-foreground">Unassigned</span>
                         )}
                       </TableCell>
-                      <TableCell>{format(new Date(complaint.created_at), 'MMM dd, yyyy')}</TableCell>
+                      <TableCell>{formatDateForDisplay(complaint.created_at, 'MMM dd, yyyy')}</TableCell>
                       <TableCell>
                         <div className="flex gap-2">
                           <Dialog>
@@ -1026,9 +1019,9 @@ export function GrievanceDashboard() {
                                   )}
 
                                   <div className="flex justify-between text-xs text-muted-foreground pt-4 border-t">
-                                    <span>Submitted: {format(new Date(selectedComplaint.created_at), 'MMM dd, yyyy HH:mm')}</span>
+                                    <span>Submitted: {formatDateForDisplay(selectedComplaint.created_at, 'MMM dd, yyyy HH:mm')}</span>
                                     {selectedComplaint.resolved_at && (
-                                      <span>Resolved: {format(new Date(selectedComplaint.resolved_at), 'MMM dd, yyyy HH:mm')}</span>
+                                      <span>Resolved: {formatDateForDisplay(selectedComplaint.resolved_at, 'MMM dd, yyyy HH:mm')}</span>
                                     )}
                                   </div>
                                 </div>

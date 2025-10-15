@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAllEmployeesAttendance } from '@/hooks/useEmployees';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,17 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Calendar,
   Download,
-  Filter,
   BarChart3,
-  Clock,
-  Users,
-  TrendingUp
+  Clock
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 export function AttendanceReports() {
-  const [attendanceYear, setAttendanceYear] = useState(new Date().getFullYear());
+  const [attendanceYear, setAttendanceYear] = useState(getCurrentISTDate().getFullYear());
   const [attendanceMonth, setAttendanceMonth] = useState<number | undefined>(undefined);
   const [shouldFetch, setShouldFetch] = useState(false);
   
@@ -107,7 +104,7 @@ export function AttendanceReports() {
                   <SelectItem value="all">All Months</SelectItem>
                   {Array.from({ length: 12 }, (_, i) => (
                     <SelectItem key={i + 1} value={(i + 1).toString()}>
-                      {format(new Date(2024, i, 1), 'MMMM')}
+                      {formatDateForDisplay(new Date(2024, i, 1), 'MMMM')}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -154,7 +151,7 @@ export function AttendanceReports() {
                       </div>
                     </TableCell>
                     <TableCell>{record.user?.department?.name}</TableCell>
-                    <TableCell>{format(new Date(record.year, record.month - 1), 'MMM yyyy')}</TableCell>
+                    <TableCell>{formatDateForDisplay(new Date(record.year, record.month - 1, 1), 'MMM yyyy')}</TableCell>
                     <TableCell>{record.total_working_days}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-green-600">

@@ -9,21 +9,16 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
   MessageSquare,
   AlertTriangle,
-  Clock,
-  CheckCircle,
-  XCircle,
   Eye,
   LogOut,
-  User
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { toast } from 'sonner';
 import { useCreateExitProcess, useExitProcess } from '../../hooks/useExit';
@@ -48,8 +43,8 @@ const priorityLevels = [
 export function Complaints() {
   const { user } = useAuth();
   const createExitProcess = useCreateExitProcess();
-  const { data: exitProcess, isLoading: exitProcessLoading } = useExitProcess();
-  const { data: complaintCategories, isLoading: categoriesLoading } = useComplaintCategories();
+  const { data: exitProcess } = useExitProcess();
+  const { data: complaintCategories } = useComplaintCategories();
   const { data: complaints, isLoading: complaintsLoading } = useComplaints();
   const { data: resolverOptions, isLoading: resolversLoading } = useResolverOptions();
   const createComplaint = useCreateComplaint();
@@ -60,7 +55,6 @@ export function Complaints() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [selectedResolver, setSelectedResolver] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedComplaint, setSelectedComplaint] = useState<any>(null);
 
   // Resignation form states
@@ -78,7 +72,7 @@ export function Complaints() {
       category_id: category,
       title: title.trim(),
       description: description.trim(),
-      priority,
+      priority: priority as 'low' | 'medium' | 'high' | 'urgent',
       status: 'open',
       assigned_to: selectedResolver
     }, {
@@ -97,18 +91,17 @@ export function Complaints() {
     e.preventDefault();
     if (!resignationReason.trim() || !lastWorkingDay || !noticePeriod) return;
 
-    setIsSubmitting(true);
     try {
       // Simulate API call
       // await new Promise(resolve => setTimeout(resolve, 1000));
       createExitProcess.mutate({
-        user_id: user.id,
-        resignation_date: new Date().toISOString(),
+        user_id: user?.id || '',
+        resignation_date: getCurrentISTDate().toISOString(),
         last_working_day: lastWorkingDay,
         notice_period_days: Number(noticePeriod),
         reason_for_leaving: resignationReason,
         exit_type: 'voluntary',
-        initiated_by: user.id,
+        initiated_by: user?.id || '',
       });
       
       // Reset form
@@ -118,33 +111,11 @@ export function Complaints() {
       setAdditionalComments('');
       
       toast.success('Resignation submitted successfully! HR will contact you soon.');
-      
-      // Update user role to ex_employee to enable exit dashboard
-      await updateUser({
-        role_id: 'ex_employee',
-        status: 'resigned'
-      });
     } catch (error) {
       toast.error('Failed to submit resignation');
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'resolved':
-        return <CheckCircle className="h-4 w-4 text-green-600" />;
-      case 'rejected':
-        return <XCircle className="h-4 w-4 text-red-600" />;
-      case 'in_progress':
-        return <Clock className="h-4 w-4 text-blue-600" />;
-      case 'open':
-        return <AlertTriangle className="h-4 w-4 text-yellow-600" />;
-      default:
-        return <AlertTriangle className="h-4 w-4 text-gray-600" />;
-    }
-  };
 
   const getStatusBadge = (status: string) => {
     const variants = {
@@ -268,11 +239,11 @@ export function Complaints() {
                                   <div className="flex items-center gap-2">
                                     <span>{resolver.full_name}</span>
                                     <Badge variant="outline" className="text-xs">
-                                      {resolver.role?.name?.replace('_', ' ')}
+                                      {(resolver.role as any)?.name?.replace('_', ' ')}
                                     </Badge>
-                                    {resolver.department?.name && (
+                                    {(resolver.department as any)?.name && (
                                       <span className="text-xs text-muted-foreground">
-                                        • {resolver.department.name}
+                                        • {(resolver.department as any).name}
                                       </span>
                                     )}
                                   </div>
@@ -477,9 +448,9 @@ export function Complaints() {
                         <div className="flex items-center gap-4">
                           <span>Type: Resignation</span>
                           <span>Notice Period: {exitProcess.notice_period_days} days</span>
-                          <span>Last Working Day: {format(new Date(exitProcess.last_working_day), 'MMM dd, yyyy')}</span>
+                          <span>Last Working Day: {formatDateForDisplay(exitProcess.last_working_day, 'MMM dd, yyyy')}</span>
                         </div>
-                        <span>Submitted: {format(new Date(exitProcess.created_at), 'MMM dd, yyyy')}</span>
+                        <span>Submitted: {formatDateForDisplay(exitProcess.created_at, 'MMM dd, yyyy')}</span>
                       </div>
                     </div>
                   )}
@@ -505,7 +476,7 @@ export function Complaints() {
                             {complaint.priority}
                           </Badge>
                         </div>
-                        <span>Submitted: {format(new Date(complaint.created_at), 'MMM dd, yyyy')}</span>
+                        <span>Submitted: {formatDateForDisplay(complaint.created_at, 'MMM dd, yyyy')}</span>
                       </div>
                       <div className="flex justify-end">
                         <Dialog>
@@ -563,9 +534,9 @@ export function Complaints() {
                                 )}
 
                                 <div className="flex justify-between text-xs text-muted-foreground pt-4 border-t">
-                                  <span>Submitted: {format(new Date(selectedComplaint.created_at), 'MMM dd, yyyy HH:mm')}</span>
+                                  <span>Submitted: {formatDateForDisplay(selectedComplaint.created_at, 'MMM dd, yyyy HH:mm')}</span>
                                   {selectedComplaint.updated_at && (
-                                    <span>Last Updated: {format(new Date(selectedComplaint.updated_at), 'MMM dd, yyyy HH:mm')}</span>
+                                    <span>Last Updated: {formatDateForDisplay(selectedComplaint.updated_at, 'MMM dd, yyyy HH:mm')}</span>
                                   )}
                                 </div>
                               </div>

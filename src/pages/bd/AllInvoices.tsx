@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useInvoices, useCreateInvoice, useUpdateInvoice, useFinanceUsers, useInvoiceComments, useCreateInvoiceComment } from '@/hooks/useBDTeam';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -16,25 +15,18 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  FileText,
   Plus,
-  Search,
   Filter,
-  Download,
-  Eye,
   Edit,
   Calendar as CalendarIcon,
-  DollarSign,
   Building,
   Clock,
-  User,
   MessageSquare,
-  Paperclip,
   Send,
   CheckCircle,
   AlertTriangle
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate, parseToISTDate } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -48,7 +40,7 @@ const invoiceSchema = z.object({
   project: z.string().optional(),
   billing_reference: z.string().optional(),
   invoice_amount: z.number().min(0.01, 'Invoice amount must be greater than 0'),
-  due_date: z.date({ required_error: 'Due date is required' }),
+  due_date: z.date({ message: 'Due date is required' }),
   payment_terms: z.string().min(1, 'Payment terms are required'),
   currency: z.string().min(1, 'Currency is required'),
   notes_to_finance: z.string().optional(),
@@ -104,7 +96,7 @@ export function AllInvoices() {
 
     const invoiceData = {
       ...data,
-      due_date: data.due_date.toISOString().split('T')[0],
+      due_date: getCurrentISTDate().toISOString().split('T')[0],
       created_by: user.id,
       status: 'assigned',
     };
@@ -138,7 +130,7 @@ export function AllInvoices() {
       project: invoice.project || '',
       billing_reference: invoice.billing_reference || '',
       invoice_amount: invoice.invoice_amount,
-      due_date: new Date(invoice.due_date),
+      due_date: parseToISTDate(invoice.due_date),
       payment_terms: invoice.payment_terms,
       currency: invoice.currency,
       notes_to_finance: invoice.notes_to_finance || '',
@@ -342,7 +334,7 @@ export function AllInvoices() {
                                 )}
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {field.value ? format(field.value, "PPP") : "Pick due date"}
+                                {field.value ? formatDateForDisplay(field.value, "PPP") : "Pick due date"}
                               </Button>
                             </FormControl>
                           </PopoverTrigger>
@@ -351,7 +343,7 @@ export function AllInvoices() {
                               mode="single"
                               selected={field.value}
                               onSelect={field.onChange}
-                              disabled={(date) => date < new Date()}
+                              disabled={(date) => date < getCurrentISTDate()}
                               initialFocus
                             />
                           </PopoverContent>
@@ -550,7 +542,7 @@ export function AllInvoices() {
                   </TableCell>
                   <TableCell>
                     <div className="text-sm">
-                      {format(new Date(invoice.due_date), 'MMM dd, yyyy')}
+                      {formatDateForDisplay(invoice.due_date, 'MMM dd, yyyy')}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -627,7 +619,7 @@ export function AllInvoices() {
                                     </div>
                                     <div>
                                       <p className="font-medium">Due Date:</p>
-                                      <p className="text-muted-foreground">{format(new Date(selectedInvoice.due_date), 'MMM dd, yyyy')}</p>
+                                      <p className="text-muted-foreground">{formatDateForDisplay(selectedInvoice.due_date, 'MMM dd, yyyy')}</p>
                                     </div>
                                     <div>
                                       <p className="font-medium">Status:</p>
@@ -668,7 +660,7 @@ export function AllInvoices() {
                                         <div className="flex items-center gap-2 mb-1">
                                           <span className="text-sm font-medium">{comment.user?.full_name}</span>
                                           <span className="text-xs text-muted-foreground">
-                                            {format(new Date(comment.created_at), 'MMM dd, HH:mm')}
+                                            {formatDateForDisplay(comment.created_at, 'MMM dd, HH:mm')}
                                           </span>
                                         </div>
                                         <p className="text-sm text-muted-foreground">{comment.comment}</p>

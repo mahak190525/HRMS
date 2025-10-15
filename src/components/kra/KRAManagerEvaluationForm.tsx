@@ -16,7 +16,7 @@ import {
   User,
   Edit
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate } from '@/utils/dateUtils';
 import { useAuth } from '@/contexts/AuthContext';
 import type { KRAAssignment } from '@/hooks/useKRA';
 import type { KRAPermissions } from '@/hooks/useKRAPermissions';
@@ -61,7 +61,7 @@ export function KRAManagerEvaluationForm({ assignment, assignmentId, permissions
       .from('kra_assignments')
       .update({ 
         status: status,
-        evaluated_at: status === 'evaluated' ? new Date().toISOString() : undefined,
+        evaluated_at: status === 'evaluated' ? getCurrentISTDate().toISOString() : undefined,
         evaluated_by: status === 'evaluated' ? user?.id : undefined
       })
       .eq('id', currentAssignment.id);
@@ -161,7 +161,7 @@ export function KRAManagerEvaluationForm({ assignment, assignmentId, permissions
 
     setIsSubmitting(true);
     try {
-      const now = new Date().toISOString();
+      const now = getCurrentISTDate().toISOString();
       
       for (const goal of detailedAssignment.template.goals) {
         const evaluation = evaluations[goal.id];
@@ -236,12 +236,12 @@ export function KRAManagerEvaluationForm({ assignment, assignmentId, permissions
                 </div>
                 <div className="flex items-center gap-1">
                   <Calendar className="h-4 w-4" />
-                  <span>Assigned: {format(new Date(currentAssignment.assigned_date || (currentAssignment as any).created_at), 'MMM dd, yyyy')}</span>
+                  <span>Assigned: {formatDateForDisplay(currentAssignment.assigned_date || (currentAssignment as any).created_at, 'MMM dd, yyyy')}</span>
                 </div>
                 {currentAssignment.submitted_at && (
                   <div className="flex items-center gap-1">
                     <CheckCircle className="h-4 w-4 text-green-600" />
-                    <span>Submitted: {format(new Date(currentAssignment.submitted_at), 'MMM dd, yyyy')}</span>
+                    <span>Submitted: {formatDateForDisplay(currentAssignment.submitted_at, 'MMM dd, yyyy')}</span>
                   </div>
                 )}
               </div>
@@ -403,7 +403,7 @@ export function KRAManagerEvaluationForm({ assignment, assignmentId, permissions
                       <p className="text-sm whitespace-pre-wrap">{employeeEval.employee_comments}</p>
                       {employeeEval.employee_submitted_at && (
                         <p className="text-xs text-green-600 mt-2">
-                          Submitted on {format(new Date(employeeEval.employee_submitted_at), 'MMM dd, yyyy')}
+                          Submitted on {formatDateForDisplay(employeeEval.employee_submitted_at, 'MMM dd, yyyy')}
                         </p>
                       )}
                     </div>
@@ -443,7 +443,7 @@ export function KRAManagerEvaluationForm({ assignment, assignmentId, permissions
                     </p>
                     {employeeEval.manager_evaluated_at && (
                       <p className="text-xs text-purple-600 mt-2">
-                        Evaluated on {format(new Date(employeeEval.manager_evaluated_at), 'MMM dd, yyyy')}
+                        Evaluated on {formatDateForDisplay(employeeEval.manager_evaluated_at, 'MMM dd, yyyy')}
                       </p>
                     )}
                   </div>
@@ -489,7 +489,7 @@ export function KRAManagerEvaluationForm({ assignment, assignmentId, permissions
             <CheckCircle className="h-8 w-8 text-green-600 mx-auto mb-2" />
             <p className="text-green-800 font-medium">Evaluation Completed</p>
             <p className="text-sm text-green-600">
-              {currentAssignment.evaluated_at && `Completed on ${format(new Date(currentAssignment.evaluated_at), 'MMM dd, yyyy')}`}
+              {currentAssignment.evaluated_at && `Completed on ${formatDateForDisplay(currentAssignment.evaluated_at, 'MMM dd, yyyy')}`}
             </p>
           </div>
         </div>

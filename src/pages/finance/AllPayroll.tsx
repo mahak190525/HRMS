@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useState } from 'react';
 import { usePayrollData, useEmployeePayrollDetails, useGeneratePayslips, useUpdatePayrollData } from '@/hooks/useFinance';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,34 +11,23 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  Banknote,
-  Search,
-  Filter,
   Download,
   Eye,
   Calendar as CalendarIcon,
-  DollarSign,
   Building,
-  Clock,
-  User,
-  Mail,
   Send,
-  CheckCircle,
   AlertTriangle,
   Calculator,
-  FileText,
   TrendingUp,
   Edit
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { cn } from '@/lib/utils';
 
 const payrollEditSchema = z.object({
   basic_salary: z.number().min(0, 'Basic salary must be positive'),
@@ -53,9 +41,9 @@ const payrollEditSchema = z.object({
 type PayrollEditFormData = z.infer<typeof payrollEditSchema>;
 
 export function AllPayroll() {
-  const { user } = useAuth();
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  // Removed unused user variable
+  const [selectedMonth, setSelectedMonth] = useState(getCurrentISTDate().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(getCurrentISTDate().getFullYear());
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
@@ -182,7 +170,7 @@ export function AllPayroll() {
 
   const totalGrossPay = filteredPayrollData?.reduce((sum, emp) => sum + emp.payroll.grossPay, 0) || 0;
   const totalNetPay = filteredPayrollData?.reduce((sum, emp) => sum + emp.payroll.netPay, 0) || 0;
-  const totalDeductions = filteredPayrollData?.reduce((sum, emp) => sum + emp.payroll.totalDeductions, 0) || 0;
+  // Removed unused totalDeductions variable
   const avgAttendance = filteredPayrollData?.reduce((sum, emp) => sum + emp.payroll.attendanceRatio, 0) / (filteredPayrollData?.length || 1) || 0;
 
   return (
@@ -196,7 +184,7 @@ export function AllPayroll() {
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="px-3 py-1">
-            {format(new Date(selectedYear, selectedMonth - 1), 'MMMM yyyy')}
+            {formatDateForDisplay(new Date(selectedYear, selectedMonth - 1, 1), 'MMMM yyyy')}
           </Badge>
         </div>
       </div>
@@ -268,7 +256,7 @@ export function AllPayroll() {
                 <SelectContent>
                   {Array.from({ length: 12 }, (_, i) => (
                     <SelectItem key={i + 1} value={(i + 1).toString()}>
-                      {format(new Date(2024, i, 1), 'MMMM')}
+                      {formatDateForDisplay(new Date(2024, i, 1), 'MMMM')}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -430,7 +418,7 @@ export function AllPayroll() {
                           <DialogHeader>
                             <DialogTitle>Payroll Details - {employee.full_name}</DialogTitle>
                             <DialogDescription>
-                              Complete salary breakdown for {format(new Date(selectedYear, selectedMonth - 1), 'MMMM yyyy')}
+                              Complete salary breakdown for {formatDateForDisplay(new Date(selectedYear, selectedMonth - 1, 1), 'MMMM yyyy')}
                             </DialogDescription>
                           </DialogHeader>
                           {detailsLoading ? (
@@ -589,7 +577,7 @@ export function AllPayroll() {
                                             <div>
                                               <p className="text-sm font-medium">{leave.leave_type?.name}</p>
                                               <p className="text-xs text-muted-foreground">
-                                                {format(new Date(leave.start_date), 'MMM dd')} - {format(new Date(leave.end_date), 'MMM dd')}
+                                                {formatDateForDisplay(leave.start_date, 'MMM dd')} - {formatDateForDisplay(leave.end_date, 'MMM dd')}
                                               </p>
                                             </div>
                                             <Badge variant="outline" className="text-blue-600">
@@ -649,7 +637,7 @@ export function AllPayroll() {
           <DialogHeader>
             <DialogTitle>Edit Payroll Data</DialogTitle>
             <DialogDescription>
-              Make adjustments to {editingEmployee?.full_name}'s payroll for {format(new Date(selectedYear, selectedMonth - 1), 'MMMM yyyy')}
+              Make adjustments to {editingEmployee?.full_name}'s payroll for {formatDateForDisplay(new Date(selectedYear, selectedMonth - 1, 1), 'MMMM yyyy')}
             </DialogDescription>
           </DialogHeader>
           <Form {...editForm}>

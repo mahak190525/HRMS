@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useState } from 'react';
 import { useUserModules, useUpdateModuleProgress, useModuleById } from '@/hooks/useLMS';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -13,22 +12,18 @@ import {
   CheckCircle,
   Clock,
   Lock,
-  Star,
   FileText,
   Video,
   Link,
   Award,
-  Target,
-  Calendar,
   Timer,
   ExternalLink
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { format } from 'date-fns';
+import { getCurrentISTDate } from '@/utils/dateUtils';
 import { cn } from '@/lib/utils';
 
 export function Prerequisites() {
-  const { user } = useAuth();
   const { data: modules, isLoading: modulesLoading } = useUserModules();
   const updateModuleProgress = useUpdateModuleProgress();
   const [selectedModule, setSelectedModule] = useState<any>(null);
@@ -57,14 +52,6 @@ export function Prerequisites() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const variants = {
-      completed: 'bg-green-100 text-green-800',
-      in_progress: 'bg-blue-100 text-blue-800',
-      not_started: 'bg-gray-100 text-gray-800',
-    };
-    return variants[status as keyof typeof variants] || 'bg-gray-100 text-gray-800';
-  };
 
   const getDifficultyBadge = (difficulty: string) => {
     const variants = {
@@ -96,7 +83,7 @@ export function Prerequisites() {
       progressData: {
         status: 'in_progress',
         progress_percentage: 5,
-        started_at: new Date().toISOString()
+        started_at: getCurrentISTDate().toISOString()
       }
     });
   };
@@ -107,7 +94,7 @@ export function Prerequisites() {
       progressData: {
         status: 'completed',
         progress_percentage: 100,
-        completed_at: new Date().toISOString()
+        completed_at: getCurrentISTDate().toISOString()
       }
     });
   };

@@ -10,20 +10,16 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
   Target,
   Award,
   MessageCircle,
-  CheckCircle,
-  Clock,
-  AlertCircle,
   Eye,
   Star,
   BarChart3
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { MyKRAView } from '@/components/kra/MyKRAView';
 import { useMyKRAAssignments } from '@/hooks/useKRA';
@@ -107,7 +103,7 @@ export function Performance() {
               {renderStars(evaluations?.[0]?.overall_rating || 0)}
             </div>
             <p className="text-xs text-muted-foreground">
-              {evaluations?.[0] ? format(new Date(evaluations[0].evaluation_period_end), 'MMM yyyy') + ' evaluation' : 'No evaluations yet'}
+              {evaluations?.[0] ? formatDateForDisplay(evaluations[0].evaluation_period_end, 'MMM yyyy') + ' evaluation' : 'No evaluations yet'}
             </p>
           </CardContent>
         </Card>
@@ -188,7 +184,7 @@ export function Performance() {
 
                         <div className="flex items-center justify-between text-sm text-muted-foreground">
                           <span>Weight: {Math.round(goal.weight * 100)}%</span>
-                          <span>Target: {format(new Date(goal.target_date), 'MMM dd, yyyy')}</span>
+                          <span>Target: {formatDateForDisplay(goal.target_date, 'MMM dd, yyyy')}</span>
                           <span>Set by: {goal.created_by_user?.full_name}</span>
                         </div>
                       </div>
@@ -225,7 +221,7 @@ export function Performance() {
                       <div className="flex items-start justify-between mb-4">
                         <div>
                           <h3 className="font-semibold">
-                            {format(new Date(evaluation.evaluation_period_start), 'MMM yyyy')} - {format(new Date(evaluation.evaluation_period_end), 'MMM yyyy')} Evaluation
+                            {formatDateForDisplay(evaluation.evaluation_period_start, 'MMM yyyy')} - {formatDateForDisplay(evaluation.evaluation_period_end, 'MMM yyyy')} Evaluation
                           </h3>
                           <p className="text-sm text-muted-foreground">
                             Evaluated by: {evaluation.evaluator?.full_name}
@@ -260,7 +256,7 @@ export function Performance() {
 
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">
-                          {format(new Date(evaluation.created_at), 'MMM dd, yyyy')}
+                          {formatDateForDisplay(evaluation.created_at, 'MMM dd, yyyy')}
                         </span>
                         <Dialog>
                           <DialogTrigger asChild>
@@ -459,7 +455,7 @@ export function Performance() {
                           </div>
                         </div>
                         <span className="text-sm text-muted-foreground">
-                          {format(new Date(item.created_at), 'MMM dd, yyyy')}
+                          {formatDateForDisplay(item.created_at, 'MMM dd, yyyy')}
                         </span>
                       </div>
                       <p className="text-sm text-muted-foreground">{item.feedback_text}</p>

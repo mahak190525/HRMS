@@ -1,22 +1,19 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { 
   Eye,
   MessageSquare,
   Calendar,
   Clock,
-  CheckCircle,
   AlertTriangle,
   Users,
-  Target,
   Filter,
   Search
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate, parseToISTDate } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 import type { KRAAssignment } from '@/hooks/useKRA';
@@ -30,7 +27,7 @@ interface KRAAssignmentManagerProps {
   permissions: KRAPermissions;
 }
 
-export function KRAAssignmentManager({ assignments, isLoading, teamMembers = [], permissions }: KRAAssignmentManagerProps) {
+export function KRAAssignmentManager({ assignments, isLoading, permissions }: KRAAssignmentManagerProps) {
   const [selectedAssignment, setSelectedAssignment] = useState<KRAAssignment | null>(null);
   const [isKRAModalOpen, setIsKRAModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -66,8 +63,8 @@ export function KRAAssignmentManager({ assignments, isLoading, teamMembers = [],
   const getDueStatus = (dueDate?: string, status?: string) => {
     if (!dueDate || ['evaluated', 'approved'].includes(status || '')) return null;
     
-    const now = new Date();
-    const due = new Date(dueDate);
+    const now = getCurrentISTDate();
+    const due = parseToISTDate(dueDate);
     const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     
     if (daysUntilDue < 0) return { status: 'overdue', days: Math.abs(daysUntilDue), color: 'text-red-600' };
@@ -191,13 +188,13 @@ export function KRAAssignmentManager({ assignments, isLoading, teamMembers = [],
                       <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
                         <div className="flex items-center gap-1">
                           <Calendar className="h-4 w-4" />
-                          <span>Assigned: {format(new Date(assignment.assigned_date), 'MMM dd, yyyy')}</span>
+                          <span>Assigned: {formatDateForDisplay(assignment.assigned_date, 'MMM dd, yyyy')}</span>
                         </div>
                         {assignment.due_date && (
                           <div className="flex items-center gap-1">
                             <Clock className="h-4 w-4" />
                             <span className={dueStatus?.color}>
-                              Due: {format(new Date(assignment.due_date), 'MMM dd, yyyy')}
+                              Due: {formatDateForDisplay(assignment.due_date, 'MMM dd, yyyy')}
                               {dueStatus && (
                                 <span className="ml-1">
                                   ({dueStatus.status === 'overdue' ? `${dueStatus.days} days overdue` :
@@ -264,10 +261,10 @@ export function KRAAssignmentManager({ assignments, isLoading, teamMembers = [],
                     </div>
                     <div className="text-right text-sm text-muted-foreground">
                       {assignment.submitted_at && (
-                        <div>Submitted: {format(new Date(assignment.submitted_at), 'MMM dd')}</div>
+                        <div>Submitted: {formatDateForDisplay(assignment.submitted_at, 'MMM dd')}</div>
                       )}
                       {assignment.evaluated_at && (
-                        <div>Evaluated: {format(new Date(assignment.evaluated_at), 'MMM dd')}</div>
+                        <div>Evaluated: {formatDateForDisplay(assignment.evaluated_at, 'MMM dd')}</div>
                       )}
                     </div>
                   </div>

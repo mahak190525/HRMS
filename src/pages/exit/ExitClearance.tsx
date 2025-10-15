@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useExitProcess } from '@/hooks/useExit';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,9 +23,8 @@ import {
   Monitor,
   BookOpen,
   MessageSquare,
-  Calendar
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { toast } from 'sonner';
 
@@ -38,7 +37,7 @@ const mockClearanceItems = [
     responsible_department: 'IT',
     responsible_person: 'John Smith (IT Manager)',
     is_completed: true,
-    completed_at: new Date().toISOString(),
+    completed_at: getCurrentISTDate().toISOString(),
     completed_by: 'John Smith',
     comments: 'Laptop returned in good condition. All data wiped.',
     is_mandatory: true,
@@ -66,7 +65,7 @@ const mockClearanceItems = [
     responsible_department: 'Manager',
     responsible_person: 'Sarah Johnson (Direct Manager)',
     is_completed: true,
-    completed_at: new Date().toISOString(),
+    completed_at: getCurrentISTDate().toISOString(),
     completed_by: 'Sarah Johnson',
     comments: 'Comprehensive handover document created and reviewed.',
     is_mandatory: true,
@@ -162,12 +161,12 @@ export function ExitClearance() {
   const completedOptional = optionalItems.filter(item => item.is_completed).length;
   const totalOptional = optionalItems.length;
 
-  const handleMarkComplete = (itemId: string) => {
+  const handleMarkComplete = (_itemId: string) => {
     // In a real app, this would update the database
     toast.success('Clearance item marked as completed!');
   };
 
-  const handleAddComment = (itemId: string) => {
+  const handleAddComment = (_itemId: string) => {
     if (!newComment.trim()) return;
     
     // In a real app, this would update the database
@@ -326,7 +325,7 @@ export function ExitClearance() {
                         <strong>Completed by {item.completed_by}:</strong> {item.comments}
                       </p>
                       <p className="text-xs text-green-600 mt-1">
-                        {format(new Date(item.completed_at), 'MMM dd, yyyy HH:mm')}
+                        {formatDateForDisplay(item.completed_at, 'MMM dd, yyyy HH:mm')}
                       </p>
                     </div>
                   )}

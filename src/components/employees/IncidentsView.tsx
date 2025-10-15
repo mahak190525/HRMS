@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { format } from 'date-fns';
+import { useState } from 'react';
+import { formatDateForDisplay } from '@/utils/dateUtils';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -230,7 +230,7 @@ export function IncidentsView({
                     <h4 className="font-medium text-lg">{incident.title}</h4>
                     <div className="flex items-center gap-2">
                       <Badge variant="outline">
-                        {format(new Date(incident.incident_date), 'MMM dd, yyyy')}
+                        {formatDateForDisplay(incident.incident_date, 'MMM dd, yyyy')}
                       </Badge>
                       {permissions.canManageAccess && mode === 'edit' && (
                         <>
@@ -333,12 +333,12 @@ export function IncidentsView({
                   </div>
 
                   <div className="text-xs text-gray-500">
-                    Created on {format(new Date(incident.created_at), 'MMM dd, yyyy')}
+                    Created on {formatDateForDisplay(incident.created_at, 'MMM dd, yyyy')}
                     {incident.created_by_user && (
                       <span> by {incident.created_by_user.full_name}</span>
                     )}
                     {incident.updated_at !== incident.created_at && (
-                      <span> • Updated on {format(new Date(incident.updated_at), 'MMM dd, yyyy')}</span>
+                      <span> • Updated on {formatDateForDisplay(incident.updated_at, 'MMM dd, yyyy')}</span>
                     )}
                   </div>
                 </div>

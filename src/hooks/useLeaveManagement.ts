@@ -17,6 +17,7 @@ export async function checkLeaveApplicationPermissions(userId: string, applicati
   const userRole = currentUser.role?.name || '';
   const isAdmin = currentUser.isSA || userRole === 'admin' || userRole === 'super_admin';
   const isHR = userRole === 'hr';
+  const isFinance = userRole === 'finance' || userRole === 'finance_manager';
   
   // Get the application user's manager info
   const { data: applicationUser, error: appUserError } = await supabase
@@ -36,11 +37,12 @@ export async function checkLeaveApplicationPermissions(userId: string, applicati
     userRole,
     isAdmin,
     isHR,
+    isFinance,
     isManager,
     managerIdFromApp: applicationUser.manager_id 
   });
   
-  // NEW RULES: Only manager, HR, and admin roles can approve/reject/edit leave applications
+  // NEW RULES: Only manager, HR, finance, and admin roles can approve/reject/edit leave applications
   // 1. ADMIN/SUPER_ADMIN have ALL permissions (highest priority)
   if (isAdmin) {
     return { canView: true, canEdit: true, reason: 'admin' };
@@ -51,7 +53,12 @@ export async function checkLeaveApplicationPermissions(userId: string, applicati
     return { canView: true, canEdit: true, reason: 'hr' };
   }
   
-  // 3. Managers can EDIT applications of their direct reports
+  // 3. Finance can EDIT all applications
+  if (isFinance) {
+    return { canView: true, canEdit: true, reason: 'finance' };
+  }
+  
+  // 4. Managers can EDIT applications of their direct reports
   if (isManager) {
     return { canView: true, canEdit: true, reason: 'manager' };
   }
@@ -81,20 +88,22 @@ export function useAllLeaveApplications() {
       
       if (userError) throw userError;
       
-      // Check if current user is admin/super_admin/hr
+      // Check if current user is admin/super_admin/hr/finance
       const userRole = currentUser.role?.name || '';
       const isAdmin = userRole === 'admin' || userRole === 'super_admin';
       const isHR = userRole === 'hr';
+      const isFinance = userRole === 'finance' || userRole === 'finance_manager';
       
       console.log('View permissions:', { 
         userId: user.id, 
         userRole,
         isAdmin,
-        isHR
+        isHR,
+        isFinance
       });
       
-      // Admin and HR can view ALL applications
-      if (isAdmin || isHR) {
+      // Admin, HR, and Finance can view ALL applications
+      if (isAdmin || isHR || isFinance) {
         const { data, error } = await supabase
           .rpc('get_leave_applications_with_manager_details');
         

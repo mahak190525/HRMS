@@ -1,7 +1,5 @@
-import React from 'react';
 import { useBDDashboardStats, useRecentBillingLogs } from '@/hooks/useBDTeam';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import {
@@ -11,21 +9,16 @@ import {
   AlertTriangle,
   TrendingUp,
   Calendar,
-  Clock,
   CheckCircle,
-  Building,
   CreditCard,
-  Target,
   BarChart3,
   History,
   Edit,
-  Plus,
-  User
+  Plus
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { formatDateForDisplay, getCurrentISTDate } from '@/utils/dateUtils';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/services/supabase';
 
@@ -100,8 +93,8 @@ export function BDDashboard() {
       const { data, error } = await supabase
         .from('billing_records')
         .select('client_name, project_name, contract_value, next_billing_date, billing_cycle')
-        .gte('next_billing_date', new Date().toISOString().split('T')[0])
-        .lte('next_billing_date', new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+        .gte('next_billing_date', getCurrentISTDate().toISOString().split('T')[0])
+        .lte('next_billing_date', new Date(getCurrentISTDate().getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
         .order('next_billing_date')
         .limit(5);
       
@@ -256,7 +249,7 @@ export function BDDashboard() {
                             {log.action_type === 'status_changed' && 'Status changed'}
                           </p>
                           <p className="text-xs text-muted-foreground truncate">
-                            {getRecordInfo()} • by {log.changed_by_user?.full_name} • {format(new Date(log.created_at), 'MMM dd, HH:mm')}
+                            {getRecordInfo()} • by {log.changed_by_user?.full_name} • {formatDateForDisplay(log.created_at, 'MMM dd, HH:mm')}
                           </p>
                           {log.old_value && log.new_value && (
                             <p className="text-xs text-muted-foreground">
@@ -315,7 +308,7 @@ export function BDDashboard() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-bold">${billing.contract_value.toLocaleString()}</p>
-                      <p className="text-xs text-muted-foreground">{format(new Date(billing.next_billing_date), 'MMM dd')}</p>
+                      <p className="text-xs text-muted-foreground">{formatDateForDisplay(billing.next_billing_date, 'MMM dd')}</p>
                     </div>
                   </div>
                 )) : (

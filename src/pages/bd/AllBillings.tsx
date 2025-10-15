@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBillingRecords, useCreateBillingRecord, useUpdateBillingRecord, useFinanceUsers } from '@/hooks/useBDTeam';
 import { notificationApi } from '@/services/api';
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -16,34 +16,29 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
-  Receipt,
   Plus,
-  Search,
   Filter,
   Download,
   Eye,
   Edit,
   Calendar as CalendarIcon,
-  DollarSign,
-  Building,
-  Clock,
-  User
+  Building
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate, parseToISTDate } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { cn } from '@/lib/utils';
-import { CONTRACT_TYPES, BILLING_CYCLES, PAYMENT_TERMS, CURRENCIES } from '@/constants';
+import { CONTRACT_TYPES, BILLING_CYCLES, PAYMENT_TERMS } from '@/constants';
 
 const billingSchema = z.object({
   client_name: z.string().min(1, 'Client name is required'),
   project_name: z.string().optional(),
   contract_type: z.string().min(1, 'Contract type is required'),
   billing_cycle: z.string().min(1, 'Billing cycle is required'),
-  contract_start_date: z.date({ required_error: 'Start date is required' }),
-  contract_end_date: z.date({ required_error: 'End date is required' }),
+  contract_start_date: z.date({ message: 'Start date is required' }),
+  contract_end_date: z.date({ message: 'End date is required' }),
   contract_value: z.number().min(0, 'Contract value must be positive'),
   billed_to_date: z.number().min(0, 'Billed amount must be positive'),
   next_billing_date: z.date().optional(),
@@ -69,7 +64,6 @@ export function AllBillings() {
   
   const [searchTerm, setSearchTerm] = useState('');
   const [contractTypeFilter, setContractTypeFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -103,9 +97,9 @@ export function AllBillings() {
 
     const billingData = {
       ...data,
-      contract_start_date: data.contract_start_date.toISOString().split('T')[0],
-      contract_end_date: data.contract_end_date.toISOString().split('T')[0],
-      next_billing_date: data.next_billing_date?.toISOString().split('T')[0],
+      contract_start_date: getCurrentISTDate().toISOString().split('T')[0],
+      contract_end_date: getCurrentISTDate().toISOString().split('T')[0],
+      next_billing_date: data.next_billing_date ? getCurrentISTDate().toISOString().split('T')[0] : undefined,
       created_by: user.id,
     };
 
@@ -175,11 +169,11 @@ export function AllBillings() {
       project_name: record.project_name || '',
       contract_type: record.contract_type,
       billing_cycle: record.billing_cycle,
-      contract_start_date: new Date(record.contract_start_date),
-      contract_end_date: new Date(record.contract_end_date),
+      contract_start_date: parseToISTDate(record.contract_start_date),
+      contract_end_date: parseToISTDate(record.contract_end_date),
       contract_value: record.contract_value,
       billed_to_date: record.billed_to_date,
-      next_billing_date: record.next_billing_date ? new Date(record.next_billing_date) : undefined,
+      next_billing_date: record.next_billing_date ? parseToISTDate(record.next_billing_date) : undefined,
       payment_terms: record.payment_terms,
       internal_notes: record.internal_notes || '',
       assigned_to_finance: record.assigned_to_finance || '',
@@ -363,7 +357,7 @@ export function AllBillings() {
                                 )}
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {field.value ? format(field.value, "PPP") : "Pick start date"}
+                                {field.value ? formatDateForDisplay(field.value, "PPP") : "Pick start date"}
                               </Button>
                             </FormControl>
                           </PopoverTrigger>
@@ -398,7 +392,7 @@ export function AllBillings() {
                                 )}
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {field.value ? format(field.value, "PPP") : "Pick end date"}
+                                {field.value ? formatDateForDisplay(field.value, "PPP") : "Pick end date"}
                               </Button>
                             </FormControl>
                           </PopoverTrigger>
@@ -407,7 +401,7 @@ export function AllBillings() {
                               mode="single"
                               selected={field.value}
                               onSelect={field.onChange}
-                              disabled={(date) => date < (form.getValues('contract_start_date') || new Date())}
+                              disabled={(date) => date < (form.getValues('contract_start_date') || getCurrentISTDate())}
                               initialFocus
                             />
                           </PopoverContent>
@@ -478,7 +472,7 @@ export function AllBillings() {
                                 )}
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {field.value ? format(field.value, "PPP") : "Pick billing date"}
+                                {field.value ? formatDateForDisplay(field.value, "PPP") : "Pick billing date"}
                               </Button>
                             </FormControl>
                           </PopoverTrigger>
@@ -674,7 +668,7 @@ export function AllBillings() {
                         {record.contract_type}
                       </Badge>
                       <div className="text-xs text-muted-foreground">
-                        {format(new Date(record.contract_start_date), 'MMM dd')} - {format(new Date(record.contract_end_date), 'MMM dd, yyyy')}
+                        {formatDateForDisplay(record.contract_start_date, 'MMM dd')} - {formatDateForDisplay(record.contract_end_date, 'MMM dd, yyyy')}
                       </div>
                     </div>
                   </TableCell>
@@ -694,7 +688,7 @@ export function AllBillings() {
                       <Badge variant="outline">{record.billing_cycle.replace('_', ' ')}</Badge>
                       {record.next_billing_date && (
                         <div className="text-xs text-muted-foreground">
-                          Next: {format(new Date(record.next_billing_date), 'MMM dd, yyyy')}
+                          Next: {formatDateForDisplay(record.next_billing_date, 'MMM dd, yyyy')}
                         </div>
                       )}
                     </div>
@@ -816,20 +810,20 @@ export function AllBillings() {
           <div>
             <Label className="text-xs font-medium text-muted-foreground">Contract Start Date</Label>
             <div className="text-sm font-semibold">
-              {format(new Date(selectedRecord.contract_start_date), 'PPP')}
+              {formatDateForDisplay(selectedRecord.contract_start_date, 'PPP')}
             </div>
           </div>
           <div>
             <Label className="text-xs font-medium text-muted-foreground">Contract End Date</Label>
             <div className="text-sm font-semibold">
-              {format(new Date(selectedRecord.contract_end_date), 'PPP')}
+              {formatDateForDisplay(selectedRecord.contract_end_date, 'PPP')}
             </div>
           </div>
           {selectedRecord.next_billing_date && (
             <div>
               <Label className="text-xs font-medium text-muted-foreground">Next Billing Date</Label>
               <div className="text-sm font-semibold">
-                {format(new Date(selectedRecord.next_billing_date), 'PPP')}
+                {formatDateForDisplay(selectedRecord.next_billing_date, 'PPP')}
               </div>
             </div>
           )}
@@ -1006,7 +1000,7 @@ export function AllBillings() {
                               )}
                             >
                               <CalendarIcon className="mr-2 h-4 w-4" />
-                              {field.value ? format(field.value, "PPP") : "Pick start date"}
+                              {field.value ? formatDateForDisplay(field.value, "PPP") : "Pick start date"}
                             </Button>
                           </FormControl>
                         </PopoverTrigger>
@@ -1041,7 +1035,7 @@ export function AllBillings() {
                               )}
                             >
                               <CalendarIcon className="mr-2 h-4 w-4" />
-                              {field.value ? format(field.value, "PPP") : "Pick end date"}
+                              {field.value ? formatDateForDisplay(field.value, "PPP") : "Pick end date"}
                             </Button>
                           </FormControl>
                         </PopoverTrigger>
@@ -1050,7 +1044,7 @@ export function AllBillings() {
                             mode="single"
                             selected={field.value}
                             onSelect={field.onChange}
-                            disabled={(date) => date < (form.getValues('contract_start_date') || new Date())}
+                            disabled={(date) => date < (form.getValues('contract_start_date') || getCurrentISTDate())}
                             initialFocus
                           />
                         </PopoverContent>
@@ -1121,7 +1115,7 @@ export function AllBillings() {
                               )}
                             >
                               <CalendarIcon className="mr-2 h-4 w-4" />
-                              {field.value ? format(field.value, "PPP") : "Pick billing date"}
+                              {field.value ? formatDateForDisplay(field.value, "PPP") : "Pick billing date"}
                             </Button>
                           </FormControl>
                         </PopoverTrigger>

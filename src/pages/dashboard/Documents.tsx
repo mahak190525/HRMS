@@ -24,7 +24,7 @@ import {
   Eye,
   Archive
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { 
   useEmployeeDocuments, 
@@ -200,7 +200,7 @@ export function Documents() {
                       </h3>
                       <div className="space-y-1 text-xs text-muted-foreground mb-4">
                         <p>Category: {doc.document_type?.category || 'Unknown'}</p>
-                        <p>Uploaded: {format(new Date(doc.updated_at), 'MMM dd, yyyy')}</p>
+                        <p>Uploaded: {formatDateForDisplay(doc.updated_at, 'MMM dd, yyyy')}</p>
                         {doc.file_size && (
                           <p>Size: {(doc.file_size / 1024 / 1024).toFixed(2)} MB</p>
                         )}
@@ -345,7 +345,7 @@ export function Documents() {
                               {upload.document_name}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              {format(new Date(upload.updated_at), 'MMM dd, yyyy')}
+                              {formatDateForDisplay(upload.updated_at, 'MMM dd, yyyy')}
                               {upload.file_size && ` • ${(upload.file_size / 1024 / 1024).toFixed(1)} MB`}
                             </p>
                           </div>
@@ -413,7 +413,7 @@ export function Documents() {
                           Requested by: {request.requested_by_user?.full_name || 'System'}
                         </span>
                         <span>
-                          Requested: {format(new Date(request.created_at), 'MMM dd, yyyy')}
+                          Requested: {formatDateForDisplay(request.created_at, 'MMM dd, yyyy')}
                         </span>
                       </div>
 

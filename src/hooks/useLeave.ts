@@ -158,7 +158,7 @@ export function useWithdrawLeaveApplication() {
       toast.success('Leave application withdrawn successfully!');
     },
     onError: (error) => {
-      toast.error('Failed to withdraw leave application');
+      toast.error(`Failed to withdraw leave application: ${error.message || 'Unknown error'}`);
       console.error('Leave withdrawal error:', error);
     },
   });

@@ -13,17 +13,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   UserPlus,
-  Upload,
   Gift,
   Clock,
   CheckCircle,
   XCircle,
-  DollarSign,
   Users,
-  TrendingUp,
   IndianRupee
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 const relationshipTypes = [
@@ -50,7 +47,6 @@ export function ReferSomeone() {
   const [additionalInfo, setAdditionalInfo] = useState('');
   const [whyRecommend, setWhyRecommend] = useState('');
   const [resumeFile, setResumeFile] = useState<File | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // New fields
   const [linkedinProfile, setLinkedinProfile] = useState('');
@@ -74,32 +70,28 @@ export function ReferSomeone() {
       referred_by: user.id,
       candidate_name: candidateName.trim(),
       candidate_email: candidateEmail.trim(),
-      candidate_phone: candidatePhone.trim() || null,
+      candidate_phone: candidatePhone.trim() || undefined,
       position: position,
-      additional_info: additionalInfo.trim() || null,
+      additional_info: additionalInfo.trim() || undefined,
       relationship: relationship,
-      linkedin_profile: linkedinProfile.trim() || null,
-      current_company: currentCompany.trim() || null,
-      current_job_title: currentJobTitle.trim() || null,
-      total_experience_years: experienceYears ? parseInt(experienceYears) : null,
-      total_experience_months: experienceMonths ? parseInt(experienceMonths) : null,
-      current_ctc: currentCtc ? parseFloat(currentCtc) : null,
-      expected_ctc: expectedCtc ? parseFloat(expectedCtc) : null,
-      notice_period_availability: noticePeriod.trim() || null,
-      reason_for_change: reasonForChange.trim() || null,
-      key_skills: keySkills.trim() || null,
-      domain_expertise: domainExpertise.trim() || null,
+      linkedin_profile: linkedinProfile.trim() || undefined,
+      current_company: currentCompany.trim() || undefined,
+      current_job_title: currentJobTitle.trim() || undefined,
+      total_experience_years: experienceYears ? parseInt(experienceYears) : undefined,
+      total_experience_months: experienceMonths ? parseInt(experienceMonths) : undefined,
+      current_ctc: currentCtc ? parseFloat(currentCtc) : undefined,
+      expected_ctc: expectedCtc ? parseFloat(expectedCtc) : undefined,
+      notice_period_availability: noticePeriod.trim() || undefined,
+      reason_for_change: reasonForChange.trim() || undefined,
+      key_skills: keySkills.trim() || undefined,
+      domain_expertise: domainExpertise.trim() || undefined,
       location_preference: locationPreference as 'Mohali' | 'Kota',
-      status: 'submitted',
+      status: 'submitted' as const,
       bonus_eligible: true
     };
 
-    const mutation = resumeFile ? createReferralWithResume : createReferral;
-    const mutationData = resumeFile 
-      ? { referralData, resumeFile }
-      : referralData;
-
-    mutation.mutate(mutationData, {
+    if (resumeFile) {
+      createReferralWithResume.mutate({ referralData, resumeFile }, {
       onSuccess: () => {
         // Reset form
         setCandidateName('');
@@ -130,6 +122,39 @@ export function ReferSomeone() {
         }
       }
     });
+    } else {
+      createReferral.mutate(referralData, {
+        onSuccess: () => {
+          // Reset form
+          setCandidateName('');
+          setCandidateEmail('');
+          setCandidatePhone('');
+          setPosition('');
+          setRelationship('');
+          setAdditionalInfo('');
+          setWhyRecommend('');
+          setResumeFile(null);
+          // Reset new fields
+          setLinkedinProfile('');
+          setCurrentCompany('');
+          setCurrentJobTitle('');
+          setExperienceYears('');
+          setExperienceMonths('');
+          setCurrentCtc('');
+          setExpectedCtc('');
+          setNoticePeriod('');
+          setReasonForChange('');
+          setKeySkills('');
+          setDomainExpertise('');
+          setLocationPreference('Mohali');
+          // Clear file input
+          const fileInput = document.getElementById('resume') as HTMLInputElement;
+          if (fileInput) {
+            fileInput.value = '';
+          }
+        }
+      });
+    }
   };
 
   const getStatusIcon = (status: string) => {
@@ -733,7 +758,7 @@ export function ReferSomeone() {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell>{format(new Date(referral.created_at), 'MMM dd, yyyy')}</TableCell>
+                        <TableCell>{formatDateForDisplay(referral.created_at, 'MMM dd, yyyy')}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

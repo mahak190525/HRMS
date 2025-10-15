@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import bcrypt from 'bcryptjs';
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { authApi } from '@/services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,19 +10,15 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { format } from 'date-fns';
+import { formatDateForDisplay } from '@/utils/dateUtils';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import {
-  Settings as SettingsIcon,
   User,
   Bell,
   Shield,
   Palette,
-  Globe,
-  Camera,
   Save,
   AlertTriangle,
   Eye,
@@ -387,7 +382,7 @@ export function Settings() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Joining Date:</span>
-                    <span className="font-medium">{user?.date_of_joining ? format(new Date(user.date_of_joining), 'PPP') : 'Not set'}</span>
+                    <span className="font-medium">{user?.date_of_joining ? formatDateForDisplay(user.date_of_joining, 'PPP') : 'Not set'}</span>
                   </div>
                 </CardContent>
               </Card>
@@ -420,7 +415,7 @@ export function Settings() {
                 <div className="md:col-span-2">
                   <p className="font-medium">Skills</p>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {user?.skill?.length > 0 ? user.skill.map((s, i) => (
+                    {user?.skill && user.skill.length > 0 ? user.skill.map((s, i) => (
                       <Badge key={i} variant="secondary">{s}</Badge>
                     )) : <p className="text-muted-foreground">No skills listed</p>}
                   </div>
@@ -456,7 +451,7 @@ export function Settings() {
                 {user?.marital_status === 'married' && user?.date_of_marriage_anniversary && (
                   <div>
                     <p className="font-medium">Marriage Anniversary</p>
-                    <p className="text-muted-foreground">{format(new Date(user.date_of_marriage_anniversary), 'PPP')}</p>
+                    <p className="text-muted-foreground">{formatDateForDisplay(user.date_of_marriage_anniversary, 'PPP')}</p>
                   </div>
                 )}
 
@@ -468,7 +463,7 @@ export function Settings() {
                 {user?.father_dob && (
                   <div>
                     <p className="font-medium">Father's Date of Birth</p>
-                    <p className="text-muted-foreground">{format(new Date(user.father_dob), 'PPP')}</p>
+                    <p className="text-muted-foreground">{formatDateForDisplay(user.father_dob, 'PPP')}</p>
                   </div>
                 )}
                 <div>
@@ -478,7 +473,7 @@ export function Settings() {
                 {user?.mother_dob && (
                   <div>
                     <p className="font-medium">Mother's Date of Birth</p>
-                    <p className="text-muted-foreground">{format(new Date(user.mother_dob), 'PPP')}</p>
+                    <p className="text-muted-foreground">{formatDateForDisplay(user.mother_dob, 'PPP')}</p>
                   </div>
                 )}
 

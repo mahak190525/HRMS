@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
   Eye,
   Calendar,
@@ -14,7 +13,7 @@ import {
   Target,
   User
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate, parseToISTDate } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -49,8 +48,8 @@ export function MyKRAView({ assignments, isLoading }: MyKRAViewProps) {
   const getDueStatus = (dueDate?: string, status?: string) => {
     if (!dueDate || ['submitted', 'evaluated', 'approved'].includes(status || '')) return null;
     
-    const now = new Date();
-    const due = new Date(dueDate);
+    const now = getCurrentISTDate();
+    const due = parseToISTDate(dueDate);
     const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     
     if (daysUntilDue < 0) return { status: 'overdue', days: Math.abs(daysUntilDue), color: 'text-red-600' };
@@ -60,8 +59,8 @@ export function MyKRAView({ assignments, isLoading }: MyKRAViewProps) {
 
   const isEditable = (assignment: KRAAssignment | null) => {
     if (!assignment || !assignment.due_date) return true;
-    const now = new Date();
-    const dueDate = new Date(assignment.due_date);
+    const now = getCurrentISTDate();
+    const dueDate = parseToISTDate(assignment.due_date);
     return now <= dueDate && !['submitted', 'evaluated', 'approved'].includes(assignment.status || '');
   };
 
@@ -108,7 +107,7 @@ export function MyKRAView({ assignments, isLoading }: MyKRAViewProps) {
                         </div>
                         <div className="flex items-center gap-1">
                           <Calendar className="h-4 w-4" />
-                          <span>Assigned: {format(new Date(assignment.assigned_date), 'MMM dd, yyyy')}</span>
+                          <span>Assigned: {formatDateForDisplay(assignment.assigned_date, 'MMM dd, yyyy')}</span>
                         </div>
                       </div>
                     </div>
@@ -133,7 +132,7 @@ export function MyKRAView({ assignments, isLoading }: MyKRAViewProps) {
                       <div className="flex items-center gap-2">
                         <Clock className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm">
-                          Due: {format(new Date(assignment.due_date), 'MMMM dd, yyyy')}
+                          Due: {formatDateForDisplay(assignment.due_date, 'MMMM dd, yyyy')}
                         </span>
                       </div>
                       {dueStatus && (
@@ -191,7 +190,7 @@ export function MyKRAView({ assignments, isLoading }: MyKRAViewProps) {
                     <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
                       <CheckCircle className="h-4 w-4 text-green-600" />
                       <span className="text-sm text-green-800">
-                        Submitted on {format(new Date(assignment.submitted_at), 'MMM dd, yyyy')}
+                        Submitted on {formatDateForDisplay(assignment.submitted_at, 'MMM dd, yyyy')}
                       </span>
                     </div>
                   )}

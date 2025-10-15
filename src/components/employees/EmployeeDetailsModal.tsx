@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { format } from 'date-fns';
+import { formatDateForDisplay } from '@/utils/dateUtils';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/services/supabase';
@@ -52,7 +52,6 @@ import {
   Phone,
   Building,
   UserCheck,
-  DollarSign,
   IndianRupee,
   FileText,
   Upload,
@@ -1032,13 +1031,13 @@ function BasicInfoView({ employee }: { employee: Employee }) {
         <div>
           <p className="font-medium">Date of Birth:</p>
           <p className="text-muted-foreground">
-            {employee.date_of_birth ? format(new Date(employee.date_of_birth), 'MMM dd, yyyy') : 'Not provided'}
+            {employee.date_of_birth ? formatDateForDisplay(employee.date_of_birth, 'MMM dd, yyyy') : 'Not provided'}
           </p>
         </div>
         <div>
           <p className="font-medium">Joining Date:</p>
           <p className="text-muted-foreground">
-            {employee.date_of_joining ? format(new Date(employee.date_of_joining), 'MMM dd, yyyy') : 'Not set'}
+            {employee.date_of_joining ? formatDateForDisplay(employee.date_of_joining, 'MMM dd, yyyy') : 'Not set'}
           </p>
         </div>
         <div>
@@ -1056,7 +1055,7 @@ function BasicInfoView({ employee }: { employee: Employee }) {
         <div>
           <p className="font-medium">Marriage Anniversary:</p>
           <p className="text-muted-foreground">
-            {employee.date_of_marriage_anniversary ? format(new Date(employee.date_of_marriage_anniversary), 'MMM dd, yyyy') : 'Not provided'}
+            {employee.date_of_marriage_anniversary ? formatDateForDisplay(employee.date_of_marriage_anniversary, 'MMM dd, yyyy') : 'Not provided'}
           </p>
         </div>
         <div className="col-span-1 sm:col-span-2">
@@ -1116,7 +1115,7 @@ function PersonalInfoView({ employee }: { employee: Employee }) {
         <div>
           <p className="font-medium">Father's DOB:</p>
           <p className="text-muted-foreground">
-            {employee.father_dob ? format(new Date(employee.father_dob), 'MMM dd, yyyy') : 'Not provided'}
+            {employee.father_dob ? formatDateForDisplay(employee.father_dob, 'MMM dd, yyyy') : 'Not provided'}
           </p>
         </div>
         <div>
@@ -1126,7 +1125,7 @@ function PersonalInfoView({ employee }: { employee: Employee }) {
         <div>
           <p className="font-medium">Mother's DOB:</p>
           <p className="text-muted-foreground">
-            {employee.mother_dob ? format(new Date(employee.mother_dob), 'MMM dd, yyyy') : 'Not provided'}
+            {employee.mother_dob ? formatDateForDisplay(employee.mother_dob, 'MMM dd, yyyy') : 'Not provided'}
           </p>
         </div>
         <div>
@@ -2599,7 +2598,7 @@ function WorkExperienceView({ employee }: { employee: Employee }) {
               )}
 
               <div className="text-xs text-gray-500">
-                Added on {format(new Date(exp.created_at), 'MMM dd, yyyy')}
+                Added on {formatDateForDisplay(exp.created_at, 'MMM dd, yyyy')}
               </div>
             </div>
           </Card>
@@ -2923,9 +2922,9 @@ function WorkExperienceEdit({ employee }: { employee: Employee }) {
                 </div>
 
                 <div className="text-xs text-gray-500">
-                  Added on {format(new Date(exp.created_at), 'MMM dd, yyyy')}
+                  Added on {formatDateForDisplay(exp.created_at, 'MMM dd, yyyy')}
                   {exp.updated_at !== exp.created_at && (
-                    <span> • Updated on {format(new Date(exp.updated_at), 'MMM dd, yyyy')}</span>
+                    <span> • Updated on {formatDateForDisplay(exp.updated_at, 'MMM dd, yyyy')}</span>
                   )}
                 </div>
               </div>

@@ -23,7 +23,7 @@ import {
   Target
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { format, differenceInMinutes } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate, parseToISTDate } from '@/utils/dateUtils';
 
 // Mock coding environment component
 function CodingIDE({ question, onCodeChange, code }: { 
@@ -464,7 +464,7 @@ export function RecruitmentAssessment() {
                         <div>
                           <div className="text-lg font-bold">
                             {assessment.submitted_at ? 
-                              format(new Date(assessment.submitted_at), 'MMM dd') : 
+                              formatDateForDisplay(assessment.submitted_at, 'MMM dd') : 
                               'N/A'
                             }
                           </div>
@@ -473,7 +473,7 @@ export function RecruitmentAssessment() {
                         <div>
                           <div className="text-lg font-bold">
                             {assessment.started_at && assessment.submitted_at ?
-                              differenceInMinutes(new Date(assessment.submitted_at), new Date(assessment.started_at)) + 'min' :
+                              Math.round((parseToISTDate(assessment.submitted_at).getTime() - parseToISTDate(assessment.started_at).getTime()) / (1000 * 60)) + 'min' :
                               'N/A'
                             }
                           </div>

@@ -1,31 +1,24 @@
-import React from 'react';
-import { useAuth } from '@/contexts/AuthContext';
 import { useLMSMetrics, useAllCandidatesProgress } from '@/hooks/useLMS';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
-  GraduationCap,
   Users,
   BookOpen,
   Award,
   FileText,
   TrendingUp,
-  Clock,
   CheckCircle,
-  Target,
   BarChart3,
-  Calendar,
   AlertTriangle
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
+import { getCurrentISTDate } from '@/utils/dateUtils';
 
 export function LMSManagerDashboard() {
-  const { user } = useAuth();
   const { data: metrics, isLoading: metricsLoading } = useLMSMetrics();
   const { data: candidates, isLoading: candidatesLoading } = useAllCandidatesProgress();
   const navigate = useNavigate();
@@ -97,7 +90,7 @@ export function LMSManagerDashboard() {
     const stuckModules = moduleProgress.filter((mp: any) => 
       mp.status === 'in_progress' && 
       mp.last_accessed_at && 
-      new Date(mp.last_accessed_at) < new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // 7 days ago
+      new Date(mp.last_accessed_at) < new Date(getCurrentISTDate().getTime() - 7 * 24 * 60 * 60 * 1000) // 7 days ago
     );
     
     return pendingDocs.length > 0 || stuckModules.length > 0;
@@ -217,9 +210,9 @@ export function LMSManagerDashboard() {
                 <div>
                   <div className="flex justify-between text-sm mb-1">
                     <span>User Engagement</span>
-                    <span>{metrics?.totalUsers > 0 ? Math.round((metrics.usersWithProgress / metrics.totalUsers) * 100) : 0}%</span>
+                    <span>{(metrics?.totalUsers || 0) > 0 ? Math.round(((metrics?.usersWithProgress || 0) / (metrics?.totalUsers || 1)) * 100) : 0}%</span>
                   </div>
-                  <Progress value={metrics?.totalUsers > 0 ? Math.round((metrics.usersWithProgress / metrics.totalUsers) * 100) : 0} />
+                  <Progress value={(metrics?.totalUsers || 0) > 0 ? Math.round(((metrics?.usersWithProgress || 0) / (metrics?.totalUsers || 1)) * 100) : 0} />
                 </div>
               </div>
             </CardContent>

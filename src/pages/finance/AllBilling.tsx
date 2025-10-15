@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   useFinanceBillingRecords, 
@@ -11,10 +11,8 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -23,36 +21,30 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  Receipt,
   Plus,
-  Search,
   Filter,
-  Download,
   Eye,
   Edit,
   Calendar as CalendarIcon,
-  DollarSign,
   Building,
-  Clock,
-  User,
-  FileText,
   Send
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { cn } from '@/lib/utils';
-import { CONTRACT_TYPES, BILLING_CYCLES, PAYMENT_TERMS, CURRENCIES } from '@/constants';
+import { CONTRACT_TYPES, BILLING_CYCLES, CURRENCIES } from '@/constants';
 
 const billingSchema = z.object({
   client_name: z.string().min(1, 'Client name is required'),
   project_name: z.string().optional(),
   contract_type: z.string().min(1, 'Contract type is required'),
   billing_cycle: z.string().min(1, 'Billing cycle is required'),
-  contract_start_date: z.date({ required_error: 'Start date is required' }),
-  contract_end_date: z.date({ required_error: 'End date is required' }),
+  contract_start_date: z.date({ message: 'Start date is required' }),
+  contract_end_date: z.date({ message: 'End date is required' }),
   contract_value: z.number().min(0, 'Contract value must be positive'),
   billed_to_date: z.number().min(0, 'Billed amount must be positive'),
   next_billing_date: z.date().optional(),
@@ -66,7 +58,7 @@ const invoiceSchema = z.object({
   project: z.string().optional(),
   billing_reference: z.string().optional(),
   invoice_amount: z.number().min(0.01, 'Invoice amount must be greater than 0'),
-  due_date: z.date({ required_error: 'Due date is required' }),
+  due_date: z.date({ message: 'Due date is required' }),
   payment_terms: z.string().min(1, 'Payment terms are required'),
   currency: z.string().min(1, 'Currency is required'),
   notes_to_finance: z.string().optional(),
@@ -90,8 +82,7 @@ export function AllBilling() {
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [isCreateBillingDialogOpen, setIsCreateBillingDialogOpen] = useState(false);
   const [isCreateInvoiceDialogOpen, setIsCreateInvoiceDialogOpen] = useState(false);
-  const [isEditBillingDialogOpen, setIsEditBillingDialogOpen] = useState(false);
-  const [isEditInvoiceDialogOpen, setIsEditInvoiceDialogOpen] = useState(false);
+  // Removed unused edit dialog state variables
 
   const billingForm = useForm<BillingFormData>({
     resolver: zodResolver(billingSchema),
@@ -139,9 +130,9 @@ export function AllBilling() {
 
     const billingData = {
       ...data,
-      contract_start_date: data.contract_start_date.toISOString().split('T')[0],
-      contract_end_date: data.contract_end_date.toISOString().split('T')[0],
-      next_billing_date: data.next_billing_date?.toISOString().split('T')[0],
+      contract_start_date: getCurrentISTDate().toISOString().split('T')[0],
+      contract_end_date: getCurrentISTDate().toISOString().split('T')[0],
+      next_billing_date: data.next_billing_date ? getCurrentISTDate().toISOString().split('T')[0] : undefined,
       created_by: user.id,
       assigned_to_finance: user.id,
     };
@@ -152,7 +143,6 @@ export function AllBilling() {
         updates: billingData
       }, {
         onSuccess: () => {
-          setIsEditBillingDialogOpen(false);
           setSelectedRecord(null);
           billingForm.reset();
         }
@@ -172,7 +162,7 @@ export function AllBilling() {
 
     const invoiceData = {
       ...data,
-      due_date: data.due_date.toISOString().split('T')[0],
+      due_date: getCurrentISTDate().toISOString().split('T')[0],
       created_by: user.id,
       assigned_finance_poc: user.id,
       status: 'assigned',
@@ -184,7 +174,6 @@ export function AllBilling() {
         updates: invoiceData
       }, {
         onSuccess: () => {
-          setIsEditInvoiceDialogOpen(false);
           setSelectedInvoice(null);
           invoiceForm.reset();
         }
@@ -548,7 +537,7 @@ export function AllBilling() {
                               mode="single"
                               selected={field.value}
                               onSelect={field.onChange}
-                              disabled={(date) => date < new Date()}
+                              disabled={(date) => date < getCurrentISTDate()}
                               initialFocus
                             />
                           </PopoverContent>
@@ -655,7 +644,7 @@ export function AllBilling() {
                             {record.contract_type}
                           </Badge>
                           <div className="text-xs text-muted-foreground">
-                            {format(new Date(record.contract_start_date), 'MMM dd')} - {format(new Date(record.contract_end_date), 'MMM dd, yyyy')}
+                            {formatDateForDisplay(record.contract_start_date, 'MMM dd')} - {formatDateForDisplay(record.contract_end_date, 'MMM dd, yyyy')}
                           </div>
                         </div>
                       </TableCell>
@@ -675,7 +664,7 @@ export function AllBilling() {
                           <Badge variant="outline">{record.billing_cycle.replace('_', ' ')}</Badge>
                           {record.next_billing_date && (
                             <div className="text-xs text-muted-foreground">
-                              Next: {format(new Date(record.next_billing_date), 'MMM dd, yyyy')}
+                              Next: {formatDateForDisplay(record.next_billing_date, 'MMM dd, yyyy')}
                             </div>
                           )}
                         </div>
@@ -796,7 +785,7 @@ export function AllBilling() {
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">
-                          {format(new Date(invoice.due_date), 'MMM dd, yyyy')}
+                          {formatDateForDisplay(invoice.due_date, 'MMM dd, yyyy')}
                         </div>
                       </TableCell>
                       <TableCell>

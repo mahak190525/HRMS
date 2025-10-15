@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentRequirements, useUserDocuments, useUploadDocument } from '@/hooks/useLMS';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -19,13 +18,10 @@ import {
   AlertTriangle,
   Eye,
   Download,
-  Calendar,
-  User,
-  Paperclip
+  User
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { toast } from 'sonner';
 
 export function DocumentUpload() {
   const { user } = useAuth();
@@ -232,7 +228,7 @@ export function DocumentUpload() {
                             <FileText className="h-4 w-4" />
                             <span className="text-sm">{existingDoc.document_name}</span>
                             <span className="text-xs text-muted-foreground">
-                              • {format(new Date(existingDoc.uploaded_at), 'MMM dd, yyyy')}
+                              • {formatDateForDisplay(existingDoc.uploaded_at, 'MMM dd, yyyy')}
                             </span>
                           </div>
                           
@@ -253,7 +249,7 @@ export function DocumentUpload() {
                                   const file = e.target.files?.[0];
                                   if (file) handleFileSelect(requirement.id, file);
                                 }}
-                                accept={requirement.file_format_restrictions?.map(f => `.${f}`).join(',')}
+                                accept={requirement.file_format_restrictions?.map((f: any) => `.${f}`).join(',')}
                               />
                               {selectedFile && (
                                 <Button 
@@ -286,7 +282,7 @@ export function DocumentUpload() {
                               const file = e.target.files?.[0];
                               if (file) handleFileSelect(requirement.id, file);
                             }}
-                            accept={requirement.file_format_restrictions?.map(f => `.${f}`).join(',')}
+                            accept={requirement.file_format_restrictions?.map((f: any) => `.${f}`).join(',')}
                           />
                           {selectedFile && (
                             <div className="flex items-center justify-between p-2 bg-blue-50 rounded">
@@ -358,7 +354,7 @@ export function DocumentUpload() {
                           <FileText className="h-4 w-4" />
                           <span className="text-sm">{existingDoc.document_name}</span>
                           <span className="text-xs text-muted-foreground">
-                            • {format(new Date(existingDoc.uploaded_at), 'MMM dd, yyyy')}
+                            • {formatDateForDisplay(existingDoc.uploaded_at, 'MMM dd, yyyy')}
                           </span>
                         </div>
                       ) : (
@@ -369,7 +365,7 @@ export function DocumentUpload() {
                               const file = e.target.files?.[0];
                               if (file) handleFileSelect(requirement.id, file);
                             }}
-                            accept={requirement.file_format_restrictions?.map(f => `.${f}`).join(',')}
+                            accept={requirement.file_format_restrictions?.map((f: any) => `.${f}`).join(',')}
                           />
                           {selectedFile && (
                             <Button 
@@ -453,7 +449,7 @@ export function DocumentUpload() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {format(new Date(document.uploaded_at), 'MMM dd, yyyy')}
+                          {formatDateForDisplay(document.uploaded_at, 'MMM dd, yyyy')}
                         </TableCell>
                         <TableCell>
                           {document.reviewed_by_user ? (

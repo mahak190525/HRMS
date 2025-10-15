@@ -1,4 +1,3 @@
-import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,7 +9,7 @@ import {
   FileText,
   X
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay } from '@/utils/dateUtils';
 
 import type { KRATemplate } from '@/hooks/useKRA';
 
@@ -59,7 +58,7 @@ export function KRATemplateDetails({ template, onClose }: KRATemplateDetailsProp
               <div>
                 <div className="font-medium">Evaluation Period</div>
                 <div className="text-muted-foreground">
-                  {format(new Date(template.evaluation_period_start), 'MMM dd')} - {format(new Date(template.evaluation_period_end), 'MMM dd, yyyy')}
+                  {formatDateForDisplay(template.evaluation_period_start, 'MMM dd')} - {formatDateForDisplay(template.evaluation_period_end, 'MMM dd, yyyy')}
                 </div>
               </div>
             </div>
@@ -89,7 +88,7 @@ export function KRATemplateDetails({ template, onClose }: KRATemplateDetailsProp
             KRA Goals ({template.goals.length})
           </h3>
           
-          {template.goals.map((goal, index) => (
+          {template.goals.map((goal) => (
             <Card key={goal.id}>
               <CardHeader>
                 <div className="flex items-start justify-between">

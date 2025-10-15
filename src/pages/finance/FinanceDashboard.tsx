@@ -1,31 +1,23 @@
-import React from 'react';
 import { useFinanceDashboardStats } from '@/hooks/useFinance';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import {
-  DollarSign,
   Users,
   FileText,
   AlertTriangle,
   TrendingUp,
   Calendar,
-  Clock,
-  CheckCircle,
-  Building,
-  CreditCard,
-  Target,
-  BarChart3,
   Receipt,
   Banknote,
-  Plus,
   ArrowRight
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query'
-import { format } from 'date-fns';
+import { supabase } from '@/services/supabase';
+import { formatDateForDisplay, getCurrentISTDate } from '@/utils/dateUtils';
 
 export function FinanceDashboard() {
   const { data: stats, isLoading: statsLoading } = useFinanceDashboardStats();
@@ -97,8 +89,8 @@ export function FinanceDashboard() {
       const { data, error } = await supabase
         .from('billing_records')
         .select('client_name, project_name, next_billing_date, contract_value')
-        .gte('next_billing_date', new Date().toISOString().split('T')[0])
-        .lte('next_billing_date', new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+        .gte('next_billing_date', getCurrentISTDate().toISOString().split('T')[0])
+        .lte('next_billing_date', new Date(getCurrentISTDate().getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
         .order('next_billing_date')
         .limit(5);
       
@@ -247,7 +239,7 @@ export function FinanceDashboard() {
                       <div>
                         <p className="text-sm font-medium">{billing.client_name}{billing.project_name ? ` - ${billing.project_name}` : ''}</p>
                         <p className="text-xs text-muted-foreground">
-                          {format(new Date(billing.next_billing_date), 'MMM dd, yyyy')}
+                          {formatDateForDisplay(billing.next_billing_date, 'MMM dd, yyyy')}
                         </p>
                       </div>
                       <Badge variant="outline">Due</Badge>

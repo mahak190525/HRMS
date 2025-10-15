@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -7,7 +6,7 @@ import {
   FileText,
   Target
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateForDisplay, getCurrentISTDate, parseToISTDate } from '@/utils/dateUtils';
 import type { KRATemplate, KRAAssignment } from '@/hooks/useKRA';
 import type { KRAPermissions } from '@/hooks/useKRAPermissions';
 
@@ -18,7 +17,7 @@ interface KRADashboardProps {
   permissions: KRAPermissions;
 }
 
-export function KRADashboard({ templates = [], assignments = [], teamMembers = [], permissions }: KRADashboardProps) {
+export function KRADashboard({ templates = [], assignments = [] }: KRADashboardProps) {
   // Calculate metrics
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -40,8 +39,8 @@ export function KRADashboard({ templates = [], assignments = [], teamMembers = [
   const getDueStatus = (dueDate: string | null, status: string) => {
     if (!dueDate || ['submitted', 'completed', 'evaluated'].includes(status)) return null;
     
-    const now = new Date();
-    const due = new Date(dueDate);
+    const now = getCurrentISTDate();
+    const due = parseToISTDate(dueDate);
     const diffTime = due.getTime() - now.getTime();
     const daysUntilDue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
@@ -53,10 +52,9 @@ export function KRADashboard({ templates = [], assignments = [], teamMembers = [
   // Calculate dashboard metrics
   const activeTemplates = templates.filter(t => t.status === 'active');
   const pendingReviews = assignments.filter(a => a.status === 'submitted');
-  const inProgressAssignments = assignments.filter(a => ['assigned', 'in_progress'].includes(a.status || ''));
   const completedAssignments = assignments.filter(a => a.status === 'submitted');
   const overdueAssignments = assignments.filter(a => {
-    const dueStatus = getDueStatus(a.due_date, a.status);
+    const dueStatus = getDueStatus(a.due_date || null, a.status || '');
     return dueStatus?.status === 'overdue';
   });
 
@@ -122,7 +120,7 @@ export function KRADashboard({ templates = [], assignments = [], teamMembers = [
                   </div>
                   <div className="text-right">
                     <div className="text-sm text-muted-foreground">
-                      Created {format(new Date(template.created_at), 'MMM dd')}
+                      Created {formatDateForDisplay(template.created_at, 'MMM dd')}
                     </div>
                   </div>
                 </div>
@@ -171,7 +169,7 @@ export function KRADashboard({ templates = [], assignments = [], teamMembers = [
                     </Badge>
                     {assignment.due_date && (
                       <div className="text-xs text-muted-foreground mt-1">
-                        Due {format(new Date(assignment.due_date), 'MMM dd')}
+                        Due {formatDateForDisplay(assignment.due_date, 'MMM dd')}
                       </div>
                     )}
                   </div>
