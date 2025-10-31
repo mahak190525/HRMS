@@ -1,4 +1,4 @@
-import React, { lazy, Suspense } from 'react';
+import React, { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -7,16 +7,22 @@ import { LoginForm } from '@/components/auth/LoginForm';
 import { RouteGuard } from '@/components/auth/RouteGuard';
 import { Toaster } from 'sonner';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { blockPrinting, initializePrintBlocking } from '@/utils/printBlocker';
 
 // Lazy load components for better performance
 const DashboardOverview = lazy(() => import('@/pages/dashboard/DashboardOverview').then(m => ({ default: m.DashboardOverview })));
 const LeaveApplication = lazy(() => import('@/pages/dashboard/LeaveApplication').then(m => ({ default: m.LeaveApplication })));
 const Documents = lazy(() => import('@/pages/dashboard/Documents').then(m => ({ default: m.Documents })));
 const Assets = lazy(() => import('@/pages/dashboard/Assets').then(m => ({ default: m.Assets })));
+const Policies = lazy(() => import('@/pages/dashboard/Policies').then(m => ({ default: m.Policies })));
 const Complaints = lazy(() => import('@/pages/dashboard/Complaints').then(m => ({ default: m.Complaints })));
 const Performance = lazy(() => import('@/pages/dashboard/Performance').then(m => ({ default: m.Performance })));
 const HRMSFeedback = lazy(() => import('@/pages/dashboard/HRMSFeedback').then(m => ({ default: m.HRMSFeedback })));
 const KRA = lazy(() => import('@/pages/performance/KRA').then(m => ({ default: m.KRA })));
+const KRATemplatePage = lazy(() => import('@/pages/performance/KRATemplatePage').then(m => ({ default: m.KRATemplatePage })));
+const KRADetailsPage = lazy(() => import('@/pages/performance/KRADetailsPage').then(m => ({ default: m.KRADetailsPage })));
+const MyKRAPage = lazy(() => import('@/pages/employees/MyKRAPage').then(m => ({ default: m.MyKRAPage })));
+const ManagerKRAPage = lazy(() => import('@/pages/performance/ManagerKRAPage').then(m => ({ default: m.ManagerKRAPage })));
 const PerformanceOverview = lazy(() => import('@/pages/performance/PerformanceOverview').then(m => ({ default: m.PerformanceOverview })));
 const ReferSomeone = lazy(() => import('@/pages/dashboard/ReferSomeone').then(m => ({ default: m.ReferSomeone })));
 const Settings = lazy(() => import('@/pages/dashboard/Settings').then(m => ({ default: m.Settings })));
@@ -46,12 +52,12 @@ const LMSDashboard = lazy(() => import('@/pages/lms/LMSDashboard').then(m => ({ 
 const Prerequisites = lazy(() => import('@/pages/lms/Prerequisites').then(m => ({ default: m.Prerequisites })));
 const DocumentUpload = lazy(() => import('@/pages/lms/DocumentUpload').then(m => ({ default: m.DocumentUpload })));
 const AllCandidates = lazy(() => import('@/pages/lms/AllCandidates'));
-const LMSManagerDashboard = lazy(() => import('@/pages/lms/LMSManagerDashboard').then(m => ({ default: m.LMSManagerDashboard })));
 const ExitDashboard = lazy(() => import('@/pages/exit/ExitDashboard').then(m => ({ default: m.ExitDashboard })));
 const ExitDocuments = lazy(() => import('@/pages/exit/ExitDocuments').then(m => ({ default: m.ExitDocuments })));
 const ExitClearance = lazy(() => import('@/pages/exit/ExitClearance').then(m => ({ default: m.ExitClearance })));
 const ExitInterview = lazy(() => import('@/pages/exit/ExitInterview').then(m => ({ default: m.ExitInterview })));
 const NotificationsPage = lazy(() => import('@/pages/notifications/Notifications').then(m => ({ default: m.NotificationsPage })));
+const PolicyDashboard = lazy(() => import('@/pages/policies/PolicyDashboard').then(m => ({ default: m.PolicyDashboard })));
 
 const queryClient = new QueryClient();
 
@@ -121,6 +127,11 @@ function AppRoutes() {
             <Documents />
           </GuardedRoute>
         } />
+        <Route path="dashboard/policies" element={
+          <GuardedRoute>
+            <Policies />
+          </GuardedRoute>
+        } />
         <Route path="dashboard/complaints" element={
           <GuardedRoute>
             <Complaints />
@@ -146,6 +157,31 @@ function AppRoutes() {
             <KRA />
           </GuardedRoute>
         } />
+        <Route path="performance/kra/template/:templateId" element={
+          <GuardedRoute>
+            <KRATemplatePage />
+          </GuardedRoute>
+        } />
+        <Route path="performance/kra/template/new" element={
+          <GuardedRoute>
+            <KRATemplatePage />
+          </GuardedRoute>
+        } />
+        <Route path="dashboard/performance/kra/:assignmentId" element={
+          <GuardedRoute>
+            <MyKRAPage />
+          </GuardedRoute>
+        } />
+        <Route path="performance/kra/manager/:assignmentId" element={
+          <GuardedRoute>
+            <ManagerKRAPage />
+          </GuardedRoute>
+        } />
+        <Route path="performance/kra/details/:assignmentId" element={
+          <GuardedRoute>
+            <KRADetailsPage />
+          </GuardedRoute>
+        } />
         <Route path="dashboard/referrals" element={
           <GuardedRoute>
             <ReferSomeone />
@@ -157,11 +193,6 @@ function AppRoutes() {
           </GuardedRoute>
         } />
         <Route path="employees" element={
-          <GuardedRoute>
-            <EmployeeManagement />
-          </GuardedRoute>
-        } />
-        <Route path="employees/*" element={
           <GuardedRoute>
             <EmployeeManagement />
           </GuardedRoute>
@@ -321,6 +352,21 @@ function AppRoutes() {
             <NotificationsPage />
           </Suspense>
         } />
+        <Route path="policies" element={
+          <GuardedRoute>
+            <PolicyDashboard />
+          </GuardedRoute>
+        } />
+        <Route path="policies/logs" element={
+          <GuardedRoute>
+            <PolicyDashboard />
+          </GuardedRoute>
+        } />
+        {/* <Route path="policies/permissions" element={
+          <GuardedRoute>
+            <PolicyDashboard />
+          </GuardedRoute>
+        } /> */}
         <Route path="exit" element={
           <Suspense fallback={<LoadingSpinner size="lg" />}>
             <ExitDashboard />
@@ -365,4 +411,44 @@ function App() {
   );
 }
 
-export default App;
+// Initialize print blocking after everything is mounted
+function InitializePrintBlocking() {
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    
+    // Check if print blocking is enabled
+    const isPrintBlockingEnabled = import.meta.env.VITE_ENABLE_PRINT_BLOCKING !== 'false';
+    
+    if (isPrintBlockingEnabled) {
+      // Add CSS class to enable print blocking styles
+      document.body.classList.add('print-blocking-enabled');
+    }
+    
+    // Wait for Toaster to be fully mounted before initializing print blocking
+    const timer = setTimeout(() => {
+      cleanup = blockPrinting();
+      initializePrintBlocking();
+    }, 500);
+
+    return () => {
+      clearTimeout(timer);
+      cleanup?.();
+      // Remove CSS class on cleanup
+      document.body.classList.remove('print-blocking-enabled');
+    };
+  }, []);
+
+  return null;
+}
+
+// Wrap the original App to add print blocking
+function AppWithPrintBlocking() {
+  return (
+    <>
+      <App />
+      <InitializePrintBlocking />
+    </>
+  );
+}
+
+export default AppWithPrintBlocking;

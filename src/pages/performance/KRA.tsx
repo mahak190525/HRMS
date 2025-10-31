@@ -17,6 +17,7 @@ import { AdminKRAOverview } from '@/components/kra/AdminKRAOverview';
 // Manager-only imports - employees access KRA through personal dashboard
 import { KRADashboard } from '@/components/kra/KRADashboard';
 import { PerformanceOverview } from './PerformanceOverview';
+import { KRANotificationTest } from '@/components/debug/KRANotificationTest';
 
 import { 
   useKRATemplates, 
@@ -115,21 +116,21 @@ export function KRA() {
 
       {/* Content */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className={`grid w-full max-w-3xl ${(() => {
+        <TabsList className={`grid w-full ${(() => {
           let tabCount = 1; // Dashboard is always visible
           if (permissions.canCreateTemplates) tabCount++;
           if (permissions.canViewAssignments) tabCount++;
           if (permissions.canViewAllKRA) tabCount++;
-          if (permissions.canViewAssignments || permissions.canViewAllKRA) tabCount++; // Performance Overview
+          // if (permissions.canViewAssignments || permissions.canViewAllKRA) tabCount++; // Performance Overview
           return `grid-cols-${tabCount}`;
         })()}`}>
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           {permissions.canCreateTemplates && <TabsTrigger value="templates">Templates</TabsTrigger>}
           {permissions.canViewAssignments && <TabsTrigger value="assignments">Team KRAs</TabsTrigger>}
           {permissions.canViewAllKRA && <TabsTrigger value="admin-overview">All KRAs</TabsTrigger>}
-          {(permissions.canViewAssignments || permissions.canViewAllKRA) && (
+          {/* {(permissions.canViewAssignments || permissions.canViewAllKRA) && (
             <TabsTrigger value="performance-overview">Performance Overview</TabsTrigger>
-          )}
+          )} */}
         </TabsList>
 
         <TabsContent value="dashboard" className="space-y-6">
@@ -170,6 +171,7 @@ export function KRA() {
               isLoading={assignmentsLoading}
               teamMembers={teamMembers}
               permissions={permissions}
+              context="team"
             />
           </TabsContent>
         )}

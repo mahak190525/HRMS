@@ -18,7 +18,8 @@ import {
   AlertTriangle,
   Save,
   Send,
-  Edit
+  Edit,
+  Settings
 } from 'lucide-react';
 import { formatDateForDisplay, getCurrentISTDate, parseToISTDate } from '@/utils/dateUtils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,6 +28,7 @@ import type { KRAAssignment } from '@/hooks/useKRA';
 import type { KRAPermissions } from '@/hooks/useKRAPermissions';
 import { useKRAAssignmentDetails, useUpdateKRAEvaluation } from '@/hooks/useKRA';
 import { supabase } from '@/services/supabase';
+import { QuarterlySettingsManager } from './QuarterlySettingsManager';
 
 interface KRAModalProps {
   isOpen: boolean;
@@ -61,6 +63,8 @@ export function KRAModal({
   const { user } = useAuth();
   const [evaluations, setEvaluations] = useState<EvaluationFormData>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedQuarter, setSelectedQuarter] = useState<'Q1' | 'Q2' | 'Q3' | 'Q4'>('Q1');
+  const [showQuarterlySettings, setShowQuarterlySettings] = useState(false);
   
   // Always call hooks - use assignment?.id to handle null cases
   const { data: detailedAssignment, refetch } = useKRAAssignmentDetails(assignment?.id || '');
@@ -481,6 +485,17 @@ export function KRAModal({
                     {getStatusIcon(currentAssignment.status || '')}
                     <span className="capitalize">{currentAssignment.status?.replace('_', ' ')}</span>
                   </Badge>
+                  {viewContext === 'manager' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowQuarterlySettings(!showQuarterlySettings)}
+                      className="flex items-center gap-1"
+                    >
+                      <Settings className="h-3 w-3" />
+                      Quarterly Settings
+                    </Button>
+                  )}
                   {dueStatus?.status === 'overdue' && (
                     <Badge variant="destructive">
                       <AlertTriangle className="h-3 w-3 mr-1" />
@@ -537,6 +552,15 @@ export function KRAModal({
               )}
             </CardContent>
           </Card>
+
+          {/* Quarterly Settings (for managers/admins) */}
+          {showQuarterlySettings && (viewContext === 'manager' || viewContext === 'admin') && (
+            <QuarterlySettingsManager
+              assignment={currentAssignment}
+              onUpdate={refetch}
+              canManage={true}
+            />
+          )}
 
           {/* Template Goals */}
           {currentAssignment.template?.goals && currentAssignment.template.goals.length > 0 && (

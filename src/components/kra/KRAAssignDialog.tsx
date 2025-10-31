@@ -6,28 +6,32 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Separator } from '@/components/ui/separator';
 import { 
   Users,
   Calendar,
   Send,
-  User
+  User,
+  X
 } from 'lucide-react';
-import { formatDateForDisplay, getCurrentISTDate } from '@/utils/dateUtils';
+import { formatDateForDisplay } from '@/utils/dateUtils';
 
 import type { KRATemplate } from '@/hooks/useKRA';
 
+
 interface KRAAssignDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
   template: KRATemplate;
   teamMembers: any[];
   existingAssignments?: any[];
-  onAssign: (templateId: string, selectedEmployees: string[], dueDate: string, mode: 'assign' | 'reassign') => void;
-  onCancel: () => void;
+  onAssign: (templateId: string, selectedEmployees: string[], mode: 'assign' | 'reassign') => void;
   isLoading?: boolean;
 }
 
-export function KRAAssignDialog({ template, teamMembers, existingAssignments = [], onAssign, onCancel, isLoading = false }: KRAAssignDialogProps) {
+export function KRAAssignDialog({ isOpen, onClose, template, teamMembers, existingAssignments = [], onAssign, isLoading = false }: KRAAssignDialogProps) {
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
-  const [dueDate, setDueDate] = useState('');
   const [assignmentMode, setAssignmentMode] = useState<'assign' | 'reassign'>('assign');
 
   const handleEmployeeToggle = (employeeId: string, checked: boolean) => {
@@ -46,6 +50,7 @@ export function KRAAssignDialog({ template, teamMembers, existingAssignments = [
     }
   };
 
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -54,236 +59,186 @@ export function KRAAssignDialog({ template, teamMembers, existingAssignments = [
       return;
     }
     
-    if (!dueDate) {
-      alert('Please set a due date');
-      return;
-    }
-
-    onAssign(template.id, selectedEmployees, dueDate, assignmentMode);
+    onAssign(template.id, selectedEmployees, assignmentMode);
   };
 
+  // Check which employees already have assignments
+  const employeesWithAssignments = existingAssignments.map(assignment => assignment.employee_id);
+  const newEmployees = teamMembers.filter(member => !employeesWithAssignments.includes(member.id));
+  const existingEmployees = teamMembers.filter(member => employeesWithAssignments.includes(member.id));
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Template Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">{template.template_name}</CardTitle>
-          <CardDescription>
-            {template.description}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-muted-foreground">Evaluation Period:</span>
-              <div className="font-medium">
-                {formatDateForDisplay(template.evaluation_period_start, 'MMM dd')} - {formatDateForDisplay(template.evaluation_period_end, 'MMM dd, yyyy')}
-              </div>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Goals:</span>
-              <div className="font-medium">{template.goals?.length || 0} KRA goals</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Due Date */}
-      <div className="space-y-2">
-        <Label htmlFor="due_date" className="flex items-center gap-2">
-          <Calendar className="h-4 w-4" />
-          Due Date *
-        </Label>
-        <Input
-          id="due_date"
-          type="date"
-          value={dueDate}
-          onChange={(e) => setDueDate(e.target.value)}
-          min={getCurrentISTDate().toISOString().split('T')[0]}
-          required
-        />
-        <p className="text-xs text-muted-foreground">
-          Employees will have until this date to complete their KRA submissions
-        </p>
-      </div>
-
-      {/* Assignment Mode & Existing Assignments */}
-      {existingAssignments.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Existing Assignments ({existingAssignments.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2 mb-4">
-              {existingAssignments.slice(0, 3).map((assignment: any) => (
-                <div key={assignment.id} className="flex items-center justify-between p-2 bg-muted rounded text-sm">
-                  <span>{assignment.employee?.full_name}</span>
-                  <Badge variant="outline" className="text-xs">
-                    {assignment.status}
-                  </Badge>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Publish to Team Members</DialogTitle>
+          <DialogDescription>
+            Select team members to assign this KRA template and set quarterly due dates.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Template Summary */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">{template.template_name}</CardTitle>
+              <CardDescription>
+                {template.description}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Evaluation Period:</span>
+                  <div className="font-medium">
+                    {formatDateForDisplay(template.evaluation_period_start, 'MMM dd')} - {formatDateForDisplay(template.evaluation_period_end, 'MMM dd, yyyy')}
+                  </div>
                 </div>
-              ))}
-              {existingAssignments.length > 3 && (
-                <p className="text-xs text-muted-foreground">
-                  +{existingAssignments.length - 3} more assignments
-                </p>
-              )}
-            </div>
-            
+                <div>
+                  <span className="text-muted-foreground">Goals:</span>
+                  <div className="font-medium">{template.goals?.length || 0} KRA goals</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+
+          {/* Assignment Mode Selection */}
+          {existingEmployees.length > 0 && (
             <div className="space-y-3">
-              <Label>Assignment Mode</Label>
-              <div className="flex gap-4">
-                <label className="flex items-center space-x-2 cursor-pointer">
+              <Label className="text-base font-medium">Assignment Mode</Label>
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
                   <input
                     type="radio"
-                    name="assignmentMode"
+                    id="assign_new"
+                    name="assignment_mode"
                     value="assign"
                     checked={assignmentMode === 'assign'}
                     onChange={(e) => setAssignmentMode(e.target.value as 'assign' | 'reassign')}
+                    className="h-4 w-4"
                   />
-                  <span className="text-sm">New Assignment</span>
-                  <span className="text-xs text-muted-foreground">(Only unassigned employees)</span>
-                </label>
-                <label className="flex items-center space-x-2 cursor-pointer">
+                  <Label htmlFor="assign_new" className="text-sm">
+                    Assign to new employees only ({newEmployees.length} available)
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
                   <input
                     type="radio"
-                    name="assignmentMode"
+                    id="reassign_all"
+                    name="assignment_mode"
                     value="reassign"
                     checked={assignmentMode === 'reassign'}
                     onChange={(e) => setAssignmentMode(e.target.value as 'assign' | 'reassign')}
+                    className="h-4 w-4"
                   />
-                  <span className="text-sm">Reassign</span>
-                  <span className="text-xs text-muted-foreground">(Reset existing assignments)</span>
-                </label>
+                  <Label htmlFor="reassign_all" className="text-sm">
+                    Reassign to all selected employees (will reset existing assignments)
+                  </Label>
+                </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
 
-      {/* Team Members Selection */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <Label className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            Select Team Members ({selectedEmployees.length}/{teamMembers.length})
-          </Label>
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="select-all"
-              checked={selectedEmployees.length === teamMembers.length && teamMembers.length > 0}
-              onCheckedChange={handleSelectAll}
-            />
-            <Label htmlFor="select-all" className="text-sm">
-              Select All
-            </Label>
-          </div>
-        </div>
+          {/* Team Member Selection */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <Label className="text-base font-medium flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Select Team Members
+              </Label>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="select_all"
+                  checked={selectedEmployees.length === teamMembers.length}
+                  onCheckedChange={handleSelectAll}
+                />
+                <Label htmlFor="select_all" className="text-sm">
+                  Select All ({teamMembers.length})
+                </Label>
+              </div>
+            </div>
 
-        {teamMembers.length > 0 ? (
-          <div className="space-y-2 max-h-64 overflow-y-auto border rounded-lg">
-            {teamMembers
-              .filter((member) => {
-                const hasExistingAssignment = existingAssignments.some(
-                  (assignment: any) => assignment.employee_id === member.id
-                );
-                
-                // For 'assign' mode, only show unassigned employees
-                // For 'reassign' mode, show all employees
-                return assignmentMode === 'reassign' || !hasExistingAssignment;
-              })
-              .map((member) => {
-                const existingAssignment = existingAssignments.find(
-                  (assignment: any) => assignment.employee_id === member.id
-                );
+            <div className="max-h-60 overflow-y-auto space-y-2 border rounded-lg p-3">
+              {teamMembers.map((member) => {
+                const hasExistingAssignment = employeesWithAssignments.includes(member.id);
+                const isDisabled = assignmentMode === 'assign' && hasExistingAssignment;
                 
                 return (
-                  <div key={member.id} className="flex items-center space-x-3 p-3 hover:bg-muted/50">
+                  <div 
+                    key={member.id} 
+                    className={`flex items-center space-x-3 p-2 rounded-lg border ${
+                      isDisabled ? 'bg-gray-50 opacity-60' : 'hover:bg-gray-50'
+                    }`}
+                  >
                     <Checkbox
-                      id={`employee-${member.id}`}
+                      id={`member_${member.id}`}
                       checked={selectedEmployees.includes(member.id)}
                       onCheckedChange={(checked) => handleEmployeeToggle(member.id, checked as boolean)}
+                      disabled={isDisabled}
                     />
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={member.avatar_url} alt={member.full_name} />
+                      <AvatarImage src={member.avatar_url} />
                       <AvatarFallback>
-                        {member.full_name?.charAt(0) || 'U'}
+                        {member.full_name?.split(' ').map((n: string) => n[0]).join('').toUpperCase() || 'U'}
                       </AvatarFallback>
                     </Avatar>
-                    <div className="flex-1">
-                      <div className="font-medium">{member.full_name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {member.employee_id && `ID: ${member.employee_id} • `}
-                        {member.position || 'Employee'}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium truncate">{member.full_name}</p>
+                        {hasExistingAssignment && (
+                          <Badge variant="secondary" className="text-xs">
+                            Already Assigned
+                          </Badge>
+                        )}
                       </div>
+                      <p className="text-xs text-muted-foreground truncate">{member.email}</p>
+                      {member.employee_id && (
+                        <p className="text-xs text-muted-foreground">ID: {member.employee_id}</p>
+                      )}
                     </div>
-                    {existingAssignment && (
-                      <div className="flex flex-col items-end gap-1">
-                        <Badge variant="outline" className="text-xs">
-                          {existingAssignment.status}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {formatDateForDisplay(existingAssignment.assigned_date, 'MMM dd')}
-                        </span>
-                      </div>
-                    )}
                   </div>
                 );
               })}
-          </div>
-        ) : (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-8">
-              <User className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No Team Members</h3>
-              <p className="text-muted-foreground text-center">
-                No team members are currently reporting to you.
+            </div>
+
+            {selectedEmployees.length > 0 && (
+              <p className="text-sm text-muted-foreground">
+                {selectedEmployees.length} team member(s) selected
               </p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+            )}
+          </div>
 
-      {/* Assignment Summary */}
-      {selectedEmployees.length > 0 && (
-        <Card className="bg-blue-50 border-blue-200">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-blue-800">
-              <Send className="h-4 w-4" />
-              <span className="font-medium">Assignment Summary</span>
-            </div>
-            <div className="mt-2 text-sm text-blue-700">
-              This KRA template will be assigned to <strong>{selectedEmployees.length}</strong> team member{selectedEmployees.length !== 1 ? 's' : ''} 
-              {dueDate && (
-                <span> with a due date of <strong>{formatDateForDisplay(dueDate, 'MMMM dd, yyyy')}</strong></span>
-              )}.
-            </div>
-            <div className="mt-2 text-xs text-blue-600">
-              Selected employees will receive notifications and can access this KRA in their dashboard.
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Form Actions */}
-      <div className="flex items-center justify-end gap-3 pt-4">
-        <Button type="button" variant="outline" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button 
-          type="submit" 
-          disabled={isLoading || selectedEmployees.length === 0 || !dueDate}
-        >
-          {isLoading ? (
-            <>Publishing...</>
-          ) : (
-            <>
-              <Send className="h-4 w-4 mr-2" />
-              Publish to Team ({selectedEmployees.length})
-            </>
-          )}
-        </Button>
-      </div>
-    </form>
+          {/* Action Buttons */}
+          <div className="flex justify-end space-x-3 pt-4 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={isLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={isLoading || selectedEmployees.length === 0}
+              className="flex items-center gap-2"
+            >
+              {isLoading ? (
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Publishing...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4" />
+                  {assignmentMode === 'reassign' ? 'Reassign Template' : 'Assign Template'}
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -27,7 +27,8 @@ export function DashboardSwitcher() {
     if (path === '/finance' || path.startsWith('/finance/')) return dashboards.find(d => d.id === 'finance');
     if (path === '/ats' || path.startsWith('/ats/')) return dashboards.find(d => d.id === 'ats');
     if (path === '/lms' || path.startsWith('/lms/')) return dashboards.find(d => d.id === 'lms');
-    if (path === '/exit' || path.startsWith('/exit/')) return dashboards.find(d => d.id === 'exit'); 
+    if (path === '/exit' || path.startsWith('/exit/')) return dashboards.find(d => d.id === 'exit');
+    if (path === '/policies' || path.startsWith('/policies/')) return dashboards.find(d => d.id === 'policies');
     return dashboards[0];
   };
 

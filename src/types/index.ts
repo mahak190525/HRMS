@@ -387,3 +387,100 @@ export interface PushSubscription {
   created_at: string;
   updated_at: string;
 }
+
+// Policy Management Types
+export interface Policy {
+  id: string;
+  name: string;
+  content: string;
+  is_active: boolean;
+  version: number;
+  created_by?: string;
+  updated_by?: string;
+  created_at: string;
+  updated_at: string;
+  // Computed fields
+  permissions?: PolicyPermission[];
+  can_read?: boolean;
+  can_write?: boolean;
+  can_delete?: boolean;
+}
+
+export interface PolicyVersion {
+  id: string;
+  policy_id: string;
+  version: number;
+  name: string;
+  content: string;
+  created_by?: string;
+  created_at: string;
+}
+
+export interface PolicyPermission {
+  id: string;
+  policy_id: string;
+  user_id?: string;
+  role?: string;
+  can_read: boolean;
+  can_write: boolean;
+  can_delete: boolean;
+  granted_by?: string;
+  created_at: string;
+  updated_at: string;
+  // Computed fields
+  user?: User;
+}
+
+export interface PolicyAccessLog {
+  id: string;
+  policy_id: string;
+  user_id: string;
+  action: 'read' | 'write' | 'delete' | 'create';
+  ip_address?: string;
+  user_agent?: string;
+  created_at: string;
+  // Computed fields
+  policy?: Policy;
+  user?: User;
+}
+
+// Policy Editor Types
+export interface PolicyEditorState {
+  content: string;
+  isDirty: boolean;
+  isLoading: boolean;
+  error?: string;
+}
+
+export interface PolicyFormData {
+  name: string;
+  content: string;
+  is_active: boolean;
+}
+
+export interface PolicyPermissionFormData {
+  policy_id: string;
+  user_id?: string;
+  role?: string;
+  can_read: boolean;
+  can_write: boolean;
+  can_delete: boolean;
+}
+
+// Policy Dashboard Types
+export interface PolicyDashboardStats {
+  total_policies: number;
+  active_policies: number;
+  recent_updates: number;
+  user_accessible_policies: number;
+}
+
+export interface PolicySearchFilters {
+  is_active?: boolean;
+  search_term?: string;
+  created_by?: string;
+  date_range?: {
+    start: string;
+    end: string;
+  };
+}

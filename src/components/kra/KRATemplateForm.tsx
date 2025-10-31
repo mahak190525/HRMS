@@ -156,9 +156,12 @@ export function KRATemplateForm({ template, onSubmit, onCancel, isLoading = fals
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (totalWeight !== 100) {
-      alert('Total weight must equal 100%');
-      return;
+    // Warn user if total weight is not 100% and template is being set to active
+    if (totalWeight !== 100 && templateData.status === 'active') {
+      const confirmed = window.confirm(
+        `The total weight is ${totalWeight}% instead of 100%. Active templates should have a total weight of 100%. Do you want to continue anyway?`
+      );
+      if (!confirmed) return;
     }
 
     // Submit template first
@@ -305,7 +308,7 @@ export function KRATemplateForm({ template, onSubmit, onCancel, isLoading = fals
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" disabled={isLoading || totalWeight !== 100}>
+        <Button type="submit" disabled={isLoading}>
           {isLoading ? (
             <>Saving...</>
           ) : (
@@ -315,6 +318,11 @@ export function KRATemplateForm({ template, onSubmit, onCancel, isLoading = fals
             </>
           )}
         </Button>
+        {totalWeight !== 100 && (
+          <p className="text-sm text-amber-600 mt-2">
+            <strong>Note:</strong> Total weight is {totalWeight}%. For active templates, the total weight should be 100%.
+          </p>
+        )}
       </div>
     </form>
   );

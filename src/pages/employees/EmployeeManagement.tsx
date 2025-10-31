@@ -29,11 +29,13 @@ import {
   Edit,
   Monitor,
   CheckCircle,
-  AlertTriangle
+  AlertTriangle,
+  FileText
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import {getRoleDisplayName} from '@/constants/index';
 import { EmployeeDetailsModal } from '@/components/employees/EmployeeDetailsModal';
+import { PrintBlockingLogs } from '@/components/admin/PrintBlockingLogs';
 
 
 interface Employee {
@@ -74,6 +76,12 @@ export function EmployeeManagement() {
   const [isAccessDialogOpen, setIsAccessDialogOpen] = useState(false);
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
   const [employeeModalMode, setEmployeeModalMode] = useState<'view' | 'edit'>('view');
+
+  // Check if user can access security logs (super admin or HR)
+  const canAccessSecurityLogs = user?.role?.name === 'super_admin' || 
+                               user?.role?.name === 'admin' || 
+                               user?.role?.name === 'hr' ||
+                               user?.isSA;
 
   // Update selectedEmployee when employee data changes (for immediate view updates)
   React.useEffect(() => {
@@ -180,16 +188,25 @@ export function EmployeeManagement() {
         </div>
       </div>
 
-      
-
       <Tabs defaultValue="employees" className="space-y-6">
-        <TabsList className={`grid w-full ${permissions.canManageAssets ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <TabsList className={`grid w-full ${
+          // permissions.canManageAssets && canAccessSecurityLogs ? 'grid-cols-3' : 
+          permissions.canManageAssets && canAccessSecurityLogs ? 'grid-cols-2' : 
+          permissions.canManageAssets || canAccessSecurityLogs ? 'grid-cols-2' : 
+          'grid-cols-1'
+        }`}>
           <TabsTrigger value="employees">
             {permissions.accessLevel === 'all' ? 'All Employees' : permissions.accessLevel === 'team' ? 'My Team' : 'My Profile'}
           </TabsTrigger>
           {permissions.canManageAssets && (
             <TabsTrigger value="assets">Asset Management</TabsTrigger>
           )}
+          {/* {canAccessSecurityLogs && (
+            <TabsTrigger value="security-logs">
+              <FileText className="h-4 w-4 mr-2" />
+              Security Logs
+            </TabsTrigger>
+          )} */}
         </TabsList>
 
         <TabsContent value="employees" className="space-y-6">
@@ -471,6 +488,12 @@ export function EmployeeManagement() {
     </CardContent>
   </Card>
 </TabsContent>
+        )}
+
+        {canAccessSecurityLogs && (
+          <TabsContent value="security-logs" className="space-y-6">
+            <PrintBlockingLogs />
+          </TabsContent>
         )}
 
       </Tabs>

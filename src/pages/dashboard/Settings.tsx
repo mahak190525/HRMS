@@ -14,6 +14,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { formatDateForDisplay } from '@/utils/dateUtils';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { PrintBlockingTest } from '@/components/debug/PrintBlockingTest';
 import {
   User,
   Bell,
@@ -184,8 +185,8 @@ export function Settings() {
       <Tabs defaultValue="profile" className="space-y-6">
         <TabsList className="grid w-full grid-cols-1">
           <TabsTrigger value="profile">Profile</TabsTrigger> 
-          {/* <TabsTrigger value="security">Security</TabsTrigger>
-          <TabsTrigger value="notifications">Notifications</TabsTrigger>
+          {/* <TabsTrigger value="security">Security</TabsTrigger> */}
+          {/* <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="appearance">Appearance</TabsTrigger> */}
         </TabsList>
 
@@ -739,6 +740,34 @@ export function Settings() {
                 {isSaving && <LoadingSpinner size="sm" className="mr-2" />}
                 {isSaving ? 'Saving...' : 'Save Preferences'}
               </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="security" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                Security Settings
+              </CardTitle>
+              <CardDescription>
+                Manage security features and test print blocking functionality
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    Print blocking is a security feature that prevents users from printing, 
+                    taking screenshots, or accessing developer tools. When enabled, all 
+                    blocked actions are logged and notifications are sent to relevant personnel.
+                  </AlertDescription>
+                </Alert>
+                
+                <PrintBlockingTest />
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

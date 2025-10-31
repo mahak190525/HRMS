@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -7,19 +9,18 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
 import { useAllKRAAssignments } from '@/hooks/useKRA';
 import { useKRAPermissions } from '@/hooks/useKRAPermissions';
-import { KRAModal } from './KRAViewModal';
 import { formatDateForDisplay } from '@/utils/dateUtils';
 import { Eye, Search, Users, BarChart3, CheckCircle2, Clock, AlertCircle, UserCheck } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export function AdminKRAOverview() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const { data: assignments = [], isLoading } = useAllKRAAssignments();
   const permissions = useKRAPermissions();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [managerFilter, setManagerFilter] = useState<string>('all');
-  const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
-  const [isKRAModalOpen, setIsKRAModalOpen] = useState(false);
 
   // Check if user has admin/HR permissions
   if (!permissions.canViewAllKRA) {
@@ -110,8 +111,21 @@ export function AdminKRAOverview() {
   };
 
   const handleViewAssignment = (assignment: any) => {
-    setSelectedAssignment(assignment);
-    setIsKRAModalOpen(true);
+    // Context-aware navigation for All KRAs tab
+    // Admin-managers can edit their direct reports, view-only for others
+    const isDirectManager = assignment.assigned_by === user?.id;
+    const isEmployee = assignment.employee_id === user?.id;
+    
+    // In 'all' context: can edit only if direct manager or employee
+    const canEdit = isDirectManager || isEmployee;
+    
+    if (canEdit && !permissions.isReadOnly) {
+      // User can edit - navigate to manager page for evaluation
+      navigate(`/performance/kra/manager/${assignment.id}`);
+    } else {
+      // User can only view - navigate to details page
+      navigate(`/performance/kra/details/${assignment.id}`);
+    }
   };
 
   if (isLoading) {
@@ -287,19 +301,6 @@ export function AdminKRAOverview() {
         </CardContent>
       </Card>
 
-      {/* KRA Modal */}
-      <KRAModal
-        isOpen={isKRAModalOpen}
-        onClose={() => {
-          setIsKRAModalOpen(false);
-          setSelectedAssignment(null);
-        }}
-        assignment={selectedAssignment}
-        permissions={permissions}
-        viewContext="admin"
-        title={selectedAssignment ? `KRA Details - ${selectedAssignment.employee?.full_name}` : ''}
-        description="Complete KRA assignment details from admin perspective."
-      />
     </div>
   );
 }

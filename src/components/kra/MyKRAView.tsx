@@ -1,24 +1,23 @@
-import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { 
-  Eye,
   Calendar,
   Clock,
   AlertTriangle,
   CheckCircle,
   FileText,
   Target,
-  User
+  User,
+  ExternalLink
 } from 'lucide-react';
 import { formatDateForDisplay, getCurrentISTDate, parseToISTDate } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useAuth } from '@/contexts/AuthContext';
 
 import type { KRAAssignment } from '@/hooks/useKRA';
-import { KRAModal } from './KRAViewModal';
 
 interface MyKRAViewProps {
   assignments: KRAAssignment[];
@@ -27,46 +26,52 @@ interface MyKRAViewProps {
 
 export function MyKRAView({ assignments, isLoading }: MyKRAViewProps) {
   const { user } = useAuth();
-  const [selectedAssignment, setSelectedAssignment] = useState<KRAAssignment | null>(null);
-  const [isKRAModalOpen, setIsKRAModalOpen] = useState(false);
+  const navigate = useNavigate();
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'submitted':
-      case 'evaluated':
-      case 'approved':
-        return 'bg-green-100 text-green-800';
-      case 'in_progress':
-        return 'bg-blue-100 text-blue-800';
-      case 'assigned':
-        return 'bg-yellow-100 text-yellow-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+
+  const getQuarterlyDueStatus = (assignment: KRAAssignment) => {
+    // Check all quarters to find the most urgent status
+    const quarters = ['q1', 'q2', 'q3', 'q4'];
+    let mostUrgentStatus = null;
+    
+    for (const quarter of quarters) {
+      const enabled = assignment[`${quarter}_enabled` as keyof KRAAssignment] as boolean;
+      const dueDate = assignment[`${quarter}_due_date` as keyof KRAAssignment] as string;
+      const status = assignment[`${quarter}_status` as keyof KRAAssignment] as string;
+      
+      if (enabled && dueDate && !['submitted', 'evaluated', 'approved'].includes(status || '')) {
+        const now = getCurrentISTDate();
+        const due = parseToISTDate(dueDate);
+        const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        
+        const quarterStatus = {
+          quarter: quarter.toUpperCase(),
+          status: daysUntilDue < 0 ? 'overdue' : daysUntilDue <= 3 ? 'due-soon' : 'on-track',
+          days: Math.abs(daysUntilDue),
+          color: daysUntilDue < 0 ? 'text-red-600' : daysUntilDue <= 3 ? 'text-orange-600' : 'text-green-600'
+        };
+        
+        // Prioritize overdue, then due-soon
+        if (!mostUrgentStatus || 
+            (quarterStatus.status === 'overdue' && mostUrgentStatus.status !== 'overdue') ||
+            (quarterStatus.status === 'due-soon' && mostUrgentStatus.status === 'on-track')) {
+          mostUrgentStatus = quarterStatus;
+        }
+      }
     }
+    
+    return mostUrgentStatus;
   };
 
-  const getDueStatus = (dueDate?: string, status?: string) => {
-    if (!dueDate || ['submitted', 'evaluated', 'approved'].includes(status || '')) return null;
-    
-    const now = getCurrentISTDate();
-    const due = parseToISTDate(dueDate);
-    const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    
-    if (daysUntilDue < 0) return { status: 'overdue', days: Math.abs(daysUntilDue), color: 'text-red-600' };
-    if (daysUntilDue <= 3) return { status: 'due-soon', days: daysUntilDue, color: 'text-orange-600' };
-    return { status: 'on-track', days: daysUntilDue, color: 'text-green-600' };
-  };
-
-  const isEditable = (assignment: KRAAssignment | null) => {
-    if (!assignment || !assignment.due_date) return true;
-    const now = getCurrentISTDate();
-    const dueDate = parseToISTDate(assignment.due_date);
-    return now <= dueDate && !['submitted', 'evaluated', 'approved'].includes(assignment.status || '');
+  const getActiveQuarters = (assignment: KRAAssignment) => {
+    const quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
+    return quarters.filter(quarter => 
+      assignment[`${quarter.toLowerCase()}_enabled` as keyof KRAAssignment] as boolean
+    );
   };
 
   const handleViewAssignment = (assignment: KRAAssignment) => {
-    setSelectedAssignment(assignment);
-    setIsKRAModalOpen(true);
+    navigate(`/dashboard/performance/kra/${assignment.id}`);
   };
 
   if (isLoading) {
@@ -82,9 +87,9 @@ export function MyKRAView({ assignments, isLoading }: MyKRAViewProps) {
       {assignments.length > 0 ? (
         <div className="grid grid-cols-1 gap-6">
           {assignments.map((assignment) => {
-            const dueStatus = getDueStatus(assignment.due_date, assignment.status);
+            const dueStatus = getQuarterlyDueStatus(assignment);
+            const activeQuarters = getActiveQuarters(assignment);
             const progressPercentage = assignment.overall_percentage || 0;
-            const canEdit = isEditable(assignment);
             
             return (
               <Card key={assignment.id} className={`${
@@ -111,14 +116,20 @@ export function MyKRAView({ assignments, isLoading }: MyKRAViewProps) {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Badge className={getStatusColor(assignment.status || '')}>
-                        {assignment.status?.replace('_', ' ') || 'Unknown'}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline">
+                        {activeQuarters.length} Quarter{activeQuarters.length !== 1 ? 's' : ''} Active
                       </Badge>
                       {dueStatus?.status === 'overdue' && (
                         <Badge variant="destructive">
                           <AlertTriangle className="h-3 w-3 mr-1" />
-                          Overdue
+                          {dueStatus.quarter} Overdue
+                        </Badge>
+                      )}
+                      {dueStatus?.status === 'due-soon' && (
+                        <Badge className="bg-orange-100 text-orange-800">
+                          <Clock className="h-3 w-3 mr-1" />
+                          {dueStatus.quarter} Due Soon
                         </Badge>
                       )}
                     </div>
@@ -126,37 +137,92 @@ export function MyKRAView({ assignments, isLoading }: MyKRAViewProps) {
                 </CardHeader>
                 
                 <CardContent className="space-y-4">
-                  {/* Due Date Info */}
-                  {assignment.due_date && (
-                    <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">
-                          Due: {formatDateForDisplay(assignment.due_date, 'MMMM dd, yyyy')}
-                        </span>
-                      </div>
-                      {dueStatus && (
-                        <span className={`text-sm font-medium ${dueStatus.color}`}>
-                          {dueStatus.status === 'overdue' ? `${dueStatus.days} days overdue` :
+                  {/* Active Quarters Info */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <Calendar className="h-4 w-4" />
+                      <span>Active Quarters ({activeQuarters.length})</span>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      {activeQuarters.map(quarter => {
+                        const qStatus = assignment[`${quarter.toLowerCase()}_status` as keyof KRAAssignment] as string;
+                        const qDueDate = assignment[`${quarter.toLowerCase()}_due_date` as keyof KRAAssignment] as string;
+                        
+                        return (
+                          <div key={quarter} className="p-2 bg-muted/30 rounded text-center">
+                            <div className="font-medium text-sm">{quarter}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {qStatus?.replace('_', ' ') || 'Not Started'}
+                            </div>
+                            {qDueDate && (
+                              <div className="text-xs text-muted-foreground">
+                                Due: {formatDateForDisplay(qDueDate, 'MMM dd')}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    
+                    {dueStatus && (
+                      <div className={`flex items-center gap-2 p-2 rounded-lg text-sm ${
+                        dueStatus.status === 'overdue' ? 'bg-red-50 text-red-800' :
+                        dueStatus.status === 'due-soon' ? 'bg-orange-50 text-orange-800' :
+                        'bg-green-50 text-green-800'
+                      }`}>
+                        {dueStatus.status === 'overdue' ? (
+                          <AlertTriangle className="h-4 w-4" />
+                        ) : (
+                          <Clock className="h-4 w-4" />
+                        )}
+                        <span>
+                          {dueStatus.quarter}: {dueStatus.status === 'overdue' ? `${dueStatus.days} days overdue` :
                            dueStatus.status === 'due-soon' ? `Due in ${dueStatus.days} days` :
                            `${dueStatus.days} days remaining`}
                         </span>
-                      )}
-                    </div>
-                  )}
+                      </div>
+                    )}
+                  </div>
 
-                  {/* Progress */}
+                  {/* Progress & Scores */}
                   {assignment.status !== 'assigned' && (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <div className="flex justify-between text-sm">
-                        <span>Completion Progress</span>
+                        <span>Current Progress</span>
                         <span>{progressPercentage.toFixed(1)}%</span>
                       </div>
                       <Progress value={progressPercentage} className="h-2" />
+                      
+                      {/* Latest Quarter Scores */}
+                      {(assignment.q4_cumulative_percentage > 0 || assignment.q3_cumulative_percentage > 0 || 
+                        assignment.q2_cumulative_percentage > 0 || assignment.q1_cumulative_percentage > 0) && (
+                        <div className="grid grid-cols-2 gap-3 p-3 bg-muted/30 rounded-lg">
+                          <div className="text-center">
+                            <div className="text-xs text-muted-foreground">Latest Quarter</div>
+                            <div className="font-semibold text-blue-600">
+                              {assignment.q4_overall_percentage > 0 ? assignment.q4_overall_percentage.toFixed(1) :
+                               assignment.q3_overall_percentage > 0 ? assignment.q3_overall_percentage.toFixed(1) :
+                               assignment.q2_overall_percentage > 0 ? assignment.q2_overall_percentage.toFixed(1) :
+                               assignment.q1_overall_percentage.toFixed(1)}%
+                            </div>
+                            <div className="text-xs text-muted-foreground">Quarterly</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-xs text-muted-foreground">Running Total</div>
+                            <div className="font-semibold text-green-600">
+                              {assignment.q4_cumulative_percentage > 0 ? assignment.q4_cumulative_percentage.toFixed(1) :
+                               assignment.q3_cumulative_percentage > 0 ? assignment.q3_cumulative_percentage.toFixed(1) :
+                               assignment.q2_cumulative_percentage > 0 ? assignment.q2_cumulative_percentage.toFixed(1) :
+                               assignment.q1_cumulative_percentage.toFixed(1)}%
+                            </div>
+                            <div className="text-xs text-muted-foreground">Cumulative</div>
+                          </div>
+                        </div>
+                      )}
+                      
                       {assignment.overall_rating && (
-                        <p className="text-xs text-muted-foreground">
-                          Current Rating: {assignment.overall_rating}<br/>
-                          Overall Percentage: {assignment.overall_percentage}%
+                        <p className="text-xs text-muted-foreground text-center">
+                          Current Rating: {assignment.overall_rating}
                         </p>
                       )}
                     </div>
@@ -185,15 +251,23 @@ export function MyKRAView({ assignments, isLoading }: MyKRAViewProps) {
                     </div>
                   )}
 
-                  {/* Submission Info */}
-                  {assignment.submitted_at && (
-                    <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <CheckCircle className="h-4 w-4 text-green-600" />
-                      <span className="text-sm text-green-800">
-                        Submitted on {formatDateForDisplay(assignment.submitted_at, 'MMM dd, yyyy')}
-                      </span>
-                    </div>
-                  )}
+                  {/* Quarterly Submission Info */}
+                  <div className="space-y-2">
+                    {activeQuarters.map(quarter => {
+                      const submittedAt = assignment[`${quarter.toLowerCase()}_submitted_at` as keyof KRAAssignment] as string;
+                      if (submittedAt) {
+                        return (
+                          <div key={quarter} className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                            <span className="text-sm text-green-800">
+                              {quarter} submitted on {formatDateForDisplay(submittedAt, 'MMM dd, yyyy')}
+                            </span>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })}
+                  </div>
 
                   {/* Action Buttons */}
                   <div className="flex items-center gap-3 pt-2">
@@ -201,27 +275,27 @@ export function MyKRAView({ assignments, isLoading }: MyKRAViewProps) {
                       onClick={() => handleViewAssignment(assignment)}
                       variant="outline"
                     >
-                      <Eye className="h-4 w-4 mr-2" />
-                      {canEdit ? 'Complete KRA' : 'View Details'}
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Open KRA Sheet
                     </Button>
                     
-                    {dueStatus?.status === 'overdue' && canEdit && (
+                    {dueStatus?.status === 'overdue' && (
                       <Button
                         onClick={() => handleViewAssignment(assignment)}
                         variant="destructive"
                       >
                         <AlertTriangle className="h-4 w-4 mr-2" />
-                        Complete Now
+                        Complete {dueStatus.quarter} Now
                       </Button>
                     )}
                     
-                    {dueStatus?.status === 'due-soon' && canEdit && (
+                    {dueStatus?.status === 'due-soon' && (
                       <Button
                         onClick={() => handleViewAssignment(assignment)}
                         className="bg-orange-600 hover:bg-orange-700"
                       >
                         <Clock className="h-4 w-4 mr-2" />
-                        Complete Soon
+                        Complete {dueStatus.quarter} Soon
                       </Button>
                     )}
                   </div>
@@ -242,21 +316,6 @@ export function MyKRAView({ assignments, isLoading }: MyKRAViewProps) {
         </Card>
       )}
 
-      {/* KRA Modal */}
-      <KRAModal
-        isOpen={isKRAModalOpen}
-        onClose={() => {
-          setIsKRAModalOpen(false);
-          setSelectedAssignment(null);
-        }}
-        assignment={selectedAssignment}
-        viewContext="employee"
-        title={user?.full_name ? `${user.full_name}'s KRA Sheet` : selectedAssignment?.template?.template_name}
-        description={isEditable(selectedAssignment) 
-          ? 'Complete your KRA evaluation by providing evidence and selecting your performance level for each goal.'
-          : 'View your KRA submission and manager feedback.'
-        }
-      />
     </div>
   );
 }

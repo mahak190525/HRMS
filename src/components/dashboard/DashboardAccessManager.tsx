@@ -1,20 +1,16 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUpdateUserPermissions } from '@/hooks/useEmployees';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Separator } from '@/components/ui/separator';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FeatureAccessManager } from './FeatureAccessManager';
+import { PolicyDashboardPermissions } from '../policies/PolicyDashboardPermissions';
 import {
   Settings,
-  Shield,
   User as UserIcon,
   Users,
   Target,
@@ -26,10 +22,7 @@ import {
   LogOut,
   Save,
   RotateCcw,
-  Info,
   Search,
-  Check,
-  X,
   Globe,
   Lock
 } from 'lucide-react';
@@ -59,8 +52,8 @@ export function DashboardAccessManager({ employee, onClose }: DashboardAccessMan
   const updateUserPermissions = useUpdateUserPermissions();
   
   // Get role-based default dashboards
-  const roleName = employee.role?.name || employee.role_id || 'employee';
-  const roleBasedDashboards = ROLE_DASHBOARD_MAPPING[roleName as keyof typeof ROLE_DASHBOARD_MAPPING] || [];
+  const roleName = (employee.role?.name || employee.role_id || 'employee') as keyof typeof ROLE_DASHBOARD_MAPPING;
+  const roleBasedDashboards = ROLE_DASHBOARD_MAPPING[roleName] || [];
   
   // Initialize dashboard permissions state
   const [dashboardPermissions, setDashboardPermissions] = useState<Record<string, boolean>>(() => {
@@ -68,7 +61,7 @@ export function DashboardAccessManager({ employee, onClose }: DashboardAccessMan
     
     // Set role-based defaults
     DASHBOARD_CONFIG.forEach(dashboard => {
-      permissions[dashboard.id] = roleBasedDashboards.includes(dashboard.id);
+      permissions[dashboard.id] = roleBasedDashboards.includes(dashboard.id as any);
     });
     
     // Override with explicit permissions
@@ -146,15 +139,15 @@ export function DashboardAccessManager({ employee, onClose }: DashboardAccessMan
     
     // Reset to role-based defaults only
     DASHBOARD_CONFIG.forEach(dashboard => {
-      permissions[dashboard.id] = roleBasedDashboards.includes(dashboard.id);
+      permissions[dashboard.id] = roleBasedDashboards.includes(dashboard.id as any);
     });
     
     setDashboardPermissions(permissions);
     setHasChanges(true);
   };
 
-  const getAccessLevel = (dashboardId: string) => {
-    const isRoleBased = roleBasedDashboards.includes(dashboardId);
+  const getAccessLevel = (dashboardId: string): 'role' | 'explicit' | 'none' => {
+    const isRoleBased = roleBasedDashboards.includes(dashboardId as any);
     const isExplicitlyGranted = dashboardPermissions[dashboardId];
     
     if (isRoleBased && isExplicitlyGranted) return 'role';
@@ -202,7 +195,7 @@ export function DashboardAccessManager({ employee, onClose }: DashboardAccessMan
 
       {/* Access Management Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="dashboards" className="flex items-center gap-2">
             <Globe className="h-4 w-4" />
             Dashboard Access
@@ -210,6 +203,10 @@ export function DashboardAccessManager({ employee, onClose }: DashboardAccessMan
           <TabsTrigger value="features" className="flex items-center gap-2">
             <Lock className="h-4 w-4" />
             Feature Access
+          </TabsTrigger>
+          <TabsTrigger value="policy-dashboard" className="flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            Policy Dashboard
           </TabsTrigger>
         </TabsList>
 
@@ -312,6 +309,13 @@ export function DashboardAccessManager({ employee, onClose }: DashboardAccessMan
             onSave={handlePagePermissionsSave}
             onCancel={onClose}
             isLoading={updateUserPermissions.isPending}
+          />
+        </TabsContent>
+
+        <TabsContent value="policy-dashboard" className="mt-6">
+          <PolicyDashboardPermissions
+            employee={employee}
+            onClose={onClose}
           />
         </TabsContent>
       </Tabs>
