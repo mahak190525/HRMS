@@ -1,5 +1,7 @@
 @import 'tailwindcss';
 @import "tw-animate-css";
+@import './styles/_variables.scss';
+@import './styles/_keyframe-animations.scss';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -117,4 +119,58 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Block printing - only if enabled via environment variable */
+@media print {
+  * {
+    visibility: hidden !important;
+    display: none !important;
+  }
+  
+  body::before {
+    content: "Printing is disabled for security and confidentiality purposes.";
+    visibility: visible !important;
+    display: block !important;
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    font-size: 18px !important;
+    font-weight: 500 !important;
+    color: #000 !important;
+    background: white !important;
+    padding: 20px 40px !important;
+    border: 2px solid #000 !important;
+    border-radius: 8px !important;
+    z-index: 99999 !important;
+    text-align: center !important;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+  }
+}
+
+/* Conditional print blocking styles - will be dynamically applied */
+.print-blocking-enabled {
+  /* Prevent text selection for non-input elements */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+.print-blocking-enabled input, 
+.print-blocking-enabled textarea, 
+.print-blocking-enabled [contenteditable="true"] {
+  -webkit-user-select: auto !important;
+  -moz-user-select: auto !important;
+  -ms-user-select: auto !important;
+  user-select: auto !important;
+}
+
+.print-blocking-enabled img {
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
 }

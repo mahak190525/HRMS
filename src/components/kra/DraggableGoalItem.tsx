@@ -133,7 +133,7 @@ export function DraggableGoalItem({
           <Input
             value={goal.strategic_goal_title || ''}
             onChange={(e) => onUpdateGoal(index, 'strategic_goal_title', e.target.value)}
-            placeholder="Revenue Growth Achievement"
+            placeholder="Enter goal title here..."
             required
           />
         </div>
@@ -202,7 +202,7 @@ export function DraggableGoalItem({
           <Textarea
             value={goal.smart_goal || ''}
             onChange={(e) => onUpdateGoal(index, 'smart_goal', e.target.value)}
-            placeholder="Specific, Measurable, Achievable, Relevant, Time-bound goal description..."
+            placeholder="Enter Specific, Measurable, Achievable, Relevant, Time-bound goal description..."
             className='whitespace-pre-line'
             rows={3}
             required
@@ -218,7 +218,7 @@ export function DraggableGoalItem({
               max="100"
               value={goal.weight || ''}
               onChange={(e) => onUpdateGoal(index, 'weight', parseFloat(e.target.value) || 0)}
-              placeholder="25"
+              placeholder="Enter weight % here..."
               required
             />
           </div>
@@ -229,7 +229,7 @@ export function DraggableGoalItem({
               min="0"
               value={goal.max_score || ''}
               onChange={(e) => onUpdateGoal(index, 'max_score', parseFloat(e.target.value) || 0)}
-              placeholder="100"
+              placeholder="Enter max score here..."
             />
           </div>
           <div className="space-y-2">
@@ -237,7 +237,7 @@ export function DraggableGoalItem({
             <Input
               value={goal.target || ''}
               onChange={(e) => onUpdateGoal(index, 'target', e.target.value)}
-              placeholder="Achieve 20% revenue growth"
+              placeholder="Enter target here..."
               required
             />
           </div>
@@ -259,9 +259,7 @@ export function DraggableGoalItem({
                   {goal[`level_${level}_rating` as keyof GoalFormData] as string}
                 </div>
                 <Textarea
-                  placeholder="Performance criteria (e.g., '• 100% on-time delivery
-• <5% rework rate
-• Active participation in peer reviews')"
+                  placeholder="Enter performance criteria here..."
                   value={goal[`level_${level}_marks` as keyof GoalFormData] as string || ''}
                   onChange={(e) => onUpdateGoal(index, `level_${level}_marks` as keyof GoalFormData, e.target.value)}
                   rows={3}

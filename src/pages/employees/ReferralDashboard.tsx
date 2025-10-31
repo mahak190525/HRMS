@@ -75,6 +75,12 @@ export function ReferralDashboard() {
   const [howToApply, setHowToApply] = useState('');
   const [applicationDeadline, setApplicationDeadline] = useState('');
   const [referralEncouraged, setReferralEncouraged] = useState(true);
+  // Additional Details for Create Dialog
+  const [createExperienceLevel, setCreateExperienceLevel] = useState('mid');
+  const [createEmploymentType, setCreateEmploymentType] = useState('full_time');
+  const [createSalaryMin, setCreateSalaryMin] = useState('');
+  const [createSalaryMax, setCreateSalaryMax] = useState('');
+  const [createStatus, setCreateStatus] = useState('open');
   // Legacy fields (keeping for backward compatibility) - removed unused variables
 
   // Positions tab filters and editing
@@ -149,11 +155,11 @@ export function ReferralDashboard() {
       how_to_apply: howToApply.trim() || null,
       application_deadline: applicationDeadline || null,
       referral_encouraged: referralEncouraged,
-      experience_level: 'mid', // Default value
-      employment_type: workType,
-      salary_range_min: null,
-      salary_range_max: null,
-      status: 'open',
+      experience_level: createExperienceLevel,
+      employment_type: createEmploymentType,
+      salary_range_min: createSalaryMin ? Number(createSalaryMin) : null,
+      salary_range_max: createSalaryMax ? Number(createSalaryMax) : null,
+      status: createStatus,
       posted_by: user.id,
     }, {
       onSuccess: () => {
@@ -171,6 +177,12 @@ export function ReferralDashboard() {
         setHowToApply('');
         setApplicationDeadline('');
         setReferralEncouraged(true);
+        // Reset additional fields
+        setCreateExperienceLevel('mid');
+        setCreateEmploymentType('full_time');
+        setCreateSalaryMin('');
+        setCreateSalaryMax('');
+        setCreateStatus('open');
         // Reset legacy fields - removed unused variables
       }
     });
@@ -1056,6 +1068,77 @@ export function ReferralDashboard() {
                       </div>
                     </div>
 
+                    {/* Additional Details */}
+                    <div className="space-y-4">
+                      <h3 className="font-semibold text-lg border-b pb-2">Additional Details</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label>Experience Level</Label>
+                          <Select value={createExperienceLevel} onValueChange={setCreateExperienceLevel}>
+                            <SelectTrigger className="mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="entry">Entry</SelectItem>
+                              <SelectItem value="mid">Mid</SelectItem>
+                              <SelectItem value="senior">Senior</SelectItem>
+                              <SelectItem value="lead">Lead</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>Employment Type</Label>
+                          <Select value={createEmploymentType} onValueChange={setCreateEmploymentType}>
+                            <SelectTrigger className="mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="full_time">Full-time</SelectItem>
+                              <SelectItem value="part_time">Part-time</SelectItem>
+                              <SelectItem value="contract">Contract</SelectItem>
+                              <SelectItem value="internship">Internship</SelectItem>
+                              <SelectItem value="temporary">Temporary</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label>Salary Range Min</Label>
+                          <Input 
+                            type="number" 
+                            value={createSalaryMin} 
+                            onChange={(e) => setCreateSalaryMin(e.target.value)} 
+                            placeholder="e.g., 50000" 
+                            className="mt-1" 
+                          />
+                        </div>
+                        <div>
+                          <Label>Salary Range Max</Label>
+                          <Input 
+                            type="number" 
+                            value={createSalaryMax} 
+                            onChange={(e) => setCreateSalaryMax(e.target.value)} 
+                            placeholder="e.g., 80000" 
+                            className="mt-1" 
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label>Status</Label>
+                        <Select value={createStatus} onValueChange={(v) => setCreateStatus(v as 'open' | 'closed' | 'on_hold')}>
+                          <SelectTrigger className="mt-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="open">Open</SelectItem>
+                            <SelectItem value="on_hold">On Hold</SelectItem>
+                            <SelectItem value="closed">Closed</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
                     <div className="flex justify-end gap-2 pt-4 border-t">
                       <Button variant="outline" onClick={() => setIsCreatePositionOpen(false)}>Cancel</Button>
                       <Button onClick={handleCreatePosition} disabled={!jobTitle.trim() || !positionDepartmentId || createJobPosition.isPending}>
@@ -1195,6 +1278,27 @@ export function ReferralDashboard() {
                                         {pos.status?.replace('_', ' ')}
                                       </Badge>
                                     </div>
+                                    <div>
+                                      <p className="font-medium">Experience Level:</p>
+                                      <p className="text-muted-foreground capitalize">{pos.experience_level?.replace('_', ' ') || 'Not specified'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="font-medium">Employment Type:</p>
+                                      <p className="text-muted-foreground capitalize">{pos.employment_type?.replace('_', ' ') || 'Not specified'}</p>
+                                    </div>
+                                    {(pos.salary_range_min || pos.salary_range_max) && (
+                                      <div className="md:col-span-2">
+                                        <p className="font-medium">Salary Range:</p>
+                                        <p className="text-muted-foreground">
+                                          {pos.salary_range_min && pos.salary_range_max 
+                                            ? `₹${pos.salary_range_min.toLocaleString()} - ₹${pos.salary_range_max.toLocaleString()}`
+                                            : pos.salary_range_min 
+                                              ? `₹${pos.salary_range_min.toLocaleString()}+`
+                                              : `Up to ₹${pos.salary_range_max.toLocaleString()}`
+                                          }
+                                        </p>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
 

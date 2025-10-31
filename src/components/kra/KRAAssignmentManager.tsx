@@ -1,35 +1,37 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { 
-  Eye,
   MessageSquare,
   Calendar,
   Clock,
   AlertTriangle,
   Users,
   Filter,
-  Search
+  Search,
+  ExternalLink
 } from 'lucide-react';
 import { formatDateForDisplay, getCurrentISTDate, parseToISTDate } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 import type { KRAAssignment } from '@/hooks/useKRA';
 import type { KRAPermissions } from '@/hooks/useKRAPermissions';
-import { KRAModal } from './KRAViewModal';
 
 interface KRAAssignmentManagerProps {
   assignments: KRAAssignment[];
   isLoading: boolean;
   teamMembers?: any[];
   permissions: KRAPermissions;
+  context?: 'team' | 'all'; // Context for determining permissions
 }
 
-export function KRAAssignmentManager({ assignments, isLoading, permissions }: KRAAssignmentManagerProps) {
-  const [selectedAssignment, setSelectedAssignment] = useState<KRAAssignment | null>(null);
-  const [isKRAModalOpen, setIsKRAModalOpen] = useState(false);
+export function KRAAssignmentManager({ assignments, isLoading, permissions, context = 'team' }: KRAAssignmentManagerProps) {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
@@ -73,8 +75,31 @@ export function KRAAssignmentManager({ assignments, isLoading, permissions }: KR
   };
 
   const handleViewAssignment = (assignment: KRAAssignment) => {
-    setSelectedAssignment(assignment);
-    setIsKRAModalOpen(true);
+    // For context-aware navigation, we need to determine permissions
+    // In 'team' context: admin-managers can edit their direct reports, view-only for others
+    // In 'all' context: admin-managers view-only for non-direct reports, edit for direct reports
+    
+    const isDirectManager = assignment.assigned_by === user?.id;
+    const isEmployee = assignment.employee_id === user?.id;
+    
+    // Determine if user can edit based on context
+    let canEdit = false;
+    
+    if (context === 'team') {
+      // Team context: can edit if direct manager or employee
+      canEdit = isDirectManager || isEmployee;
+    } else if (context === 'all') {
+      // All context: can edit only if direct manager or employee
+      canEdit = isDirectManager || isEmployee;
+    }
+    
+    if (canEdit && !permissions.isReadOnly) {
+      // User can edit - navigate to manager page for evaluation
+      navigate(`/performance/kra/manager/${assignment.id}`);
+    } else {
+      // User can only view - navigate to details page
+      navigate(`/performance/kra/details/${assignment.id}`);
+    }
   };
 
 
@@ -275,7 +300,7 @@ export function KRAAssignmentManager({ assignments, isLoading, permissions }: KR
                       onClick={() => handleViewAssignment(assignment)}
                       variant="outline"
                     >
-                      <Eye className="h-4 w-4 mr-2" />
+                      <ExternalLink className="h-4 w-4 mr-2" />
                       {assignment.status === 'submitted' && !permissions.isReadOnly ? 'Review & Evaluate' : 'View Details'}
                     </Button>
                     
@@ -321,22 +346,6 @@ export function KRAAssignmentManager({ assignments, isLoading, permissions }: KR
         </Card>
       )}
 
-      {/* KRA Modal */}
-      <KRAModal
-        isOpen={isKRAModalOpen}
-        onClose={() => {
-          setIsKRAModalOpen(false);
-          setSelectedAssignment(null);
-        }}
-        assignment={selectedAssignment}
-        permissions={permissions}
-        viewContext="manager"
-        title={selectedAssignment ? `${selectedAssignment.employee?.full_name} - ${selectedAssignment.template?.template_name}` : ''}
-        description={selectedAssignment?.status === 'submitted' 
-          ? 'Review the employee submission and provide your evaluation.'
-          : 'View the KRA assignment details and current progress.'
-        }
-      />
     </div>
   );
 }

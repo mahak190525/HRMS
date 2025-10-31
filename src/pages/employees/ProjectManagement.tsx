@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
@@ -24,7 +25,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useProjects } from '@/hooks/useProjects';
-import type { CreateProjectData, UpdateProjectData, ProjectWithRelations, ProjectAssignment } from '@/services';
+import type { ProjectWithRelations } from '@/services';
 
 const projectSchema = z.object({
   project_name: z.string().min(1, 'Project name is required'),
@@ -51,7 +52,7 @@ export function ProjectManagement() {
     defaultValues: {
       project_name: '',
       assignments: [],
-      status: 'active',
+      status: 'active' as const,
     },
   });
 
@@ -76,20 +77,20 @@ export function ProjectManagement() {
 
   const handleEditProject = (project: ProjectWithRelations) => {
     setEditingProject(project);
-    
+
     // Extract data from project assignments
     const assignments = project.project_assignments?.map(assignment => ({
       user_id: assignment.user_id,
       role_type: assignment.role_type,
       custom_role_name: assignment.custom_role_name || '',
     })) || [];
-    
+
     form.reset({
       project_name: project.project_name,
       assignments: assignments,
       status: project.status,
     });
-    
+
     setIsEditDialogOpen(true);
   };
 
@@ -111,10 +112,10 @@ export function ProjectManagement() {
   const addAssignment = (userId: string, roleType: 'QA' | 'Development' | 'Design' | 'Testing' | 'Management' | 'Support' | 'Other' | null) => {
     const currentAssignments = form.getValues('assignments');
     const existingAssignment = currentAssignments.find(a => a.user_id === userId);
-    
+
     if (existingAssignment) {
       // Update existing assignment
-      const updatedAssignments = currentAssignments.map(a => 
+      const updatedAssignments = currentAssignments.map(a =>
         a.user_id === userId ? { ...a, role_type: roleType } : a
       );
       form.setValue('assignments', updatedAssignments);
@@ -132,7 +133,7 @@ export function ProjectManagement() {
 
   const updateCustomRoleName = (userId: string, customRoleName: string) => {
     const currentAssignments = form.getValues('assignments');
-    const updatedAssignments = currentAssignments.map(a => 
+    const updatedAssignments = currentAssignments.map(a =>
       a.user_id === userId ? { ...a, custom_role_name: customRoleName } : a
     );
     form.setValue('assignments', updatedAssignments);
@@ -141,7 +142,7 @@ export function ProjectManagement() {
   const filteredProjects = projects?.filter(project => {
     const matchesSearch = project.project_name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
-    
+
     return matchesSearch && matchesStatus;
   });
 
@@ -231,11 +232,11 @@ export function ProjectManagement() {
                             {/* Add new assignment button */}
                             <Popover open={assignmentsOpen} onOpenChange={setAssignmentsOpen}>
                               <PopoverTrigger asChild>
-                                <Button 
-                                  type="button" 
-                                  variant="outline" 
-                                  role="combobox" 
-                                  aria-expanded={assignmentsOpen} 
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={assignmentsOpen}
                                   className="w-full justify-start min-h-[3rem] h-auto py-2"
                                 >
                                   <div className="flex items-start justify-between w-full">
@@ -252,7 +253,7 @@ export function ProjectManagement() {
                                             'Support': 'bg-orange-100 text-orange-800',
                                             'Other': 'bg-gray-100 text-gray-800'
                                           };
-                                          
+
                                           return user ? (
                                             <Badge key={assignment.user_id} variant="secondary" className="text-xs px-2 py-1 mb-1">
                                               {user.full_name}
@@ -288,7 +289,7 @@ export function ProjectManagement() {
                                 <Command>
                                   <CommandInput placeholder="Search team members..." />
                                   <CommandEmpty>No users found.</CommandEmpty>
-                                  <CommandGroup>
+                                  <CommandGroup className="max-h-64 overflow-y-auto">
                                     {allUsers?.map((user) => {
                                       const isAssigned = field.value.some(a => a.user_id === user.id);
                                       return (
@@ -324,27 +325,31 @@ export function ProjectManagement() {
                                   return (
                                     <div key={assignment.user_id} className="flex items-center gap-2 p-2 border rounded-md bg-gray-50">
                                       <div className="flex-1 font-medium text-sm">{user?.full_name || 'Unknown User'}</div>
-                                      <select
-                                        value={assignment.role_type || ''}
-                                        onChange={(e) => {
-                                          const updatedAssignments = field.value.map(a => 
-                                            a.user_id === assignment.user_id 
-                                              ? { ...a, role_type: e.target.value === '' ? null : e.target.value as 'QA' | 'Development' | 'Design' | 'Testing' | 'Management' | 'Support' | 'Other' }
+                                      <Select
+                                        value={assignment.role_type || 'none'}
+                                        onValueChange={(value) => {
+                                          const updatedAssignments = field.value.map(a =>
+                                            a.user_id === assignment.user_id
+                                              ? { ...a, role_type: value === 'none' ? null : value as 'QA' | 'Development' | 'Design' | 'Testing' | 'Management' | 'Support' | 'Other' }
                                               : a
                                           );
                                           field.onChange(updatedAssignments);
                                         }}
-                                        className="w-32 p-1 border rounded text-xs"
                                       >
-                                        <option value="">No Role</option>
-                                        <option value="Development">Development</option>
-                                        <option value="QA">QA</option>
-                                        <option value="Design">Design</option>
-                                        <option value="Testing">Testing</option>
-                                        <option value="Management">Management</option>
-                                        <option value="Support">Support</option>
-                                        <option value="Other">Other</option>
-                                      </select>
+                                        <SelectTrigger className="w-32 h-8 text-xs">
+                                          <SelectValue placeholder="No Role" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="none">No Role</SelectItem>
+                                          <SelectItem value="Development">Development</SelectItem>
+                                          <SelectItem value="QA">QA</SelectItem>
+                                          <SelectItem value="Design">Design</SelectItem>
+                                          <SelectItem value="Testing">Testing</SelectItem>
+                                          <SelectItem value="Management">Management</SelectItem>
+                                          <SelectItem value="Support">Support</SelectItem>
+                                          <SelectItem value="Other">Other</SelectItem>
+                                        </SelectContent>
+                                      </Select>
                                       {assignment.role_type === 'Other' && (
                                         <Input
                                           placeholder="Custom role name"
@@ -372,12 +377,17 @@ export function ProjectManagement() {
                       <FormItem>
                         <FormLabel>Status</FormLabel>
                         <FormControl>
-                          <select {...field} className="w-full p-2 border rounded-md">
-                            <option value="active">Active</option>
-                            <option value="completed">Completed</option>
-                            <option value="on-hold">On Hold</option>
-                            <option value="cancelled">Cancelled</option>
-                          </select>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="active">Active</SelectItem>
+                              <SelectItem value="completed">Completed</SelectItem>
+                              <SelectItem value="on-hold">On Hold</SelectItem>
+                              <SelectItem value="cancelled">Cancelled</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -425,21 +435,22 @@ export function ProjectManagement() {
               />
             </div>
             <div>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full p-2 border rounded-md"
-              >
-                <option value="all">All Statuses</option>
-                <option value="active">Active</option>
-                <option value="completed">Completed</option>
-                <option value="on-hold">On Hold</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="on-hold">On Hold</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => {
                   setSearchTerm('');
                   setStatusFilter('all');
@@ -497,17 +508,17 @@ export function ProjectManagement() {
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
-                       {getProjectMembers(project).map((assignment) => (
-                         <Badge key={assignment.id} variant="outline" className="text-xs">
-                           {getUserName(assignment.user_id)}
-                           {assignment.role_type && (
-                             <span className="ml-1 text-xs opacity-75">({assignment.role_type})</span>
-                           )}
-                           {assignment.custom_role_name && (
-                             <span className="ml-1 text-xs opacity-75"> - {assignment.custom_role_name}</span>
-                           )}
-                         </Badge>
-                       ))}
+                      {getProjectMembers(project).map((assignment) => (
+                        <Badge key={assignment.id} variant="outline" className="text-xs">
+                          {getUserName(assignment.user_id)}
+                          {assignment.role_type && (
+                            <span className="ml-1 text-xs opacity-75">({assignment.role_type})</span>
+                          )}
+                          {assignment.custom_role_name && (
+                            <span className="ml-1 text-xs opacity-75"> - {assignment.custom_role_name}</span>
+                          )}
+                        </Badge>
+                      ))}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -595,11 +606,11 @@ export function ProjectManagement() {
                         {/* Add new assignment button */}
                         <Popover open={assignmentsOpen} onOpenChange={setAssignmentsOpen}>
                           <PopoverTrigger asChild>
-                            <Button 
-                              type="button" 
-                              variant="outline" 
-                              role="combobox" 
-                              aria-expanded={assignmentsOpen} 
+                            <Button
+                              type="button"
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={assignmentsOpen}
                               className="w-full justify-start min-h-[3rem] h-auto py-2"
                             >
                               <div className="flex items-start justify-between w-full">
@@ -616,7 +627,7 @@ export function ProjectManagement() {
                                         'Support': 'bg-orange-100 text-orange-800',
                                         'Other': 'bg-gray-100 text-gray-800'
                                       };
-                                      
+
                                       return user ? (
                                         <Badge key={assignment.user_id} variant="secondary" className="text-xs px-2 py-1 mb-1">
                                           {user.full_name}
@@ -652,7 +663,7 @@ export function ProjectManagement() {
                             <Command>
                               <CommandInput placeholder="Search team members..." />
                               <CommandEmpty>No users found.</CommandEmpty>
-                              <CommandGroup>
+                              <CommandGroup className="max-h-64 overflow-y-auto">
                                 {allUsers?.map((user) => {
                                   const isAssigned = field.value.some(a => a.user_id === user.id);
                                   return (
@@ -688,27 +699,31 @@ export function ProjectManagement() {
                               return (
                                 <div key={assignment.user_id} className="flex items-center gap-2 p-2 border rounded-md bg-gray-50">
                                   <div className="flex-1 font-medium text-sm">{user?.full_name || 'Unknown User'}</div>
-                                  <select
-                                    value={assignment.role_type || ''}
-                                    onChange={(e) => {
-                                      const updatedAssignments = field.value.map(a => 
-                                        a.user_id === assignment.user_id 
-                                          ? { ...a, role_type: e.target.value === '' ? null : e.target.value as 'QA' | 'Development' | 'Design' | 'Testing' | 'Management' | 'Support' | 'Other' }
+                                  <Select
+                                    value={assignment.role_type || 'none'}
+                                    onValueChange={(value) => {
+                                      const updatedAssignments = field.value.map(a =>
+                                        a.user_id === assignment.user_id
+                                          ? { ...a, role_type: value === 'none' ? null : value as 'QA' | 'Development' | 'Design' | 'Testing' | 'Management' | 'Support' | 'Other' }
                                           : a
                                       );
                                       field.onChange(updatedAssignments);
                                     }}
-                                    className="w-32 p-1 border rounded text-xs"
                                   >
-                                    <option value="">No Role</option>
-                                    <option value="Development">Development</option>
-                                    <option value="QA">QA</option>
-                                    <option value="Design">Design</option>
-                                    <option value="Testing">Testing</option>
-                                    <option value="Management">Management</option>
-                                    <option value="Support">Support</option>
-                                    <option value="Other">Other</option>
-                                  </select>
+                                    <SelectTrigger className="w-32 h-8 text-xs">
+                                      <SelectValue placeholder="No Role" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">No Role</SelectItem>
+                                      <SelectItem value="Development">Development</SelectItem>
+                                      <SelectItem value="QA">QA</SelectItem>
+                                      <SelectItem value="Design">Design</SelectItem>
+                                      <SelectItem value="Testing">Testing</SelectItem>
+                                      <SelectItem value="Management">Management</SelectItem>
+                                      <SelectItem value="Support">Support</SelectItem>
+                                      <SelectItem value="Other">Other</SelectItem>
+                                    </SelectContent>
+                                  </Select>
                                   {assignment.role_type === 'Other' && (
                                     <Input
                                       placeholder="Custom role name"
@@ -736,12 +751,17 @@ export function ProjectManagement() {
                   <FormItem>
                     <FormLabel>Status</FormLabel>
                     <FormControl>
-                      <select {...field} className="w-full p-2 border rounded-md">
-                        <option value="active">Active</option>
-                        <option value="completed">Completed</option>
-                        <option value="on-hold">On Hold</option>
-                        <option value="cancelled">Cancelled</option>
-                      </select>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="completed">Completed</SelectItem>
+                          <SelectItem value="on-hold">On Hold</SelectItem>
+                          <SelectItem value="cancelled">Cancelled</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </FormControl>
                     <FormMessage />
                   </FormItem>

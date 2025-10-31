@@ -5,11 +5,11 @@ import { atsApi } from './atsApi';
 import { notificationApi } from './notificationApi';
 import { FileUploadService } from './fileUpload';
 import { getTodayIST, getISTDateOffset, formatDateForDatabase } from '@/utils/dateUtils';
-import type { 
-  User, 
-  LeaveApplication, 
-  Complaint, 
-  PerformanceGoal, 
+import type {
+  User,
+  LeaveApplication,
+  Complaint,
+  PerformanceGoal,
   Referral,
   PerformanceEvaluation,
   PerformanceAppraisal,
@@ -28,7 +28,7 @@ export const authApi = {
       `)
       .eq('id', (await supabase.auth.getUser()).data.user?.id)
       .single();
-    
+
     if (error && error.code !== 'PGRST116') throw error;
     return data;
   },
@@ -37,7 +37,7 @@ export const authApi = {
     // Filter out relational data and only keep direct column updates
     const allowedFields = [
       // Essential profile fields
-      'full_name', 'email', 'phone', 'address', 'date_of_birth', 'password_hash', 
+      'full_name', 'email', 'phone', 'address', 'date_of_birth', 'password_hash',
       'avatar_url', 'extra_permissions', 'position', 'company_email',
       'employee_id', 'role_id', 'department_id', 'manager_id', 'salary', 'status',
       // Extended profile fields from migration
@@ -49,13 +49,13 @@ export const authApi = {
       'ifsc_code', 'qualification', 'employment_terms', 'date_of_joining',
       // New onboarding fields
       'appointment_formalities', 'orientation', 'order_id_card', 'email_account',
-      'skype_account', 'system_account', 'added_to_mailing_list', 
+      'skype_account', 'system_account', 'added_to_mailing_list',
       'added_to_attendance_sheet', 'confluence_info_provided', 'id_card_provided',
       'remarks', 'uan_number', 'is_experienced',
       // System fields
       'isSA'
     ];
-    
+
     const filteredUpdates = Object.keys(updates)
       .filter(key => allowedFields.includes(key))
       .reduce((obj, key) => {
@@ -95,8 +95,8 @@ export const authApi = {
     // Handle empty string fields that should be null
     const optionalTextFields = [
       'company_email', 'personal_email', 'phone', 'address', 'position',
-      'alternate_contact_no', 'level_grade', 'current_office_location', 
-      'blood_group', 'religion', 'gender', 'marital_status', 
+      'alternate_contact_no', 'level_grade', 'current_office_location',
+      'blood_group', 'religion', 'gender', 'marital_status',
       'father_name', 'mother_name', 'designation_offer_letter',
       'permanent_address', 'aadhar_card_no', 'pan_no', 'bank_account_no',
       'ifsc_code', 'qualification', 'employment_terms',
@@ -120,7 +120,7 @@ export const authApi = {
       .eq('id', userId)
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   }
@@ -133,7 +133,7 @@ export const leaveApi = {
       .from('leave_types')
       .select('*')
       .order('name');
-    
+
     if (error) throw error;
     return data;
   },
@@ -147,7 +147,7 @@ export const leaveApi = {
       `)
       .eq('user_id', userId)
       .eq('year', year);
-    
+
     if (error) throw error;
     return data;
   },
@@ -155,7 +155,7 @@ export const leaveApi = {
   async getUserLeaveSummary(userId: string) {
     const { data, error } = await supabase
       .rpc('get_user_leave_summary', { p_user_id: userId });
-    
+
     if (error) throw error;
     return data;
   },
@@ -163,7 +163,7 @@ export const leaveApi = {
   async recalculateUserBalance(userId: string) {
     const { data, error } = await supabase
       .rpc('recalculate_user_leave_balance', { p_user_id: userId });
-    
+
     if (error) throw error;
     return data;
   },
@@ -176,7 +176,7 @@ export const leaveApi = {
     // Use RPC function to get comprehensive leave balance data
     const { data, error } = await supabase
       .rpc('get_all_employees_leave_balances', { p_year: year });
-    
+
     if (error) throw error;
     return data;
   },
@@ -186,7 +186,7 @@ export const leaveApi = {
     // First get leave balance data from RPC
     const { data: balanceData, error: balanceError } = await supabase
       .rpc('get_all_employees_leave_balances', { p_year: year });
-    
+
     if (balanceError) throw balanceError;
 
     // Then get user manager information
@@ -231,7 +231,7 @@ export const leaveApi = {
         user:users(full_name, employee_id, email)
       `)
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -243,7 +243,7 @@ export const leaveApi = {
     year?: number;
   }, currentUserId?: string) {
     const year = adjustment.year || new Date().getFullYear();
-    
+
     // Use RPC function to handle the adjustment server-side
     const { data: rpcResult, error: rpcError } = await supabase
       .rpc('adjust_leave_balance', {
@@ -254,22 +254,22 @@ export const leaveApi = {
         p_year: year,
         p_adjusted_by: currentUserId || null
       });
-    
+
     if (rpcError) {
       console.error('RPC error:', rpcError);
       throw rpcError;
     }
-    
+
     if (!rpcResult || rpcResult.length === 0) {
       throw new Error('No result returned from balance adjustment');
     }
-    
+
     const result = rpcResult[0];
-    
+
     if (!result.success) {
       throw new Error(result.message || 'Failed to adjust leave balance');
     }
-    
+
     // Get the updated balance record with full details
     const { data: balanceData, error: balanceError } = await supabase
       .from('leave_balances')
@@ -280,12 +280,12 @@ export const leaveApi = {
       `)
       .eq('id', result.balance_id)
       .single();
-    
+
     if (balanceError) {
       console.error('Failed to fetch updated balance:', balanceError);
       throw balanceError;
     }
-    
+
     return balanceData;
   },
 
@@ -302,20 +302,20 @@ export const leaveApi = {
       `)
       .order('created_at', { ascending: false })
       .limit(limit);
-    
+
     if (userId) {
       query = query.eq('user_id', userId);
     }
-    
+
     const { data, error } = await query;
-    
+
     if (error) throw error;
     return data;
   },
 
   async createLeaveBalanceForUser(userId: string, leaveTypeId: string, allocatedDays: number | string, year?: number) {
     const balanceYear = year || new Date().getFullYear();
-    
+
     const { data, error } = await supabase
       .from('leave_balances')
       .insert({
@@ -333,7 +333,7 @@ export const leaveApi = {
         user:users(full_name, employee_id, email)
       `)
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -347,7 +347,7 @@ export const leaveApi = {
       `)
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -361,12 +361,12 @@ export const leaveApi = {
         leave_type:leave_types!leave_type_id(name, description)
       `)
       .single();
-    
+
     if (error) throw error;
-    
+
     // The database trigger will automatically create the notification
     // No need to manually create it here
-    
+
     return data;
   },
 
@@ -374,7 +374,7 @@ export const leaveApi = {
     const today = getTodayIST();
     const fromDate = startDate || today;
     const toDate = endDate || getISTDateOffset(7); // Next 7 days
-    
+
     const { data, error } = await supabase
       .from('leave_applications')
       .select(`
@@ -385,7 +385,7 @@ export const leaveApi = {
       .eq('status', 'approved')
       .or(`and(start_date.lte.${toDate},end_date.gte.${fromDate})`) // Show overlapping leave periods
       .order('start_date', { ascending: true });
-    
+
     if (error) throw error;
     return data;
   },
@@ -403,7 +403,7 @@ export const leaveApi = {
         p_end_date: endDate,
         p_is_half_day: isHalfDay
       });
-    
+
     if (error) throw error;
     return data?.[0] || null;
   },
@@ -419,7 +419,7 @@ export const leaveApi = {
         p_start_date: startDate,
         p_end_date: endDate
       });
-    
+
     if (error) throw error;
     return data || [];
   },
@@ -427,7 +427,7 @@ export const leaveApi = {
   async recalculateAllApprovedLeaveBalances() {
     const { data, error } = await supabase
       .rpc('recalculate_all_approved_leave_balances');
-    
+
     if (error) throw error;
     return data;
   },
@@ -437,15 +437,15 @@ export const leaveApi = {
       .from('holidays')
       .select('*')
       .order('date');
-    
+
     if (year) {
       const yearStart = `${year}-01-01`;
       const yearEnd = `${year}-12-31`;
       query = query.gte('date', yearStart).lte('date', yearEnd);
     }
-    
+
     const { data, error } = await query;
-    
+
     if (error) throw error;
     return data;
   },
@@ -456,7 +456,7 @@ export const leaveApi = {
       .insert(holidayData)
       .select('*')
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -466,7 +466,7 @@ export const leaveApi = {
       .from('holidays')
       .delete()
       .eq('id', holidayId);
-    
+
     if (error) throw error;
   }
 };
@@ -479,7 +479,7 @@ export const complaintsApi = {
       .from('complaint_categories')
       .select('*')
       .order('name');
-    
+
     if (error) throw error;
     return data;
   },
@@ -494,7 +494,7 @@ export const complaintsApi = {
       `)
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -510,9 +510,9 @@ export const complaintsApi = {
         assigned_to_user:users!complaints_assigned_to_fkey(full_name, email)
       `)
       .single();
-    
+
     if (error) throw error;
-    
+
     // Send notification to user's manager for approval
     try {
       if (data.user.manager_id) {
@@ -525,13 +525,13 @@ export const complaintsApi = {
           data: { complaint_id: data.id, action: 'approve_or_reject', target: 'grievance/active' }
         });
       }
-      
+
       // Also notify HR for visibility
       const { data: hrUsers } = await supabase
         .from('users')
         .select('id')
         .eq('role_id', (await supabase.from('roles').select('id').eq('name', 'hr').single()).data?.id);
-      
+
       if (hrUsers && hrUsers.length > 0) {
         for (const hrUser of hrUsers) {
           await notificationApi.createNotification({
@@ -546,7 +546,7 @@ export const complaintsApi = {
     } catch (notificationError) {
       console.error('Failed to send complaint notification:', notificationError);
     }
-    
+
     return data;
   }
 };
@@ -562,17 +562,17 @@ export const performanceApi = {
       `)
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
 
   async updateGoalProgress(goalId: string, progress: number) {
     const status = progress === 100 ? 'completed' : progress > 0 ? 'in_progress' : 'not_started';
-    
+
     const { data, error } = await supabase
       .from('performance_goals')
-      .update({ 
+      .update({
         progress_percentage: progress,
         status,
         updated_at: new Date().toISOString()
@@ -580,7 +580,7 @@ export const performanceApi = {
       .eq('id', goalId)
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -594,7 +594,7 @@ export const performanceApi = {
       `)
       .eq('user_id', userId)
       .order('evaluation_period_end', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -605,7 +605,7 @@ export const performanceApi = {
       .select('*')
       .eq('user_id', userId)
       .order('appraisal_year', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -619,7 +619,7 @@ export const performanceApi = {
       `)
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   }
@@ -629,7 +629,7 @@ export const performanceApi = {
 async function getHRAndAdminUsers(): Promise<{ id: string; full_name: string }[]> {
   try {
     console.log('Fetching HR and Admin users for referral notifications...');
-    
+
     // Get all active users with their role and department info
     const { data: allUsers, error } = await supabase
       .from('users')
@@ -653,15 +653,15 @@ async function getHRAndAdminUsers(): Promise<{ id: string; full_name: string }[]
     const hrAdminUsers = allUsers?.filter(user => {
       const isHRRole = user.role?.name && ['hr', 'hrm', 'admin', 'super_admin'].includes(user.role.name);
       const isSuperAdmin = user.isSA === true;
-      const isHRDepartment = user.department?.name && 
+      const isHRDepartment = user.department?.name &&
         user.department.name.toLowerCase().includes('hr');
-      
+
       const isHRAdminUser = isHRRole || isSuperAdmin || isHRDepartment;
-      
+
       if (isHRAdminUser) {
         console.log(`HR/Admin User found: ${user.full_name} - Role: ${user.role?.name}, Super Admin: ${user.isSA}, Department: ${user.department?.name}`);
       }
-      
+
       return isHRAdminUser;
     }) || [];
 
@@ -689,7 +689,7 @@ export const referralsApi = {
       .eq('status', 'open')
       .eq('referral_encouraged', true)
       .order('job_title');
-    
+
     if (error) throw error;
     return data;
   },
@@ -700,7 +700,7 @@ export const referralsApi = {
       .select('*')
       .eq('referred_by', userId)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -714,18 +714,18 @@ export const referralsApi = {
         referred_by_user:users!referred_by(full_name, employee_id, email)
       `)
       .single();
-    
+
     if (error) throw error;
-    
+
     // Send notifications to HR and Admin users
     try {
       const hrAdminUsers = await getHRAndAdminUsers();
-      
+
       if (hrAdminUsers.length === 0) {
         console.warn('No HR/Admin users found to notify about referral submission');
       } else {
         console.log(`Sending referral notifications to ${hrAdminUsers.length} HR/Admin users`);
-        
+
         const notificationPromises = hrAdminUsers.map(async (hrUser) => {
           try {
             const result = await notificationApi.createNotification({
@@ -760,27 +760,27 @@ export const referralsApi = {
       console.error('Failed to send referral notifications:', notificationError);
       // Don't throw error here - referral was created successfully, notification failure shouldn't break the flow
     }
-    
+
     return data;
   },
 
   async createReferralWithResume(referralData: Omit<Referral, 'id' | 'created_at' | 'updated_at'>, resumeFile?: File) {
     let finalReferralData = { ...referralData };
-    
+
     // Upload resume if provided
     if (resumeFile) {
       const uploadResult = await FileUploadService.uploadResume(
-        resumeFile, 
+        resumeFile,
         referralData.candidate_name
       );
-      
+
       if (!uploadResult.success) {
         throw new Error(uploadResult.error || 'Failed to upload resume');
       }
-      
+
       finalReferralData.resume_url = uploadResult.url;
     }
-    
+
     const { data, error } = await supabase
       .from('referrals')
       .insert(finalReferralData)
@@ -789,7 +789,7 @@ export const referralsApi = {
         referred_by_user:users!referred_by(full_name, employee_id, email)
       `)
       .single();
-    
+
     if (error) {
       // If database insert fails and we uploaded a file, try to clean up
       if (finalReferralData.resume_url) {
@@ -801,16 +801,16 @@ export const referralsApi = {
       }
       throw error;
     }
-    
+
     // Send notifications to HR and Admin users
     try {
       const hrAdminUsers = await getHRAndAdminUsers();
-      
+
       if (hrAdminUsers.length === 0) {
         console.warn('No HR/Admin users found to notify about referral submission');
       } else {
         console.log(`Sending referral with resume notifications to ${hrAdminUsers.length} HR/Admin users`);
-        
+
         const notificationPromises = hrAdminUsers.map(async (hrUser) => {
           try {
             const result = await notificationApi.createNotification({
@@ -847,7 +847,7 @@ export const referralsApi = {
       console.error('Failed to send referral notifications:', notificationError);
       // Don't throw error here - referral was created successfully, notification failure shouldn't break the flow
     }
-    
+
     return data;
   },
 
@@ -858,27 +858,27 @@ export const referralsApi = {
       .select('resume_url')
       .eq('id', id)
       .single();
-    
+
     if (fetchError) throw fetchError;
-    
+
     // Upload new resume
     const uploadResult = await FileUploadService.uploadResume(resumeFile, candidateName);
-    
+
     if (!uploadResult.success) {
       throw new Error(uploadResult.error || 'Failed to upload resume');
     }
-    
+
     // Update referral with new resume URL
     const { data, error } = await supabase
       .from('referrals')
-      .update({ 
+      .update({
         resume_url: uploadResult.url,
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
       .select()
       .single();
-    
+
     if (error) {
       // If database update fails, cleanup the newly uploaded file
       try {
@@ -888,7 +888,7 @@ export const referralsApi = {
       }
       throw error;
     }
-    
+
     // Delete old resume file if it exists
     if (currentReferral.resume_url) {
       try {
@@ -898,7 +898,7 @@ export const referralsApi = {
         // Don't throw error here as the main operation succeeded
       }
     }
-    
+
     return data;
   }
 };
@@ -953,7 +953,7 @@ export const dashboardApi = {
       .gte('date', getTodayIST())
       .order('date')
       .limit(4);
-    
+
     if (error) throw error;
     return data;
   }
@@ -971,7 +971,7 @@ export const timeTrackingApi = {
       `)
       .eq('user_id', userId)
       .eq('entry_date', today);
-    
+
     if (error) throw error;
     return data;
   },
@@ -985,7 +985,7 @@ export const timeTrackingApi = {
         project:new_projects(project_name)
       `)
       .single();
-    
+
     if (error) throw error;
     return data;
   }
@@ -1009,7 +1009,7 @@ export const exitApi = {
       .insert(exitData)
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -1024,7 +1024,7 @@ export const exitApi = {
       `)
       .eq('user_id', userId)
       .maybeSingle();
-    
+
     if (error) throw error;
     return data;
   }
@@ -1035,9 +1035,9 @@ export const employeeApi = {
   async getAllEmployees() {
     const { data, error } = await supabase
       .rpc('get_employees_with_manager_details');
-    
+
     if (error) throw error;
-    
+
     // Transform the data to match the expected structure
     return data?.map((row: any) => ({
       id: row.id,
@@ -1120,9 +1120,9 @@ export const employeeApi = {
   async getAllUsersDetails() {
     const { data, error } = await supabase
       .rpc('get_all_users_with_manager_details');
-    
+
     if (error) throw error;
-    
+
     // Transform the data to match the expected structure
     return data?.map((row: any) => ({
       id: row.id,
@@ -1205,13 +1205,13 @@ export const employeeApi = {
   async getEmployeeById(id: string) {
     const { data, error } = await supabase
       .rpc('get_all_users_with_manager_details');
-    
+
     if (error) throw error;
-    
+
     // Find the specific employee
     const employee = data?.find((row: any) => row.id === id);
     if (!employee) throw new Error('Employee not found');
-    
+
     // Transform the data to match the expected structure
     return {
       id: employee.id,
@@ -1283,7 +1283,7 @@ export const employeeApi = {
       .eq('user_id', userId)
       .eq('year', year)
       .order('month');
-    
+
     if (error) throw error;
     return data;
   },
@@ -1296,15 +1296,466 @@ export const employeeApi = {
         user:users(full_name, employee_id, department:departments!users_department_id_fkey(name))
       `)
       .eq('year', year);
-    
+
     if (month) {
       query = query.eq('month', month);
     }
-    
+
     const { data, error } = await query.order('month');
-    
+
     if (error) throw error;
     return data;
+  },
+
+  async getAllEmployeesAttendanceFromSecondDB(year: number = new Date().getFullYear(), month?: number) {
+    try {
+      // Import secondSupabase dynamically to avoid circular dependencies
+      const { secondSupabase } = await import('@/services/secondSupabase');
+
+      // Get all employees from main database
+      const employees = await this.getAllEmployees();
+
+      // Get holidays for the year
+      const holidays = await leaveApi.getAllHolidays(year);
+
+      // Calculate date range
+      const startDate = month
+        ? new Date(year, month - 1, 1)
+        : new Date(year, 0, 1);
+      const endDate = month
+        ? new Date(year, month, 0) // Last day of the month
+        : new Date(year, 11, 31); // Last day of the year
+
+      const attendanceReports = [];
+
+      for (const employee of employees) {
+        try {
+          // Get user ID from second database using email
+          const { data: profiles, error: profileError } = await secondSupabase
+            .from('profiles')
+            .select('id')
+            .eq('email', employee.email.toLowerCase())
+            .limit(1);
+
+          if (profileError || !profiles || profiles.length === 0) {
+            // Employee not found in second database, create empty record
+            if (month) {
+              attendanceReports.push({
+                user_id: employee.id,
+                year,
+                month,
+                total_working_days: this.getWorkingDaysInMonth(year, month, holidays),
+                days_present: 0,
+                days_absent: this.getWorkingDaysInMonth(year, month, holidays),
+                days_on_leave: 0,
+                total_hours_worked: 0,
+                overtime_hours: 0,
+                user: {
+                  full_name: employee.full_name,
+                  employee_id: employee.employee_id,
+                  department: employee.department
+                }
+              });
+            } else {
+              // For yearly report, create monthly records
+              for (let m = 1; m <= 12; m++) {
+                attendanceReports.push({
+                  user_id: employee.id,
+                  year,
+                  month: m,
+                  total_working_days: this.getWorkingDaysInMonth(year, m, holidays),
+                  days_present: 0,
+                  days_absent: this.getWorkingDaysInMonth(year, m, holidays),
+                  days_on_leave: 0,
+                  total_hours_worked: 0,
+                  overtime_hours: 0,
+                  user: {
+                    full_name: employee.full_name,
+                    employee_id: employee.employee_id,
+                    department: employee.department
+                  }
+                });
+              }
+            }
+            continue;
+          }
+
+          const secondDbUserId = profiles[0].id;
+
+          // Get time entries for the date range
+          let timeQuery = secondSupabase
+            .from('time_entries')
+            .select('id, start_time, duration, created_at')
+            .eq('user_id', secondDbUserId)
+            .gte('start_time', startDate.toISOString())
+            .lte('start_time', endDate.toISOString());
+
+          const { data: timeEntries, error: timeError } = await timeQuery;
+
+          if (timeError) {
+            console.error(`Error fetching time entries for ${employee.email}:`, timeError);
+            continue;
+          }
+
+          // Process time entries by month (using start_time for allocation)
+          // This ensures night shift hours are allocated to the month/day the shift started
+          const monthlyData = new Map();
+
+          if (timeEntries && timeEntries.length > 0) {
+            timeEntries.forEach(entry => {
+              // Use start_time for date allocation (important for night shifts)
+              const entryDate = new Date(entry.start_time);
+              const entryMonth = entryDate.getMonth() + 1;
+              const entryYear = entryDate.getFullYear();
+              const key = `${entryYear}-${entryMonth}`;
+
+              if (!monthlyData.has(key)) {
+                monthlyData.set(key, {
+                  year: entryYear,
+                  month: entryMonth,
+                  totalHours: 0,
+                  daysWorked: new Set()
+                });
+              }
+
+              const monthData = monthlyData.get(key);
+              monthData.totalHours += (entry.duration || 0) / 3600; // Convert seconds to hours
+              // Use start_time date for tracking unique working days (local date)
+              const localDateKey = `${entryYear}-${String(entryMonth).padStart(2, '0')}-${String(entryDate.getDate()).padStart(2, '0')}`;
+              monthData.daysWorked.add(localDateKey);
+            });
+          }
+
+          // Generate reports based on processed data
+          if (month) {
+            // Single month report
+            const key = `${year}-${month}`;
+            const monthData = monthlyData.get(key);
+            const workingDays = this.getWorkingDaysInMonth(year, month, holidays);
+            const daysPresent = monthData ? monthData.daysWorked.size : 0;
+            const totalHours = monthData ? monthData.totalHours : 0;
+
+            attendanceReports.push({
+              user_id: employee.id,
+              year,
+              month,
+              total_working_days: workingDays,
+              days_present: daysPresent,
+              days_absent: Math.max(0, workingDays - daysPresent),
+              days_on_leave: 0, // We don't have leave data in time tracking
+              total_hours_worked: Math.round(totalHours * 100) / 100,
+              overtime_hours: Math.max(0, Math.round((totalHours - (daysPresent * 8)) * 100) / 100),
+              user: {
+                full_name: employee.full_name,
+                employee_id: employee.employee_id,
+                department: employee.department
+              }
+            });
+          } else {
+            // Yearly report - generate for each month
+            for (let m = 1; m <= 12; m++) {
+              const key = `${year}-${m}`;
+              const monthData = monthlyData.get(key);
+              const workingDays = this.getWorkingDaysInMonth(year, m, holidays);
+              const daysPresent = monthData ? monthData.daysWorked.size : 0;
+              const totalHours = monthData ? monthData.totalHours : 0;
+
+              attendanceReports.push({
+                user_id: employee.id,
+                year,
+                month: m,
+                total_working_days: workingDays,
+                days_present: daysPresent,
+                days_absent: Math.max(0, workingDays - daysPresent),
+                days_on_leave: 0,
+                total_hours_worked: Math.round(totalHours * 100) / 100,
+                overtime_hours: Math.max(0, Math.round((totalHours - (daysPresent * 8)) * 100) / 100),
+                user: {
+                  full_name: employee.full_name,
+                  employee_id: employee.employee_id,
+                  department: employee.department
+                }
+              });
+            }
+          }
+        } catch (employeeError) {
+          console.error(`Error processing employee ${employee.email}:`, employeeError);
+          continue;
+        }
+      }
+
+      return attendanceReports.sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year;
+        if (a.month !== b.month) return a.month - b.month;
+        return (a.user?.full_name || '').localeCompare(b.user?.full_name || '');
+      });
+
+    } catch (error) {
+      console.error('Error in getAllEmployeesAttendanceFromSecondDB:', error);
+      throw error;
+    }
+  },
+
+  // Helper function to calculate working days in a month (excluding weekends and holidays)
+  getWorkingDaysInMonth(year: number, month: number, holidays: any[] = []): number {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0);
+    let workingDays = 0;
+
+    for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+      const dayOfWeek = date.getDay();
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6; // Sunday (0) or Saturday (6)
+      const { isHoliday } = this.isHoliday(date, holidays);
+
+      if (!isWeekend && !isHoliday) {
+        workingDays++;
+      }
+    }
+
+    return workingDays;
+  },
+
+  async getEmployeeDaywiseAttendance(employeeId: string, year: number, month: number) {
+    try {
+      // Import secondSupabase dynamically to avoid circular dependencies
+      const { secondSupabase } = await import('@/services/secondSupabase');
+
+      // Get employee details from main database
+      const employee = await this.getEmployeeById(employeeId);
+      if (!employee) {
+        throw new Error('Employee not found');
+      }
+
+      // Get holidays for the year
+      const holidays = await leaveApi.getAllHolidays(year);
+
+      // Get user ID from second database using email
+      const { data: profiles, error: profileError } = await secondSupabase
+        .from('profiles')
+        .select('id')
+        .eq('email', employee.email.toLowerCase())
+        .limit(1);
+
+      if (profileError || !profiles || profiles.length === 0) {
+        // Employee not found in second database, return empty daywise data
+        const daysInMonth = new Date(year, month, 0).getDate();
+        const daywiseData = [];
+
+        for (let day = 1; day <= daysInMonth; day++) {
+          const date = new Date(year, month - 1, day);
+          const dayOfWeek = date.getDay();
+          const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+          const { isHoliday, holiday } = this.isHoliday(date, holidays);
+
+          let status = 'Absent';
+          if (isWeekend) {
+            status = 'Weekend';
+          } else if (isHoliday) {
+            status = 'Holiday';
+          }
+
+          const isWorkingDay = !isWeekend && !isHoliday;
+
+          daywiseData.push({
+            date: date.toISOString().split('T')[0],
+            day: day,
+            dayName: date.toLocaleDateString('en-US', { weekday: 'long' }),
+            isWeekend,
+            isHoliday,
+            holiday: holiday || null,
+            isWorkingDay,
+            status,
+            hoursWorked: 0,
+            timeEntries: []
+          });
+        }
+
+        return {
+          employee: {
+            id: employee.id,
+            full_name: employee.full_name,
+            employee_id: employee.employee_id,
+            email: employee.email,
+            department: employee.department
+          },
+          year,
+          month,
+          monthName: new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'long' }),
+          daywiseData,
+          summary: {
+            totalWorkingDays: daywiseData.filter(d => d.isWorkingDay).length,
+            daysPresent: 0,
+            daysAbsent: daywiseData.filter(d => d.isWorkingDay).length,
+            totalHours: 0,
+            averageHoursPerDay: 0
+          }
+        };
+      }
+
+      const secondDbUserId = profiles[0].id;
+
+      // Get time entries for the specific month
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0);
+
+      const { data: timeEntries, error: timeError } = await secondSupabase
+        .from('time_entries')
+        .select('id, start_time, duration, created_at')
+        .eq('user_id', secondDbUserId)
+        .gte('start_time', startDate.toISOString())
+        .lte('start_time', endDate.toISOString())
+        .order('start_time');
+
+      if (timeError) {
+        console.error(`Error fetching time entries for ${employee.email}:`, timeError);
+        throw timeError;
+      }
+
+      // Group time entries by date (using start_time date for allocation)
+      // This ensures night shift hours are allocated to the day the shift started
+      const entriesByDate = new Map();
+      if (timeEntries && timeEntries.length > 0) {
+        timeEntries.forEach(entry => {
+          // Use start_time date for allocation (important for night shifts)
+          const startDate = new Date(entry.start_time);
+
+          // Debug: Let's see what we're working with
+          if (employee.email.includes('mahak') || employee.full_name.includes('Mahak')) {
+            console.log(`DEBUG - Entry for ${employee.full_name}:`);
+            console.log(`  start_time from DB: ${entry.start_time}`);
+            console.log(`  Parsed as Date: ${startDate.toString()}`);
+            console.log(`  Local date: ${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`);
+            console.log(`  Time: ${startDate.getHours()}:${String(startDate.getMinutes()).padStart(2, '0')}`);
+          }
+
+          // Create date key using local timezone to avoid UTC conversion issues
+          // This ensures night shifts are allocated to the correct local date
+          const localYear = startDate.getFullYear();
+          const localMonth = String(startDate.getMonth() + 1).padStart(2, '0');
+          const localDay = String(startDate.getDate()).padStart(2, '0');
+          const dateKey = `${localYear}-${localMonth}-${localDay}`;
+
+          if (!entriesByDate.has(dateKey)) {
+            entriesByDate.set(dateKey, []);
+          }
+          entriesByDate.get(dateKey).push(entry);
+        });
+      }
+
+      // Generate daywise data
+      const daysInMonth = new Date(year, month, 0).getDate();
+      const daywiseData = [];
+      let totalHours = 0;
+      let daysPresent = 0;
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(year, month - 1, day);
+        // Use local date to match the key format used above
+        const dateYear = date.getFullYear();
+        const dateMonth = String(date.getMonth() + 1).padStart(2, '0');
+        const dateDay = String(date.getDate()).padStart(2, '0');
+        const dateKey = `${dateYear}-${dateMonth}-${dateDay}`;
+        const dayOfWeek = date.getDay();
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        const dayEntries = entriesByDate.get(dateKey) || [];
+
+        const dayHours = dayEntries.reduce((sum: number, entry: any) => sum + ((entry.duration || 0) / 3600), 0);
+        totalHours += dayHours;
+
+        // Check if this date is a holiday
+        const { isHoliday, holiday } = this.isHoliday(date, holidays);
+
+        let status = 'Absent';
+        if (isWeekend) {
+          status = 'Weekend';
+        } else if (isHoliday) {
+          status = 'Holiday';
+        } else if (dayEntries.length > 0) {
+          status = 'Present';
+          daysPresent++;
+        }
+
+        const isWorkingDay = !isWeekend && !isHoliday;
+
+        daywiseData.push({
+          date: dateKey,
+          day: day,
+          dayName: date.toLocaleDateString('en-US', { weekday: 'long' }),
+          isWeekend,
+          isHoliday,
+          holiday: holiday || null,
+          isWorkingDay,
+          status,
+          hoursWorked: Math.round(dayHours * 100) / 100,
+          timeEntries: dayEntries.map((entry: any) => ({
+            id: entry.id,
+            startTime: entry.start_time,
+            duration: entry.duration,
+            durationHours: Math.round((entry.duration / 3600) * 100) / 100,
+            formattedDuration: this.formatDurationFromSeconds(entry.duration || 0)
+          }))
+        });
+      }
+
+      const workingDays = daywiseData.filter(d => d.isWorkingDay).length;
+
+      return {
+        employee: {
+          id: employee.id,
+          full_name: employee.full_name,
+          employee_id: employee.employee_id,
+          email: employee.email,
+          department: employee.department
+        },
+        year,
+        month,
+        monthName: new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'long' }),
+        daywiseData,
+        summary: {
+          totalWorkingDays: workingDays,
+          daysPresent,
+          daysAbsent: workingDays - daysPresent,
+          totalHours: Math.round(totalHours * 100) / 100,
+          averageHoursPerDay: daysPresent > 0 ? Math.round((totalHours / daysPresent) * 100) / 100 : 0
+        }
+      };
+
+    } catch (error) {
+      console.error('Error in getEmployeeDaywiseAttendance:', error);
+      throw error;
+    }
+  },
+
+  // Helper function to format duration from seconds
+  formatDurationFromSeconds(seconds: number): string {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    } else if (minutes > 0) {
+      return `${minutes}m`;
+    } else {
+      return `${seconds}s`;
+    }
+  },
+
+
+
+  // Helper function to check if a date is a holiday
+  isHoliday(date: Date, holidays: any[]): { isHoliday: boolean; holiday?: any } {
+    // Use local date formatting to avoid timezone issues
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+
+    const holiday = holidays.find(h => h.date === dateStr);
+
+    return {
+      isHoliday: !!holiday,
+      holiday
+    };
   }
 };
 
@@ -1318,7 +1769,7 @@ export const assetApi = {
         category:asset_categories(name, description)
       `)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -1334,7 +1785,7 @@ export const assetApi = {
       `)
       .eq('is_active', true)
       .order('assigned_date', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -1344,7 +1795,7 @@ export const assetApi = {
       .from('asset_categories')
       .select('*')
       .order('name');
-    
+
     if (error) throw error;
     return data;
   },
@@ -1361,13 +1812,13 @@ export const assetApi = {
         vm:virtual_machines(vm_number, project_name, purpose, cloud_provider)
       `)
       .single();
-    
+
     if (error) throw error;
-    
+
     // Notifications are now handled automatically by database triggers
     // This ensures notifications are sent even if the client disconnects
     console.log('Asset assignment created successfully, notifications triggered via database triggers');
-    
+
     return data;
   },
 
@@ -1380,7 +1831,7 @@ export const assetApi = {
       `)
       .in('status', ['available', 'assigned'])  // Include both available and assigned assets for multiple assignments
       .order('name');
-    
+
     if (error) throw error;
     return data;
   },
@@ -1394,7 +1845,7 @@ export const assetApi = {
         category:asset_categories(name, description)
       `)
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -1412,7 +1863,7 @@ export const assetApi = {
         category:asset_categories(name, description)
       `)
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -1422,7 +1873,7 @@ export const assetApi = {
       .from('assets')
       .delete()
       .eq('id', id);
-    
+
     if (error) throw error;
   },
 
@@ -1441,7 +1892,7 @@ export const assetApi = {
         assigned_by_user:users!assigned_by(full_name)
       `)
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -1451,14 +1902,14 @@ export const assetApi = {
       .from('asset_assignments')
       .delete()
       .eq('id', id);
-    
+
     if (error) throw error;
   },
 
   async getEmployeeDetails(userId: string) {
     const { data, error } = await supabase
       .rpc('get_employee_details', { p_user_id: userId });
-    
+
     if (error) throw error;
     return data[0];
   },
@@ -1484,7 +1935,7 @@ export const assetApi = {
         p_issuance_condition_notes: assignmentData.issuance_condition_notes,
         p_notes: assignmentData.notes
       });
-    
+
     if (error) throw error;
     return data;
   },
@@ -1496,12 +1947,12 @@ export const assetApi = {
         p_return_condition: returnCondition || 'good',
         p_return_notes: returnNotes
       });
-    
+
     if (error) throw error;
-    
+
     // Notifications for unassignment are handled automatically by database triggers
     console.log('Asset unassigned successfully, notifications triggered via database triggers');
-    
+
     return data;
   },
 
@@ -1512,7 +1963,7 @@ export const assetApi = {
         p_condition_at_issuance: condition,
         p_issuance_notes: notes
       });
-    
+
     if (error) throw error;
     return data;
   },
@@ -1526,16 +1977,16 @@ export const assetApi = {
         return_condition_notes: returnNotes
       })
       .eq('id', assignmentId);
-    
+
     if (error) throw error;
-    
+
     // Check if this was the last assignment for this asset, if so update asset status
     const { data: remainingAssignments } = await supabase
       .from('asset_assignments')
       .select('asset_id')
       .eq('asset_id', (await supabase.from('asset_assignments').select('asset_id').eq('id', assignmentId).single()).data?.asset_id)
       .eq('is_active', true);
-    
+
     if (!remainingAssignments || remainingAssignments.length === 0) {
       await supabase
         .from('assets')
@@ -1551,7 +2002,7 @@ export const assetApi = {
         p_description: categoryData.description,
         p_depreciation_rate: categoryData.depreciation_rate || 10.00
       });
-    
+
     if (error) throw error;
     return data;
   },
@@ -1561,19 +2012,19 @@ export const assetApi = {
     const { data: totalAssets } = await supabase
       .from('assets')
       .select('id, status');
-    
+
     // Get active assignments count
     const { data: activeAssignments } = await supabase
       .from('asset_assignments')
       .select('id')
       .eq('is_active', true);
-    
+
     // Get assets by status
     const assetsByStatus = totalAssets?.reduce((acc: any, asset: any) => {
       acc[asset.status] = (acc[asset.status] || 0) + 1;
       return acc;
     }, {} as Record<string, number>) || {};
-    
+
     return {
       totalAssets: totalAssets?.length || 0,
       activeAssignments: activeAssignments?.length || 0,
@@ -1589,7 +2040,7 @@ export const assetApi = {
       .from('current_asset_notes_guidance')
       .select('*')
       .single();
-    
+
     if (error && error.code !== 'PGRST116') throw error;
     return data;
   },
@@ -1600,7 +2051,7 @@ export const assetApi = {
     // Get current user from localStorage (matching the auth pattern used in this app)
     const userDataStr = localStorage.getItem('hrms_user');
     if (!userDataStr) throw new Error('Not authenticated');
-    
+
     const userData = JSON.parse(userDataStr);
     if (!userData || !userData.id) throw new Error('Invalid user session');
 
@@ -1618,7 +2069,7 @@ export const assetApi = {
       console.error('Error creating notes guidance:', error);
       throw error;
     }
-    
+
     console.log('Successfully created notes guidance:', data);
     return data;
   },
@@ -1627,7 +2078,7 @@ export const assetApi = {
     // Get current user from localStorage (matching the auth pattern used in this app)
     const userDataStr = localStorage.getItem('hrms_user');
     if (!userDataStr) throw new Error('Not authenticated');
-    
+
     const userData = JSON.parse(userDataStr);
     if (!userData || !userData.id) throw new Error('Invalid user session');
 
@@ -1647,7 +2098,7 @@ export const assetApi = {
       console.error('Update notes guidance error:', error);
       throw error;
     }
-    
+
     console.log('Successfully updated notes guidance:', data);
     return data;
   },
@@ -1671,7 +2122,7 @@ export const assetApi = {
         updated_by_user:users!updated_by(full_name)
       `)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -1685,7 +2136,7 @@ export const assetApi = {
         updated_by_user:users!updated_by(full_name)
       `)
       .order('version', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -1694,7 +2145,7 @@ export const assetApi = {
   async getUserAssignmentLogs(userId: string) {
     const { data, error } = await supabase
       .rpc('get_user_assignment_logs', { p_user_id: userId });
-    
+
     if (error) throw error;
     return data;
   },
@@ -1702,7 +2153,7 @@ export const assetApi = {
   async getUsersWithAssignmentHistory() {
     const { data, error } = await supabase
       .rpc('get_users_with_assignment_history');
-    
+
     if (error) throw error;
     return data;
   },
@@ -1715,7 +2166,7 @@ export const assetApi = {
         action_by_user:users!action_by(full_name)
       `)
       .order('action_date', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -1723,7 +2174,7 @@ export const assetApi = {
   async backfillAssignmentLogs() {
     const { data, error } = await supabase
       .rpc('backfill_assignment_logs');
-    
+
     if (error) throw error;
     return data;
   },
@@ -1739,7 +2190,7 @@ export const assetApi = {
         assigned_by_user:users!assigned_by(full_name)
       `)
       .order('assigned_date', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -1763,7 +2214,7 @@ export const assetApi = {
       .eq('user_id', userId)
       .eq('is_active', true)
       .order('assigned_date', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -1790,7 +2241,7 @@ export const assetApi = {
         user:users!asset_complaints_user_id_fkey(full_name, employee_id)
       `)
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -1805,7 +2256,7 @@ export const assetApi = {
       `)
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -1821,7 +2272,7 @@ export const assetApi = {
         resolved_by_user:users!asset_complaints_resolved_by_fkey(full_name)
       `)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -1844,7 +2295,7 @@ export const assetApi = {
         resolved_by_user:users!asset_complaints_resolved_by_fkey(full_name)
       `)
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -1866,13 +2317,13 @@ export const assetApi = {
         user:users!asset_requests_user_id_fkey(full_name, employee_id, manager_id)
       `)
       .single();
-    
+
     if (error) throw error;
-    
+
     // Notifications are now handled automatically by database triggers
     // This ensures notifications are sent even if the client disconnects
     console.log('Asset request created successfully, notifications triggered via database triggers');
-    
+
     return data;
   },
 
@@ -1889,7 +2340,7 @@ export const assetApi = {
       `)
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -1908,7 +2359,7 @@ export const assetApi = {
         fulfilled_asset:assets(name, asset_tag, brand, model)
       `)
       .order('created_at', { ascending: false });
-    
+
     if (error) {
       console.error('API: getAllAssetRequests error:', error);
       throw error;
@@ -1933,7 +2384,7 @@ export const assetApi = {
         fulfilled_asset:assets(name, asset_tag, brand, model)
       `)
       .order('created_at', { ascending: false });
-    
+
     if (error) {
       console.error('API: getManagerAssetRequests error:', error);
       throw error;
@@ -1956,7 +2407,7 @@ export const assetApi = {
         assigned_by_user:users!asset_assignments_assigned_by_fkey(full_name)
       `)
       .order('assigned_date', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -1972,7 +2423,7 @@ export const assetApi = {
         resolved_by_user:users!asset_complaints_resolved_by_fkey(full_name)
       `)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -2016,12 +2467,12 @@ export const assetApi = {
         fulfilled_asset:assets(name, asset_tag, brand, model)
       `)
       .single();
-    
+
     if (error) throw error;
-    
+
     // Notifications for status changes are handled automatically by database triggers
     console.log('Asset request updated successfully, status change notifications triggered via database triggers');
-    
+
     return data;
   }
 };
@@ -2033,7 +2484,7 @@ export const vmApi = {
       .from('virtual_machines')
       .select('*')
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -2043,7 +2494,7 @@ export const vmApi = {
       .from('vm_assignments_view')
       .select('*')
       .order('assigned_date', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -2051,7 +2502,7 @@ export const vmApi = {
   async getAvailableVMs() {
     const { data, error } = await supabase
       .rpc('get_available_vms');
-    
+
     if (error) throw error;
     return data;
   },
@@ -2059,7 +2510,7 @@ export const vmApi = {
   async getUserVMs(userId: string) {
     const { data, error } = await supabase
       .rpc('get_user_vms', { p_user_id: userId });
-    
+
     if (error) throw error;
     return data;
   },
@@ -2093,7 +2544,7 @@ export const vmApi = {
         p_assigned_by_user_id: vmData.assigned_by_user_id,
         p_assignment_notes: vmData.assignment_notes
       });
-    
+
     if (error) throw error;
     return data;
   },
@@ -2106,7 +2557,7 @@ export const vmApi = {
         p_assigned_by_user_id: assignedBy,
         p_notes: notes
       });
-    
+
     if (error) throw error;
     return data;
   },
@@ -2117,21 +2568,21 @@ export const vmApi = {
         p_vm_id: vmId,
         p_return_condition: returnCondition
       });
-    
+
     if (error) throw error;
     return data;
   },
 
   async updateVM(vmId: string, updates: any) {
     console.log('Updating VM with data:', updates);
-    
+
     const { data, error } = await supabase
       .from('virtual_machines')
       .update(updates)
       .eq('id', vmId)
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -2139,13 +2590,13 @@ export const vmApi = {
   async deleteVM(vmId: string) {
     // First unassign if assigned
     await this.unassignVMFromUser(vmId);
-    
+
     // Delete the VM record
     const { error } = await supabase
       .from('virtual_machines')
       .delete()
       .eq('id', vmId);
-    
+
     if (error) throw error;
   },
 
@@ -2154,32 +2605,32 @@ export const vmApi = {
     const { data: totalVMs } = await supabase
       .from('virtual_machines')
       .select('id, vm_location, cloud_provider, audit_status');
-    
+
     // Get active VM assignments count
     const { data: activeVMAssignments } = await supabase
       .from('asset_assignments')
       .select('id')
       .eq('is_active', true)
       .not('vm_id', 'is', null);
-    
+
     // Get VMs by location
     const vmsByLocation = totalVMs?.reduce((acc: any, vm: any) => {
       acc[vm.vm_location] = (acc[vm.vm_location] || 0) + 1;
       return acc;
     }, {} as Record<string, number>) || {};
-    
+
     // Get VMs by cloud provider
     const vmsByProvider = totalVMs?.reduce((acc: any, vm: any) => {
       acc[vm.cloud_provider] = (acc[vm.cloud_provider] || 0) + 1;
       return acc;
     }, {} as Record<string, number>) || {};
-    
+
     // Get VMs by audit status
     const vmsByAuditStatus = totalVMs?.reduce((acc: any, vm: any) => {
       acc[vm.audit_status] = (acc[vm.audit_status] || 0) + 1;
       return acc;
     }, {} as Record<string, number>) || {};
-    
+
     return {
       totalVMs: totalVMs?.length || 0,
       activeVMAssignments: activeVMAssignments?.length || 0,
@@ -2198,27 +2649,27 @@ export const vmApi = {
         .select('asset_tag, name')
         .eq('id', assetId)
         .single();
-      
+
       if (assetError) {
         console.error('Error fetching asset:', assetError);
         return null;
       }
-      
+
       if (!asset?.asset_tag) {
         console.log('No asset_tag found for asset:', assetId);
         return null;
       }
-      
+
       // Check if this is a VM asset (asset_tag should start with 'VM-')
       if (!asset.asset_tag.startsWith('VM-')) {
         console.log('Asset is not a VM asset:', asset.asset_tag);
         return null;
       }
-      
+
       // Extract VM number from asset_tag (e.g., 'VM-1001' -> '1001')
       const vmNumber = asset.asset_tag.replace('VM-', '');
       console.log('Extracted VM number:', vmNumber, 'from asset_tag:', asset.asset_tag);
-      
+
       // Fetch VM data directly from virtual_machines table using vm_number
       // Select specific columns to avoid schema cache issues
       const { data: vmData, error: vmError } = await supabase
@@ -2252,15 +2703,15 @@ export const vmApi = {
         `)
         .eq('vm_number', vmNumber)
         .single();
-      
+
       if (vmError) {
         console.error('Error fetching VM data for vm_number:', vmNumber, vmError);
         return null;
       }
-      
+
       console.log('Successfully fetched VM data:', vmData);
       return vmData;
-      
+
     } catch (error) {
       console.error('Unexpected error in getVMByAssetId:', error);
       return null;
@@ -2278,34 +2729,34 @@ export const hrReferralsApi = {
         referred_by_user:users!referred_by(full_name, employee_id, email, department:departments!users_department_id_fkey(name))
       `)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
 
   async updateReferralStatus(
-    id: string, 
-    status: string, 
-    hrNotes?: string, 
-    bonusEligible?: boolean, 
-    bonusAmount?: number | null, 
+    id: string,
+    status: string,
+    hrNotes?: string,
+    bonusEligible?: boolean,
+    bonusAmount?: number | null,
     bonusPaid?: boolean
   ) {
-    const updateData: any = { 
-      status, 
+    const updateData: any = {
+      status,
       hr_notes: hrNotes,
-      updated_at: new Date().toISOString() 
+      updated_at: new Date().toISOString()
     };
 
     // Handle bonus fields
     if (bonusEligible !== undefined) {
       updateData.bonus_eligible = bonusEligible;
     }
-    
+
     if (bonusAmount !== undefined) {
       updateData.bonus_amount = bonusAmount;
     }
-    
+
     if (bonusPaid !== undefined) {
       updateData.bonus_paid = bonusPaid;
     }
@@ -2319,7 +2770,7 @@ export const hrReferralsApi = {
         referred_by_user:users!referred_by(full_name, employee_id, email, department:departments!users_department_id_fkey(name))
       `)
       .single();
-    
+
     if (error) throw error;
     return data;
   }
@@ -2337,7 +2788,7 @@ export const grievanceApi = {
         assigned_to_user:users!complaints_assigned_to_fkey(full_name)
       `)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -2347,17 +2798,17 @@ export const grievanceApi = {
       .from('complaint_categories')
       .select('*')
       .order('name');
-    
+
     if (error) throw error;
     return data;
   },
 
   async approveComplaint(id: string, assigned_to: string, approvedBy: string) {
     console.log('Approving complaint:', { id, assigned_to, approvedBy });
-    
+
     const { data, error } = await supabase
       .from('complaints')
-      .update({ 
+      .update({
         status: 'in_progress', // Change to in_progress when approved and assigned
         assigned_to: assigned_to, // Update the assigned_to field with the new resolver
         updated_at: new Date().toISOString()
@@ -2370,11 +2821,11 @@ export const grievanceApi = {
         assigned_to_user:users!complaints_assigned_to_fkey(full_name)
       `)
       .single();
-    
+
     if (error) throw error;
-    
+
     console.log('Complaint updated successfully:', data);
-    
+
     // Send notifications after manager approval
     try {
       // 1. Notify the assigned resolver
@@ -2385,7 +2836,7 @@ export const grievanceApi = {
         type: 'complaint_assigned',
         data: { complaint_id: data.id, action: 'resolve', target: 'grievance/active' }
       });
-      
+
       // 2. Notify the employee who submitted the complaint
       await notificationApi.createNotification({
         user_id: data.user_id,
@@ -2397,14 +2848,14 @@ export const grievanceApi = {
     } catch (notificationError: any) {
       console.error('Failed to send approval notifications:', notificationError);
     }
-    
+
     return data;
   },
 
   async rejectComplaint(id: string, rejectedBy: string, reason?: string) {
     const { data, error } = await supabase
       .from('complaints')
-      .update({ 
+      .update({
         status: 'closed',
         resolution: `Rejected: ${reason}` || 'Complaint rejected by manager',
         resolved_at: new Date().toISOString(),
@@ -2418,9 +2869,9 @@ export const grievanceApi = {
         assigned_to_user:users!complaints_assigned_to_fkey(full_name)
       `)
       .single();
-    
+
     if (error) throw error;
-    
+
     // Send notifications for rejection
     try {
       // 1. Notify the employee who submitted the complaint
@@ -2434,14 +2885,14 @@ export const grievanceApi = {
     } catch (notificationError) {
       console.error('Failed to send rejection notification:', notificationError);
     }
-    
+
     return data;
   },
 
   async reassignComplaint(id: string, new_assigned_to: string, reassignedBy: string, reason?: string) {
     const { data, error } = await supabase
       .from('complaints')
-      .update({ 
+      .update({
         assigned_to: new_assigned_to,
         status: 'in_progress',
         updated_at: new Date().toISOString()
@@ -2454,9 +2905,9 @@ export const grievanceApi = {
         assigned_to_user:users!complaints_assigned_to_fkey(full_name)
       `)
       .single();
-    
+
     if (error) throw error;
-    
+
     // Send notifications for reassignment
     try {
       // 1. Notify the new assignee
@@ -2467,7 +2918,7 @@ export const grievanceApi = {
         type: 'complaint_reassigned',
         data: { complaint_id: data.id, action: 'resolve' }
       });
-      
+
       // 2. Notify the employee who submitted the complaint
       await notificationApi.createNotification({
         user_id: data.user_id,
@@ -2476,7 +2927,7 @@ export const grievanceApi = {
         type: 'complaint_reassigned',
         data: { complaint_id: data.id, action: 'view', target: 'dashboard/complaints', tab: 'my-complaints' }
       });
-      
+
       // 3. Notify the employee's manager (if different from reassigner)
       if (data.user.manager_id) {
         await notificationApi.createNotification({
@@ -2490,7 +2941,7 @@ export const grievanceApi = {
     } catch (notificationError) {
       console.error('Failed to send reassignment notifications:', notificationError);
     }
-    
+
     return data;
   },
 
@@ -2500,9 +2951,9 @@ export const grievanceApi = {
       .select('id, full_name, employee_id, role:roles(name), department:departments!users_department_id_fkey(name)')
       .eq('status', 'active')
       .order('full_name');
-    
+
     if (error) throw error;
-    
+
     // Also get users by role name for flexibility
     const { data: roleBasedUsers, error: roleError } = await supabase
       .from('users')
@@ -2514,9 +2965,9 @@ export const grievanceApi = {
       .eq('status', 'active')
       .in('role.name', ['hr', 'bdm', 'qam', 'sdm', 'hrm', 'admin', 'super_admin'])
       .order('full_name');
-    
+
     if (roleError) throw roleError;
-    
+
     // Get users who are managers (have direct reports)
     const { data: managers, error: managersError } = await supabase
       .from('users')
@@ -2528,9 +2979,9 @@ export const grievanceApi = {
       .eq('status', 'active')
       .not('manager_id', 'is', null)
       .order('full_name');
-    
+
     if (managersError) throw managersError;
-    
+
     // Get users from HR and Finance departments
     const { data: departmentUsers, error: deptError } = await supabase
       .from('users')
@@ -2542,36 +2993,36 @@ export const grievanceApi = {
       .eq('status', 'active')
       .in('department.name', ['HR', 'Finance', 'Human Resources'])
       .order('full_name');
-    
+
     if (deptError) throw deptError;
-    
+
     // Combine all resolver sources and deduplicate
     const allResolvers = [
-      ...(roleBasedUsers || []), 
-      ...(managers || []), 
+      ...(roleBasedUsers || []),
+      ...(managers || []),
       ...(departmentUsers || [])
     ];
-    const uniqueResolvers = allResolvers.filter((resolver, index, self) => 
+    const uniqueResolvers = allResolvers.filter((resolver, index, self) =>
       index === self.findIndex(r => r.id === resolver.id)
     );
-    
+
     return uniqueResolvers;
   },
 
   async updateComplaintStatus(id: string, status: string, resolution?: string, assigned_to?: string) {
-    const updateData: any = { 
-      status, 
-      updated_at: new Date().toISOString() 
+    const updateData: any = {
+      status,
+      updated_at: new Date().toISOString()
     };
-    
+
     if (resolution) {
       updateData.resolution = resolution;
     }
-    
+
     if (assigned_to) {
       updateData.assigned_to = assigned_to;
     }
-    
+
     if (status === 'resolved') {
       updateData.resolved_at = new Date().toISOString();
     }
@@ -2587,15 +3038,15 @@ export const grievanceApi = {
         assigned_to_user:users!complaints_assigned_to_fkey(full_name)
       `)
       .single();
-    
+
     if (error) throw error;
-    
+
     // Send notifications for all status updates
     try {
       // 1. Notify the employee who submitted the complaint
       let notificationTitle = 'Complaint Status Updated';
       let notificationMessage = `Your complaint "${data.title}" status has been updated to ${status}.`;
-      
+
       if (status === 'resolved') {
         notificationTitle = 'Complaint Resolved';
         notificationMessage = `Your complaint "${data.title}" has been resolved.`;
@@ -2603,7 +3054,7 @@ export const grievanceApi = {
           notificationMessage += ` Resolution: ${resolution}`;
         }
       }
-      
+
       await notificationApi.createNotification({
         user_id: data.user_id,
         title: notificationTitle,
@@ -2611,7 +3062,7 @@ export const grievanceApi = {
         type: status === 'resolved' ? 'complaint_resolved' : 'complaint_status_updated',
         data: { complaint_id: data.id, action: 'view' }
       });
-      
+
       // 2. Notify the employee's manager (always notify manager of changes)
       if (data.user.manager_id && data.user.manager_id !== assigned_to) {
         await notificationApi.createNotification({
@@ -2622,7 +3073,7 @@ export const grievanceApi = {
           data: { complaint_id: data.id, action: 'view' }
         });
       }
-      
+
       // 3. If there's an assigned resolver (and it's not the employee or manager), notify them too
       if (data.assigned_to && data.assigned_to !== data.user_id && data.assigned_to !== data.user.manager_id) {
         await notificationApi.createNotification({
@@ -2636,7 +3087,7 @@ export const grievanceApi = {
     } catch (notificationError) {
       console.error('Failed to send status update notifications:', notificationError);
     }
-    
+
     return data;
   },
 
@@ -2649,7 +3100,7 @@ export const grievanceApi = {
       `)
       .eq('complaint_id', complaintId)
       .order('created_at', { ascending: true });
-    
+
     if (error) throw error;
     return data;
   },
@@ -2668,7 +3119,7 @@ export const grievanceApi = {
         user:users(full_name, avatar_url)
       `)
       .single();
-    
+
     if (error) throw error;
     return data;
   }
@@ -2686,7 +3137,7 @@ export const hrExitApi = {
         hr_approved_by_user:users!hr_approved_by(full_name)
       `)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -2705,7 +3156,7 @@ export const hrExitApi = {
       `)
       .eq('id', id)
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -2720,7 +3171,7 @@ export const hrExitApi = {
       .eq('id', id)
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -2730,7 +3181,7 @@ export const hrExitApi = {
       .from('exit_processes')
       .delete()
       .eq('id', id);
-    
+
     if (error) throw error;
   }
 };
@@ -2743,7 +3194,7 @@ export const bdTeamApi = {
       .from('billing_records')
       .select('client_name')
       .gte('contract_end_date', getTodayIST());
-    
+
     const activeClients = new Set(billingRecords?.map((r: any) => r.client_name)).size;
 
     // Get unpaid invoices
@@ -2751,7 +3202,7 @@ export const bdTeamApi = {
       .from('invoices')
       .select('invoice_amount')
       .in('status', ['assigned', 'in_progress', 'sent']);
-    
+
     const unpaidAmount = unpaidInvoices?.reduce((sum: any, inv: any) => sum + inv.invoice_amount, 0) || 0;
     const unpaidCount = unpaidInvoices?.length || 0;
 
@@ -2761,14 +3212,14 @@ export const bdTeamApi = {
       .select('id')
       .lt('due_date', getTodayIST())
       .neq('status', 'paid');
-    
+
     const overdueCount = overdueInvoices?.length || 0;
 
     // Get total contract value
     const { data: totalContracts } = await supabase
       .from('billing_records')
       .select('contract_value');
-    
+
     const totalContractValue = totalContracts?.reduce((sum: any, record: any) => sum + record.contract_value, 0) || 0;
 
     return {
@@ -2789,7 +3240,7 @@ export const bdTeamApi = {
         created_by_user:users!created_by(full_name)
       `)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -2804,7 +3255,7 @@ export const bdTeamApi = {
       `)
       .eq('id', id)
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -2819,7 +3270,7 @@ export const bdTeamApi = {
         created_by_user:users!created_by(full_name)
       `)
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -2839,7 +3290,7 @@ export const bdTeamApi = {
         created_by_user:users!created_by(full_name)
       `)
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -2853,7 +3304,7 @@ export const bdTeamApi = {
         created_by_user:users!created_by(full_name)
       `)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -2868,7 +3319,7 @@ export const bdTeamApi = {
       `)
       .eq('id', id)
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -2883,7 +3334,7 @@ export const bdTeamApi = {
         created_by_user:users!created_by(full_name)
       `)
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -2903,7 +3354,7 @@ export const bdTeamApi = {
         created_by_user:users!created_by(full_name)
       `)
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -2916,23 +3367,23 @@ export const bdTeamApi = {
           *,
           changed_by_user:users!changed_by(full_name)
         `);
-      
+
       if (recordId) {
         query = query.eq('billing_record_id', recordId);
       }
-      
+
       if (invoiceId) {
         query = query.eq('invoice_id', invoiceId);
       }
-      
+
       const { data, error } = await query.order('created_at', { ascending: false });
-      
+
       if (error) {
         console.error('Billing logs fetch error:', error);
         // Return empty array if there's an RLS error or no data
         return [];
       }
-      
+
       return data || [];
     } catch (error) {
       console.error('Billing logs API error:', error);
@@ -2952,13 +3403,13 @@ export const bdTeamApi = {
         `)
         .order('created_at', { ascending: false })
         .limit(limit || 10);
-      
+
       if (error) {
         console.error('Recent billing logs fetch error:', error);
         // Return empty array if there's an RLS error or no data
         return [];
       }
-      
+
       return data || [];
     } catch (error) {
       console.error('Recent billing logs API error:', error);
@@ -2975,7 +3426,7 @@ export const bdTeamApi = {
       `)
       .eq('invoice_id', invoiceId)
       .order('created_at', { ascending: true });
-    
+
     if (error) throw error;
     return data;
   },
@@ -2994,7 +3445,7 @@ export const bdTeamApi = {
         user:users(full_name, avatar_url)
       `)
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -3005,7 +3456,7 @@ export const bdTeamApi = {
       .select('id, full_name, email, employee_id')
       .eq('status', 'active')
       .order('full_name');
-    
+
     if (error) throw error;
     return data;
   },
@@ -3016,7 +3467,7 @@ export const bdTeamApi = {
       .select('*')
       .eq('client_name', clientName)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   }

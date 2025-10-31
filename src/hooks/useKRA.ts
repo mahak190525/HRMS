@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/services/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
 
 // Types
 export interface KRACategory {
@@ -28,6 +27,13 @@ export interface KRATemplate {
   created_by: string;
   department_id?: string;
   total_weight: number;
+  
+  // Quarterly due dates
+  q1_due_date?: string;
+  q2_due_date?: string;
+  q3_due_date?: string;
+  q4_due_date?: string;
+  
   created_at: string;
   updated_at: string;
   created_by_user?: {
@@ -89,6 +95,91 @@ export interface KRAAssignment {
   submitted_by?: string;
   evaluated_at?: string;
   evaluated_by?: string;
+  
+  // Quarterly status tracking
+  q1_status: 'not_started' | 'in_progress' | 'submitted' | 'evaluated';
+  q2_status: 'not_started' | 'in_progress' | 'submitted' | 'evaluated';
+  q3_status: 'not_started' | 'in_progress' | 'submitted' | 'evaluated';
+  q4_status: 'not_started' | 'in_progress' | 'submitted' | 'evaluated';
+  
+  // Quarterly due dates (employee-specific)
+  q1_due_date?: string;
+  q2_due_date?: string;
+  q3_due_date?: string;
+  q4_due_date?: string;
+  
+  // Quarterly visibility controls
+  q1_enabled: boolean;
+  q2_enabled: boolean;
+  q3_enabled: boolean;
+  q4_enabled: boolean;
+  
+  // Quarterly enabled tracking
+  q1_enabled_at?: string;
+  q2_enabled_at?: string;
+  q3_enabled_at?: string;
+  q4_enabled_at?: string;
+  q1_enabled_by?: string;
+  q2_enabled_by?: string;
+  q3_enabled_by?: string;
+  q4_enabled_by?: string;
+  
+  // Quarterly submission tracking
+  q1_submitted_at?: string;
+  q1_submitted_by?: string;
+  q1_evaluated_at?: string;
+  q1_evaluated_by?: string;
+  q2_submitted_at?: string;
+  q2_submitted_by?: string;
+  q2_evaluated_at?: string;
+  q2_evaluated_by?: string;
+  q3_submitted_at?: string;
+  q3_submitted_by?: string;
+  q3_evaluated_at?: string;
+  q3_evaluated_by?: string;
+  q4_submitted_at?: string;
+  q4_submitted_by?: string;
+  q4_evaluated_at?: string;
+  q4_evaluated_by?: string;
+  
+  // Quarterly scores
+  q1_total_score: number;
+  q1_total_possible_score: number;
+  q1_overall_percentage: number;
+  q1_overall_rating?: string;
+  q2_total_score: number;
+  q2_total_possible_score: number;
+  q2_overall_percentage: number;
+  q2_overall_rating?: string;
+  q3_total_score: number;
+  q3_total_possible_score: number;
+  q3_overall_percentage: number;
+  q3_overall_rating?: string;
+  q4_total_score: number;
+  q4_total_possible_score: number;
+  q4_overall_percentage: number;
+  q4_overall_rating?: string;
+  
+  // Cumulative scores (running totals)
+  q1_cumulative_score: number;
+  q1_cumulative_possible_score: number;
+  q1_cumulative_percentage: number;
+  q2_cumulative_score: number;
+  q2_cumulative_possible_score: number;
+  q2_cumulative_percentage: number;
+  q3_cumulative_score: number;
+  q3_cumulative_possible_score: number;
+  q3_cumulative_percentage: number;
+  q4_cumulative_score: number;
+  q4_cumulative_possible_score: number;
+  q4_cumulative_percentage: number;
+  
+  // Annual summary
+  annual_average_score: number;
+  annual_average_percentage: number;
+  annual_overall_rating?: string;
+  completed_quarters: number;
+  
   template?: KRATemplate;
   employee?: {
     id: string;
@@ -108,6 +199,7 @@ export interface KRAEvaluation {
   id: string;
   assignment_id: string;
   goal_id: string;
+  quarter: 'Q1' | 'Q2' | 'Q3' | 'Q4';
   employee_comments?: string;
   employee_submitted_at?: string;
   selected_level?: number;
@@ -234,10 +326,9 @@ export function useCreateKRATemplate() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['kra-templates'] });
-      toast.success('KRA template created successfully');
     },
     onError: (error) => {
-      toast.error('Failed to create KRA template: ' + error.message);
+      console.error('Failed to create KRA template:', error);
     },
   });
 }
@@ -261,10 +352,148 @@ export function useUpdateKRATemplate() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['kra-templates'] });
       queryClient.invalidateQueries({ queryKey: ['kra-template'] });
-      toast.success('KRA template updated successfully');
     },
     onError: (error) => {
-      toast.error('Failed to update KRA template: ' + error.message);
+      console.error('Failed to update KRA template:', error);
+    },
+  });
+}
+
+// Hook for deleting KRA templates
+export function useDeleteKRATemplate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (templateId: string) => {
+      // First check if template has any assignments
+      const { data: assignments, error: assignmentError } = await supabase
+        .from('kra_assignments')
+        .select('id')
+        .eq('template_id', templateId)
+        .limit(1);
+
+      if (assignmentError) throw assignmentError;
+
+      if (assignments && assignments.length > 0) {
+        // Archive the template instead of deleting it
+        const { error: archiveError } = await supabase
+          .from('kra_templates')
+          .update({ 
+            status: 'archived',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', templateId);
+
+        if (archiveError) throw archiveError;
+        return { templateId, archived: true };
+      }
+
+      // Delete the template (goals will be deleted by cascade)
+      const { error } = await supabase
+        .from('kra_templates')
+        .delete()
+        .eq('id', templateId);
+
+      if (error) throw error;
+      return { templateId, archived: false };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['kra-templates'] });
+      queryClient.invalidateQueries({ queryKey: ['kra-template'] });
+    },
+    onError: (error) => {
+      console.error('Error deleting template:', error);
+      // Let the component handle the toast
+    },
+  });
+}
+
+// Hook for copying KRA templates
+export function useCopyKRATemplate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ templateId, currentUserId }: { templateId: string; currentUserId: string }) => {
+      // First, get the original template with all its goals
+      const { data: originalTemplate, error: templateError } = await supabase
+        .from('kra_templates')
+        .select(`
+          *,
+          goals:kra_goals(*)
+        `)
+        .eq('id', templateId)
+        .single();
+
+      if (templateError) throw templateError;
+      if (!originalTemplate) throw new Error('Template not found');
+
+      // Create the new template (copy)
+      const newTemplateData = {
+        template_name: `${originalTemplate.template_name} (Copy)`,
+        description: originalTemplate.description,
+        evaluation_period_start: originalTemplate.evaluation_period_start,
+        evaluation_period_end: originalTemplate.evaluation_period_end,
+        status: 'draft', // Always create copies as draft
+        created_by: currentUserId, // Use current user as creator
+        department_id: originalTemplate.department_id,
+        total_weight: originalTemplate.total_weight,
+      };
+
+      const { data: newTemplate, error: createTemplateError } = await supabase
+        .from('kra_templates')
+        .insert([newTemplateData])
+        .select()
+        .single();
+
+      if (createTemplateError) throw createTemplateError;
+      if (!newTemplate) throw new Error('Failed to create template copy');
+
+      // Copy all the goals
+      if (originalTemplate.goals && originalTemplate.goals.length > 0) {
+        const newGoals = originalTemplate.goals.map((goal: any) => ({
+          template_id: newTemplate.id,
+          goal_id: goal.goal_id,
+          strategic_goal_title: goal.strategic_goal_title,
+          category_id: goal.category_id,
+          smart_goal: goal.smart_goal,
+          weight: goal.weight,
+          max_score: goal.max_score,
+          target: goal.target,
+          dependencies: goal.dependencies,
+          level_1_marks: goal.level_1_marks,
+          level_2_marks: goal.level_2_marks,
+          level_3_marks: goal.level_3_marks,
+          level_4_marks: goal.level_4_marks,
+          level_5_marks: goal.level_5_marks,
+          level_1_points: goal.level_1_points,
+          level_2_points: goal.level_2_points,
+          level_3_points: goal.level_3_points,
+          level_4_points: goal.level_4_points,
+          level_5_points: goal.level_5_points,
+          level_1_rating: goal.level_1_rating,
+          level_2_rating: goal.level_2_rating,
+          level_3_rating: goal.level_3_rating,
+          level_4_rating: goal.level_4_rating,
+          level_5_rating: goal.level_5_rating,
+          manager_comments: goal.manager_comments,
+          display_order: goal.display_order,
+        }));
+
+        const { error: createGoalsError } = await supabase
+          .from('kra_goals')
+          .insert(newGoals);
+
+        if (createGoalsError) throw createGoalsError;
+      }
+
+      return newTemplate;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['kra-templates'] });
+      queryClient.invalidateQueries({ queryKey: ['kra-template'] });
+    },
+    onError: (error) => {
+      console.error('Error copying template:', error);
     },
   });
 }
@@ -290,10 +519,9 @@ export function useCreateKRAGoal() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['kra-template', (variables as any).template_id] });
       queryClient.invalidateQueries({ queryKey: ['kra-templates'] });
-      toast.success('KRA goal added successfully');
     },
     onError: (error) => {
-      toast.error('Failed to add KRA goal: ' + error.message);
+      console.error('Failed to add KRA goal:', error);
     },
   });
 }
@@ -320,10 +548,9 @@ export function useUpdateKRAGoal() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['kra-template', data.template_id] });
       queryClient.invalidateQueries({ queryKey: ['kra-templates'] });
-      toast.success('KRA goal updated successfully');
     },
     onError: (error) => {
-      toast.error('Failed to update KRA goal: ' + error.message);
+      console.error('Failed to update KRA goal:', error);
     },
   });
 }
@@ -485,10 +712,9 @@ export function useCreateKRAAssignment() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['kra-assignments'] });
-      toast.success('KRA assigned successfully');
     },
     onError: (error) => {
-      toast.error('Failed to assign KRA: ' + error.message);
+      console.error('Failed to assign KRA:', error);
     },
   });
 }
@@ -509,10 +735,9 @@ export function useBulkCreateKRAAssignments() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['kra-assignments'] });
-      toast.success('KRA assigned to team members successfully');
     },
     onError: (error) => {
-      toast.error('Failed to assign KRA: ' + error.message);
+      console.error('Failed to assign KRA:', error);
     },
   });
 }
@@ -618,14 +843,12 @@ export function useBulkAssignKRATemplate() {
         return data;
       }
     },
-    onSuccess: (data, variables) => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['kra-assignments'] });
       queryClient.invalidateQueries({ queryKey: ['template-assignments', variables.templateId] });
-      const action = variables.mode === 'reassign' ? 'reassigned' : 'assigned';
-      toast.success(`KRA template ${action} successfully to ${data.length} employee(s)`);
     },
     onError: (error) => {
-      toast.error('Failed to assign KRA template: ' + error.message);
+      console.error('Failed to assign KRA template:', error);
     },
   });
 }
@@ -662,10 +885,9 @@ export function useUpdateKRAEvaluation() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['kra-assignment-details', data.assignment_id] });
       queryClient.invalidateQueries({ queryKey: ['my-kra-assignments'] });
-      toast.success('Evaluation updated successfully');
     },
     onError: (error) => {
-      toast.error('Failed to update evaluation: ' + error.message);
+      console.error('Failed to update evaluation:', error);
     },
   });
 }
@@ -734,10 +956,9 @@ export function useCreateKRACategory() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['kra-categories'] });
-      toast.success('Category created successfully');
     },
     onError: (error) => {
-      toast.error('Failed to create category: ' + error.message);
+      console.error('Failed to create category:', error);
     },
   });
 }

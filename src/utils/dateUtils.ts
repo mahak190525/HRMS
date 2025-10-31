@@ -181,3 +181,22 @@ export default {
   compareISTDates,
   getISTDateRange
 };
+
+// Helper function to sanitize date values for database operations
+export const sanitizeDateValue = (dateValue: string | null | undefined): string | null => {
+  if (!dateValue || dateValue === '') {
+    return null;
+  }
+  return dateValue;
+};
+
+// Helper function to sanitize multiple date fields in an object
+export const sanitizeDateFields = (data: Record<string, any>, dateFields: string[]): Record<string, any> => {
+  const sanitized = { ...data };
+  dateFields.forEach(field => {
+    if (field in sanitized) {
+      sanitized[field] = sanitizeDateValue(sanitized[field]);
+    }
+  });
+  return sanitized;
+};

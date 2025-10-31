@@ -26,7 +26,7 @@ import {
   Download,
   RefreshCw
 } from 'lucide-react';
-import { parseISO, isWithinInterval } from 'date-fns';
+import { parseISO } from 'date-fns';
 import { toast } from 'sonner';
 
 // Import KRA hooks and types
@@ -39,8 +39,8 @@ import { supabase } from '@/services/supabase';
 
 interface PerformanceFilters {
   employeeId: string;
-  startDate: string;
-  endDate: string;
+  evaluationStartDate: string;
+  evaluationEndDate: string;
   status: string;
 }
 
@@ -59,8 +59,8 @@ export function PerformanceOverview() {
   // State for filters
   const [filters, setFilters] = useState<PerformanceFilters>({
     employeeId: '',
-    startDate: '',
-    endDate: '',
+    evaluationStartDate: '',
+    evaluationEndDate: '',
     status: ''
   });
 
@@ -76,8 +76,8 @@ export function PerformanceOverview() {
     isLoading: metricsLoading 
   } = usePerformanceMetrics({
     employeeId: filters.employeeId,
-    startDate: filters.startDate,
-    endDate: filters.endDate
+    startDate: filters.evaluationStartDate,
+    endDate: filters.evaluationEndDate
   });
 
 
@@ -168,26 +168,30 @@ export function PerformanceOverview() {
         return false;
       }
 
-      // Date range filter
-      if (filters.startDate || filters.endDate) {
-        const assignmentDate = assignment.assigned_date;
-        if (!assignmentDate) return false;
-
-        const date = parseISO(assignmentDate);
+      // Evaluation period date range filter
+      if ((filters.evaluationStartDate || filters.evaluationEndDate) && assignment.template) {
+        const templateStart = assignment.template.evaluation_period_start;
+        const templateEnd = assignment.template.evaluation_period_end;
         
-        if (filters.startDate && filters.endDate) {
-          const startDate = parseISO(filters.startDate);
-          const endDate = parseISO(filters.endDate);
+        if (!templateStart || !templateEnd) return false;
+
+        const evalStart = parseISO(templateStart);
+        const evalEnd = parseISO(templateEnd);
+        
+        if (filters.evaluationStartDate && filters.evaluationEndDate) {
+          const filterStart = parseISO(filters.evaluationStartDate);
+          const filterEnd = parseISO(filters.evaluationEndDate);
           
-          if (!isWithinInterval(date, { start: startDate, end: endDate })) {
+          // Check if evaluation period overlaps with filter range
+          if (evalEnd < filterStart || evalStart > filterEnd) {
             return false;
           }
-        } else if (filters.startDate) {
-          const startDate = parseISO(filters.startDate);
-          if (date < startDate) return false;
-        } else if (filters.endDate) {
-          const endDate = parseISO(filters.endDate);
-          if (date > endDate) return false;
+        } else if (filters.evaluationStartDate) {
+          const filterStart = parseISO(filters.evaluationStartDate);
+          if (evalEnd < filterStart) return false;
+        } else if (filters.evaluationEndDate) {
+          const filterEnd = parseISO(filters.evaluationEndDate);
+          if (evalStart > filterEnd) return false;
         }
       }
 
@@ -300,13 +304,14 @@ export function PerformanceOverview() {
         const goalId = evaluation.goal.goal_id;
         const goalTitle = evaluation.goal.strategic_goal_title;
         const shortGoalTitle = goalTitle.length > 30 ? goalTitle.substring(0, 30) + '...' : goalTitle;
+        const quarter = evaluation.quarter || 'Q1'; // Get the specific quarter
         
         const maxPossiblePoints = evaluation.goal.level_5_points || evaluation.goal.max_score || 100;
-        const awardedPoints = evaluation.awarded_points || 0;
+        const awardedPoints = evaluation.awarded_marks || 0; // Use awarded_marks (level points) instead of awarded_points
         const percentage = maxPossiblePoints > 0 ? (awardedPoints / maxPossiblePoints) * 100 : 0;
         
-        // Create a unique display name combining goal ID, period, and employee
-        const displayName = `${goalId} - ${kraPeriod}`;
+        // Create a unique display name combining goal ID, period, and quarter
+        const displayName = `${goalId} - ${kraPeriod} - ${quarter}`;
         
         chartData.push({
           displayName: displayName, // Unique key for X-axis
@@ -314,6 +319,7 @@ export function PerformanceOverview() {
           goalTitle: goalTitle,
           shortGoalTitle: shortGoalTitle,
           kraPeriod: kraPeriod,
+          quarter: quarter, // Add quarter information
           employeeName: employeeName,
           points: awardedPoints,
           maxPoints: maxPossiblePoints,
@@ -326,7 +332,7 @@ export function PerformanceOverview() {
       });
     });
 
-    // Sort by goal ID first, then by KRA period for consistent ordering
+    // Sort by goal ID first, then by KRA period, then by quarter for consistent ordering
     return chartData
       .sort((a, b) => {
         // First sort by goal ID
@@ -334,76 +340,121 @@ export function PerformanceOverview() {
         if (goalIdCompare !== 0) return goalIdCompare;
         
         // Then by KRA period
-        return a.kraPeriod.localeCompare(b.kraPeriod);
+        const periodCompare = a.kraPeriod.localeCompare(b.kraPeriod);
+        if (periodCompare !== 0) return periodCompare;
+        
+        // Finally by quarter (Q1, Q2, Q3, Q4)
+        const quarterOrder = { 'Q1': 1, 'Q2': 2, 'Q3': 3, 'Q4': 4 };
+        return (quarterOrder[a.quarter as keyof typeof quarterOrder] || 0) - (quarterOrder[b.quarter as keyof typeof quarterOrder] || 0);
       })
       .slice(0, 25); // Show more data points to see progression
   }, [filteredAssignments, getGoalColor]);
 
-  // Process progression over time data - showing how each goal performs across different KRA periods
+  // Process progression over time data - showing cumulative goal performance across quarters
   const progressionData = useMemo(() => {
-    // Group evaluations by goal and KRA period
+    // Group evaluations by goal and track cumulative performance across quarters
     const goalProgressionMap = new Map<string, Map<string, any>>();
     
     filteredAssignments.forEach((assignment) => {
       if (!assignment.evaluations || assignment.evaluations.length === 0) return;
       
-      const kraSheetName = assignment.template?.template_name || 'Unknown';
+      const templateName = assignment.template?.template_name || 'Unknown Template';
+      const employeeName = assignment.employee?.full_name || 'Unknown Employee';
+      
+      // Group evaluations by goal and quarter
+      const goalQuarterMap = new Map<string, Map<string, any>>();
       
       assignment.evaluations.forEach((evaluation: any) => {
-        if (!evaluation.goal) return;
+        if (!evaluation.goal || !evaluation.quarter) return;
         
         const goalId = evaluation.goal.goal_id;
         const goalTitle = evaluation.goal.strategic_goal_title;
+        const quarter = evaluation.quarter;
         
-        // Ensure we're getting the correct max points - prefer level_5_points
+        if (!goalQuarterMap.has(goalId)) {
+          goalQuarterMap.set(goalId, new Map());
+        }
+        
         const maxPossiblePoints = evaluation.goal.level_5_points || evaluation.goal.max_score || 100;
         const awardedPoints = evaluation.awarded_points || 0;
+        const awardedMarks = evaluation.awarded_marks || 0; // This is what the manager actually awarded
         const percentage = maxPossiblePoints > 0 ? (awardedPoints / maxPossiblePoints) * 100 : 0;
         
-        if (!goalProgressionMap.has(goalId)) {
-          goalProgressionMap.set(goalId, new Map());
-        }
+        goalQuarterMap.get(goalId)!.set(quarter, {
+          goalId,
+          goalTitle,
+          quarter,
+          percentage,
+          awardedPoints,
+          awardedMarks, // Manager's awarded marks/points
+          maxPossiblePoints,
+          templateName,
+          employeeName
+        });
+      });
+      
+      // Store individual quarterly awarded marks for each goal
+      goalQuarterMap.forEach((quarterMap, goalId) => {
+        const quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
         
-        const goalData = goalProgressionMap.get(goalId)!;
-        
-        // Only set if this KRA sheet doesn't already have this goal (prevent duplicates)
-        if (!goalData.has(kraSheetName)) {
-          goalData.set(kraSheetName, {
-            goalId,
-            goalTitle,
-            kraSheet: kraSheetName,
-            points: awardedPoints,
-            maxPoints: maxPossiblePoints,
-            percentage: percentage,
-            weight: evaluation.goal.weight || 0,
-            evaluationId: evaluation.id
-          });
-        }
+        quarters.forEach(quarter => {
+          const quarterData = quarterMap.get(quarter);
+          if (quarterData) {
+            const periodKey = `${templateName} - ${quarter}`;
+            
+            if (!goalProgressionMap.has(goalId)) {
+              goalProgressionMap.set(goalId, new Map());
+            }
+            
+            goalProgressionMap.get(goalId)!.set(periodKey, {
+              goalId,
+              goalTitle: quarterData.goalTitle,
+              quarter,
+              periodKey,
+              quarterAwardedMarks: quarterData.awardedMarks,
+              quarterMaxMarks: quarterData.maxPossiblePoints || 100,
+              templateName,
+              employeeName
+            });
+          }
+        });
       });
     });
     
     // Convert to array format for line chart
-    // Create a list of all KRA periods
-    const allKraPeriods = new Set<string>();
-    filteredAssignments.forEach(a => {
-      if (a.template?.template_name) {
-        allKraPeriods.add(a.template.template_name);
-      }
+    const allPeriods = new Set<string>();
+    goalProgressionMap.forEach((periodMap) => {
+      periodMap.forEach((_, periodKey) => {
+        allPeriods.add(periodKey);
+      });
     });
     
-    const sortedPeriods = Array.from(allKraPeriods).sort();
+    const sortedPeriods = Array.from(allPeriods).sort((a, b) => {
+      // Sort by template name first, then by quarter
+      const [templateA, quarterA] = a.split(' - ');
+      const [templateB, quarterB] = b.split(' - ');
+      
+      if (templateA !== templateB) {
+        return templateA.localeCompare(templateB);
+      }
+      
+      // Sort quarters in order Q1, Q2, Q3, Q4
+      const quarterOrder = { 'Q1': 1, 'Q2': 2, 'Q3': 3, 'Q4': 4 };
+      return (quarterOrder[quarterA as keyof typeof quarterOrder] || 0) - (quarterOrder[quarterB as keyof typeof quarterOrder] || 0);
+    });
     
-    // Build chart data with one data point per KRA period
+    // Build chart data with one data point per period
     const chartData = sortedPeriods.map(period => {
       const dataPoint: any = { kraSheet: period };
       
       goalProgressionMap.forEach((periodMap, goalId) => {
         const goalData = periodMap.get(period);
         if (goalData) {
-          dataPoint[goalId] = goalData.percentage;
+          dataPoint[goalId] = goalData.quarterAwardedMarks;
           dataPoint[`${goalId}_goalTitle`] = goalData.goalTitle;
-          dataPoint[`${goalId}_points`] = goalData.points;
-          dataPoint[`${goalId}_maxPoints`] = goalData.maxPoints;
+          dataPoint[`${goalId}_quarter`] = goalData.quarter;
+          dataPoint[`${goalId}_quarterMarks`] = goalData.quarterAwardedMarks;
+          dataPoint[`${goalId}_quarterMaxMarks`] = goalData.quarterMaxMarks;
         }
       });
       
@@ -415,8 +466,8 @@ export function PerformanceOverview() {
       const firstEntry = Array.from(periodMap.values())[0];
       return {
         goalId,
-        goalTitle: firstEntry.goalTitle,
-        color: getGoalColor(firstEntry.goalTitle) // Use strategic goal title for color
+        goalTitle: `${goalId}: ${firstEntry.goalTitle}`,
+        color: getGoalColor(firstEntry.goalTitle) // Use goal title for color
       };
     });
     
@@ -432,8 +483,8 @@ export function PerformanceOverview() {
   const clearFilters = () => {
     setFilters({
       employeeId: '',
-      startDate: '',
-      endDate: '',
+      evaluationStartDate: '',
+      evaluationEndDate: '',
       status: ''
     });
   };
@@ -485,12 +536,11 @@ export function PerformanceOverview() {
             {/* Employee Filter */}
             <div className="space-y-2">
               <Label htmlFor="employee-filter">Employee</Label>
-              <Select value={filters.employeeId || 'all'} onValueChange={(value) => handleFilterChange('employeeId', value === 'all' ? '' : value)}>
+              <Select value={filters.employeeId} onValueChange={(value) => handleFilterChange('employeeId', value)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="All employees" />
+                  <SelectValue placeholder="Select employee" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All employees</SelectItem>
                   {availableEmployees.length === 0 ? (
                     <SelectItem value="no-employees" disabled>
                       No employees available
@@ -506,37 +556,36 @@ export function PerformanceOverview() {
               </Select>
             </div>
 
-            {/* Start Date Filter */}
+            {/* Evaluation Start Date Filter */}
             <div className="space-y-2">
-              <Label htmlFor="start-date">Start Date</Label>
+              <Label htmlFor="evaluation-start-date">Evaluation Start Date</Label>
               <Input
-                id="start-date"
+                id="evaluation-start-date"
                 type="date"
-                value={filters.startDate}
-                onChange={(e) => handleFilterChange('startDate', e.target.value)}
+                value={filters.evaluationStartDate}
+                onChange={(e) => handleFilterChange('evaluationStartDate', e.target.value)}
               />
             </div>
 
-            {/* End Date Filter */}
+            {/* Evaluation End Date Filter */}
             <div className="space-y-2">
-              <Label htmlFor="end-date">End Date</Label>
+              <Label htmlFor="evaluation-end-date">Evaluation End Date</Label>
               <Input
-                id="end-date"
+                id="evaluation-end-date"
                 type="date"
-                value={filters.endDate}
-                onChange={(e) => handleFilterChange('endDate', e.target.value)}
+                value={filters.evaluationEndDate}
+                onChange={(e) => handleFilterChange('evaluationEndDate', e.target.value)}
               />
             </div>
 
             {/* Status Filter */}
             <div className="space-y-2">
               <Label htmlFor="status-filter">Status</Label>
-              <Select value={filters.status || 'all'} onValueChange={(value) => handleFilterChange('status', value === 'all' ? '' : value)}>
+              <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="All statuses" />
+                  <SelectValue placeholder="Select status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem>
                   <SelectItem value="assigned">Assigned</SelectItem>
                   <SelectItem value="in_progress">In Progress</SelectItem>
                   <SelectItem value="submitted">Submitted</SelectItem>
@@ -658,7 +707,7 @@ export function PerformanceOverview() {
                   />
                   <YAxis 
                     domain={[0, 100]} 
-                    label={{ value: 'Performance %', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: '#000000' } }}
+                    label={{ value: 'Cumulative Performance %', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: '#000000' } }}
                     stroke="#000000"
                     tick={{ fill: '#000000' }}
                   />
@@ -754,6 +803,7 @@ export function PerformanceOverview() {
                             <p className="text-sm text-gray-900 mb-2">{data.goalTitle}</p>
                             <div className="border-t border-gray-200 pt-2 space-y-1">
                               <p className="text-sm text-gray-600">{`KRA Period: ${data.kraPeriod}`}</p>
+                              <p className="text-sm text-gray-600">{`Quarter: ${data.quarter}`}</p>
                               <p className="text-sm text-gray-500">{`Employee: ${data.employeeName}`}</p>
                               <p className="text-sm font-medium text-gray-700">{`Points: ${data.points}/${data.maxPoints}`}</p>
                               <p className="text-sm text-gray-700">{`Percentage: ${data.percentage.toFixed(1)}%`}</p>
@@ -795,21 +845,42 @@ export function PerformanceOverview() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5" />
-            Goal Progression Over Time
+            Goal Points Progression
           </CardTitle>
           <CardDescription>
-            Track how each goal's performance evolves across different KRA periods
+            Track individual goal performance points awarded by managers each quarter
           </CardDescription>
         </CardHeader>
         <CardContent>
           {progressionData.chartData.length > 0 && progressionData.goalsList.length > 0 ? (
-            <div className="h-96">
+            <>
+              {/* Debug info - remove in production */}
+              {/* <div className="mb-4 p-2 bg-gray-50 rounded text-xs text-gray-600">
+                <p>Chart Data Points: {progressionData.chartData.length}</p>
+                <p>Goals: {progressionData.goalsList.length}</p>
+                <p>Goals: {progressionData.goalsList.map(g => g.goalTitle).join(', ')}</p>
+              </div> */}
+              {/* Legend outside chart for better space utilization */}
+              <div className="mb-4 flex flex-wrap gap-3">
+                {progressionData.goalsList.map(goal => (
+                  <div key={goal.goalId} className="flex items-center gap-2 text-sm">
+                    <div 
+                      className="w-4 h-1 rounded"
+                      style={{ backgroundColor: goal.color }}
+                    />
+                    <span className="text-gray-700">
+                      {goal.goalTitle.length > 25 ? goal.goalTitle.substring(0, 25) + '...' : goal.goalTitle}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="h-[500px]">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart 
                   data={progressionData.chartData} 
-                  margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                  margin={{ top: 20, right: 30, left: 60, bottom: 20 }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#d1d5db" opacity={0.7} />
                   <XAxis 
                     dataKey="kraSheet" 
                     angle={-45}
@@ -820,8 +891,8 @@ export function PerformanceOverview() {
                     tick={{ fill: '#000000' }}
                   />
                   <YAxis 
-                    domain={[0, 100]}
-                    label={{ value: 'Performance %', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: '#000000' } }}
+                    domain={[0, 'dataMax']}
+                    label={{ value: 'Points Awarded', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: '#000000' } }}
                     stroke="#000000"
                     tick={{ fill: '#000000' }}
                   />
@@ -830,20 +901,18 @@ export function PerformanceOverview() {
                       if (active && payload && payload.length) {
                         return (
                           <div className="bg-white/95 p-3 border border-gray-200 rounded-lg shadow-lg max-w-xs">
-                            <p className="font-medium text-gray-800 mb-2">{`KRA Period: ${label}`}</p>
+                            <p className="font-medium text-gray-800 mb-2">{`Period: ${label}`}</p>
                             {payload.map((entry: any, index: number) => {
                               const goalId = entry.dataKey;
-                              const goalTitle = entry.payload[`${goalId}_goalTitle`] || goalId;
-                              const points = entry.payload[`${goalId}_points`] || 0;
-                              const maxPoints = entry.payload[`${goalId}_maxPoints`] || 0;
+                              const quarterMaxMarks = entry.payload[`${goalId}_quarterMaxMarks`] || 0;
                               
                               return (
                                 <div key={index} className="mb-1">
                                   <p className="text-sm font-medium" style={{ color: entry.color }}>
-                                    {goalTitle}
+                                    {goalId}
                                   </p>
                                   <p className="text-xs text-gray-700">
-                                    {`${entry.value?.toFixed(1)}% (${points}/${maxPoints} points)`}
+                                    {`Points: ${entry.value}/${quarterMaxMarks}`}
                                   </p>
                                 </div>
                               );
@@ -854,29 +923,35 @@ export function PerformanceOverview() {
                       return null;
                     }}
                   />
-                  <Legend 
-                    wrapperStyle={{ paddingTop: '20px', color: '#000000' }}
-                    formatter={(value) => {
-                      const goal = progressionData.goalsList.find(g => g.goalId === value);
-                      return goal ? goal.goalTitle : value;
-                    }}
-                  />
                   {progressionData.goalsList.map(goal => (
                     <Line
                       key={goal.goalId}
                       type="monotone"
                       dataKey={goal.goalId}
                       stroke={goal.color}
-                      strokeWidth={3}
-                      dot={{ fill: goal.color, r: 5, stroke: goal.color, strokeWidth: 2 }}
-                      activeDot={{ r: 7, stroke: goal.color, strokeWidth: 2 }}
+                      strokeWidth={4}
+                      dot={{ 
+                        fill: goal.color, 
+                        r: 6, 
+                        stroke: '#ffffff', 
+                        strokeWidth: 2,
+                        fillOpacity: 1
+                      }}
+                      activeDot={{ 
+                        r: 10, 
+                        stroke: goal.color, 
+                        strokeWidth: 3,
+                        fill: '#ffffff',
+                        fillOpacity: 1
+                      }}
                       connectNulls={false}
                       name={goal.goalId}
                     />
                   ))}
                 </LineChart>
               </ResponsiveContainer>
-            </div>
+              </div>
+            </>
           ) : (
             <div className="flex items-center justify-center h-48 text-muted-foreground">
               <div className="text-center">

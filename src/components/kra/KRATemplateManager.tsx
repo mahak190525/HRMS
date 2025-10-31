@@ -1,8 +1,18 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { 
   Plus, 
   Eye, 
@@ -11,17 +21,16 @@ import {
   Users, 
   Calendar,
   Target,
-  FileText
+  FileText,
+  Trash2
 } from 'lucide-react';
 import { formatDateForDisplay } from '@/utils/dateUtils';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import type { KRATemplate } from '@/hooks/useKRA'
+import { useDeleteKRATemplate, useCopyKRATemplate } from '@/hooks/useKRA';
 import type { KRAPermissions } from '@/hooks/useKRAPermissions';
-import { useCreateKRATemplate, useUpdateKRATemplate, useTeamMembers, useBulkAssignKRATemplate, useTemplateAssignments, useCreateKRAGoal, useUpdateKRAGoal } from '@/hooks/useKRA';
-import { KRATemplateForm } from './KRATemplateForm';
-import { KRATemplateDetails } from './KRATemplateDetails';
-import { KRAAssignDialog } from './KRAAssignDialog';
+import { toast } from 'sonner';
 
 interface KRATemplateManagerProps {
   templates: KRATemplate[];
@@ -31,21 +40,12 @@ interface KRATemplateManagerProps {
 
 export function KRATemplateManager({ templates, isLoading, permissions }: KRATemplateManagerProps) {
   const { user } = useAuth();
-  const [selectedTemplate, setSelectedTemplate] = useState<KRATemplate | null>(null);
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
-  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
-
-  const createTemplate = useCreateKRATemplate();
-  const updateTemplate = useUpdateKRATemplate();
-  const { data: teamMembers } = useTeamMembers();
-  const bulkAssignTemplate = useBulkAssignKRATemplate();
-  const createGoal = useCreateKRAGoal();
-  const updateGoal = useUpdateKRAGoal();
+  const navigate = useNavigate();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [templateToDelete, setTemplateToDelete] = useState<KRATemplate | null>(null);
   
-  // Get existing assignments for the selected template
-  const { data: existingAssignments } = useTemplateAssignments(selectedTemplate?.id || '');
+  const deleteTemplateMutation = useDeleteKRATemplate();
+  const copyTemplateMutation = useCopyKRATemplate();
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -62,200 +62,67 @@ export function KRATemplateManager({ templates, isLoading, permissions }: KRATem
     }
   };
 
-  const handleCreateTemplate = async (templateData: Partial<KRATemplate> & { goals?: any[] }) => {
-    try {
-      const { goals, ...template } = templateData;
-      
-      // Create template first
-      const newTemplate = await createTemplate.mutateAsync({
-        ...template,
-        created_by: user?.id,
-        department_id: user?.department_id,
-      });
-
-      // Create goals if provided
-      if (goals && goals.length > 0 && newTemplate?.id) {
-        for (const goal of goals) {
-          // Check required fields: goal_id, strategic_goal_title, smart_goal, weight, target
-          const hasRequiredFields = goal.goal_id && 
-                                   goal.strategic_goal_title && 
-                                   goal.smart_goal && 
-                                   goal.weight && 
-                                   goal.target;
-          
-          if (hasRequiredFields) {
-            const goalData = {
-              ...goal,
-              template_id: newTemplate.id,
-              id: undefined, // Remove any temporary IDs
-              tempId: undefined,
-              isNew: undefined,
-            };
-            
-            await createGoal.mutateAsync(goalData);
-          }
-        }
-      }
-      
-      setIsCreateDialogOpen(false);
-    } catch (error) {
-      console.error('Error creating template or goals:', error);
-      throw error; // Re-throw to let the mutation handle it
-    }
+  const handleCreateTemplate = () => {
+    navigate('/performance/kra/template/new?mode=create');
   };
 
-  const handleUpdateTemplate = async (templateData: Partial<KRATemplate> & { goals?: any[] }) => {
-    if (!selectedTemplate) return;
-    
-    const { goals, ...template } = templateData;
-    
-    // Update template first
-    await updateTemplate.mutateAsync({
-      id: selectedTemplate.id,
-      ...template,
-    });
-
-    // Handle goals update/create/delete
-    if (goals && selectedTemplate.id) {
-      
-      for (const goal of goals) {
-        // Check required fields: goal_id, strategic_goal_title, smart_goal, weight, target
-        const hasRequiredFields = goal.goal_id && 
-                                 goal.strategic_goal_title && 
-                                 goal.smart_goal && 
-                                 goal.weight && 
-                                 goal.target;
-        
-        if (hasRequiredFields) {
-          if (goal.id && !(goal as any).isNew) {
-            // Update existing goal
-            await updateGoal.mutateAsync({
-              id: goal.id,
-              ...goal,
-              template_id: selectedTemplate.id,
-              tempId: undefined,
-              isNew: undefined,
-            });
-          } else {
-            // Create new goal
-            await createGoal.mutateAsync({
-              ...goal,
-              template_id: selectedTemplate.id,
-              id: undefined,
-              tempId: undefined,
-              isNew: undefined,
-            });
-          }
-        } else {
-          console.warn('Skipping goal - missing required fields:', {
-            goal_id: goal.goal_id,
-            strategic_goal_title: goal.strategic_goal_title,
-            smart_goal: goal.smart_goal,
-            weight: goal.weight,
-            target: goal.target
-          });
-        }
-      }
-      
-      // Note: For now, we'll skip deleting goals to avoid data loss
-      // In a production system, you'd want to implement soft deletes or
-      // proper goal deletion handling
-    }
-    
-    setIsEditDialogOpen(false);
-    setSelectedTemplate(null);
+  const handleViewTemplate = (template: KRATemplate) => {
+    navigate(`/performance/kra/template/${template.id}?mode=view`);
   };
 
-  const handlePublishTemplate = async (templateId: string, selectedEmployees: string[], dueDate: string, mode: 'assign' | 'reassign' = 'assign') => {
-    const assignments = selectedEmployees.map(employeeId => ({
-      employeeId,
-      dueDate,
-      assignedBy: user?.id!,
-    }));
-
-    await bulkAssignTemplate.mutateAsync({
-      templateId,
-      assignments,
-      mode,
-    });
-    
-    // Only update template status to active on first publish (not reassignment)
-    if (mode === 'assign') {
-      await updateTemplate.mutateAsync({
-        id: templateId,
-        status: 'active',
-      });
-    }
-    
-    setIsAssignDialogOpen(false);
-    setSelectedTemplate(null);
+  const handleEditTemplate = (template: KRATemplate) => {
+    navigate(`/performance/kra/template/${template.id}?mode=edit`);
   };
 
-  const handleDuplicateTemplate = async (template: KRATemplate) => {
+  const handleCopyTemplate = async (template: KRATemplate) => {
     if (!user?.id) {
-      console.error('User not found');
+      toast.error('User not authenticated');
       return;
     }
-
-    const duplicatedTemplate = {
-      template_name: `${template.template_name} (Copy)`,
-      description: template.description,
-      evaluation_period_start: template.evaluation_period_start,
-      evaluation_period_end: template.evaluation_period_end,
-      status: 'draft' as const,
-      total_weight: template.total_weight,
-      created_by: user.id,
-    };
-
+    
     try {
-      const newTemplate = await createTemplate.mutateAsync(duplicatedTemplate);
-      
-      // Copy goals if they exist
-      if (template.goals && template.goals.length > 0) {
-        for (const goal of template.goals) {
-          const duplicatedGoal = {
-            template_id: newTemplate.id,
-            goal_id: goal.goal_id,
-            strategic_goal_title: goal.strategic_goal_title,
-            category_id: goal.category_id,
-            smart_goal: goal.smart_goal,
-            weight: goal.weight,
-            max_score: goal.max_score,
-            target: goal.target,
-            dependencies: goal.dependencies,
-            level_1_marks: goal.level_1_marks,
-            level_2_marks: goal.level_2_marks,
-            level_3_marks: goal.level_3_marks,
-            level_4_marks: goal.level_4_marks,
-            level_5_marks: goal.level_5_marks,
-            level_1_points: goal.level_1_points,
-            level_2_points: goal.level_2_points,
-            level_3_points: goal.level_3_points,
-            level_4_points: goal.level_4_points,
-            level_5_points: goal.level_5_points,
-            level_1_rating: goal.level_1_rating,
-            level_2_rating: goal.level_2_rating,
-            level_3_rating: goal.level_3_rating,
-            level_4_rating: goal.level_4_rating,
-            level_5_rating: goal.level_5_rating,
-            manager_comments: goal.manager_comments,
-            display_order: goal.display_order,
-          };
-          
-          await createGoal.mutateAsync(duplicatedGoal);
-        }
-      }
-      
-      // Success feedback is handled by the useCreateKRATemplate hook's onSuccess callback
-    } catch (error) {
-      console.error('Failed to duplicate template:', error);
-      // Error feedback is handled by the useCreateKRATemplate hook's onError callback
+      const newTemplate = await copyTemplateMutation.mutateAsync({ 
+        templateId: template.id, 
+        currentUserId: user.id 
+      });
+      toast.success(`Template "${template.template_name}" copied successfully as "${newTemplate.template_name}"`);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to copy template');
+      console.error('Copy failed:', error);
     }
+  };
+
+  const handleDeleteTemplate = (template: KRATemplate) => {
+    setTemplateToDelete(template);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!templateToDelete) return;
+    
+    try {
+      const result = await deleteTemplateMutation.mutateAsync(templateToDelete.id);
+      if (result.archived) {
+        toast.success('Template archived successfully (it had assignments and could not be deleted)');
+      } else {
+        toast.success('Template deleted successfully');
+      }
+      setDeleteDialogOpen(false);
+      setTemplateToDelete(null);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete template');
+      console.error('Delete failed:', error);
+    }
+  };
+
+  const cancelDelete = () => {
+    setDeleteDialogOpen(false);
+    setTemplateToDelete(null);
   };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-8">
+      <div className="flex items-center justify-center py-12">
         <LoadingSpinner size="lg" />
       </div>
     );
@@ -263,108 +130,125 @@ export function KRATemplateManager({ templates, isLoading, permissions }: KRATem
 
   return (
     <div className="space-y-6">
-      {/* Header Actions */}
+      {/* Header with Create Button */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          {permissions.canCreateTemplates && !permissions.isReadOnly && (
-            <Button onClick={() => setIsCreateDialogOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">KRA Templates</h2>
+          <p className="text-muted-foreground">
+            Create and manage KRA templates with quarterly due dates for your team
+          </p>
+        </div>
+        {permissions.canCreateTemplates && (
+          <Button onClick={handleCreateTemplate} className="flex items-center gap-2">
+            <Plus className="h-4 w-4" />
               Create Template
             </Button>
           )}
-        </div>
       </div>
 
       {/* Templates Grid */}
       {templates.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {templates.map((template) => (
-            <Card key={template.id} className="relative flex flex-col h-full">
+            <Card key={template.id} className="hover:shadow-md transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg">{template.template_name}</CardTitle>
-                    <CardDescription className="mt-1">
-                      {template.description || 'No description'}
-                    </CardDescription>
+                  <div className="space-y-1">
+                    <CardTitle className="text-lg line-clamp-2">
+                      {template.template_name}
+                    </CardTitle>
+                    <Badge className={getStatusColor(template.status)}>
+                      {template.status.charAt(0).toUpperCase() + template.status.slice(1)}
+                    </Badge>
                   </div>
-                  <Badge className={getStatusColor(template.status)}>
-                    {template.status}
-                  </Badge>
                 </div>
+                {template.description && (
+                  <CardDescription className="line-clamp-2">
+                    {template.description}
+                  </CardDescription>
+                )}
               </CardHeader>
               
-              <CardContent className="space-y-4 flex-1 flex flex-col justify-between">
-                <div className="space-y-2 text-sm text-muted-foreground">
+              <CardContent className="space-y-4">
+                {/* Template Stats */}
+                <div className="grid grid-cols-2 gap-4 text-sm">
                   <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    <span>
-                      {formatDateForDisplay(template.evaluation_period_start, 'MMM dd')} - {formatDateForDisplay(template.evaluation_period_end, 'MMM dd, yyyy')}
+                    <Target className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Goals:</span>
+                    <span className="font-medium">{template.goals?.length || 0}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Period:</span>
+                    <span className="font-medium text-xs">
+                      {formatDateForDisplay(template.evaluation_period_start, 'MMM')} - {formatDateForDisplay(template.evaluation_period_end, 'MMM yyyy')}
                     </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Target className="h-4 w-4" />
-                    <span>{template.goals?.length || 0} goals</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    <span>Weight: {template.total_weight}%</span>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap 2xl:flex-nowrap items-center gap-2 pt-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setSelectedTemplate(template);
-                      setIsViewDialogOpen(true);
-                    }}
-                    className="flex-shrink-0"
-                  >
-                    <Eye className="h-4 w-4 mr-1" />
-                    View
-                  </Button>
-                  
-                  {permissions.canEditTemplates && !permissions.isReadOnly && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setSelectedTemplate(template);
-                        setIsEditDialogOpen(true);
-                      }}
-                      className="flex-shrink-0"
-                    >
-                      <Edit className="h-4 w-4 mr-1" />
-                      Edit
-                    </Button>
-                  )}
+                {/* Template Details */}
+                <div className="text-xs text-muted-foreground">
+                  <div>Created: {formatDateForDisplay(template.created_at)}</div>
+                  <div>By: {template.created_by_user?.full_name || 'Unknown'}</div>
+                </div>
 
-                  {permissions.canAssignKRA && !permissions.isReadOnly && (
+                {/* Action Buttons */}
+                <div className="flex items-center justify-between pt-2 border-t">
+                  <div className="flex items-center gap-1">
                     <Button
+                      variant="ghost"
                       size="sm"
-                      onClick={() => {
-                        setSelectedTemplate(template);
-                        setIsAssignDialogOpen(true);
-                      }}
-                      className="flex-shrink-0"
+                      onClick={() => handleViewTemplate(template)}
+                      className="flex items-center gap-1"
                     >
-                      <Users className="h-4 w-4 mr-1" />
-                      {template.status === 'draft' ? 'Publish' : 'Assign'}
+                      <Eye className="h-3 w-3" />
+                      View
                     </Button>
+                    
+                    {permissions.canCreateTemplates && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditTemplate(template)}
+                          className="flex items-center gap-1"
+                        >
+                          <Edit className="h-3 w-3" />
+                          Edit
+                        </Button>
+                        
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleCopyTemplate(template)}
+                          disabled={copyTemplateMutation.isPending}
+                          className="flex items-center gap-1"
+                        >
+                          <Copy className="h-3 w-3" />
+                          {copyTemplateMutation.isPending ? 'Copying...' : 'Copy'}
+                        </Button>
+                        
+                    <Button
+                          variant="ghost"
+                      size="sm"
+                          onClick={() => handleDeleteTemplate(template)}
+                          className="flex items-center gap-1 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Delete
+                    </Button>
+                      </>
                   )}
+                  </div>
 
-                  {permissions.canCreateTemplates && !permissions.isReadOnly && (
+                  {template.status === 'active' && (
                     <Button
                       size="sm"
-                      variant="outline"
-                      onClick={() => handleDuplicateTemplate(template)}
-                      className="flex-shrink-0"
-                      disabled={createTemplate.isPending || createGoal.isPending}
+                      onClick={() => navigate(`/performance/kra/template/${template.id}?mode=view&action=publish`)}
+                      className="flex items-center gap-1"
                     >
-                      <Copy className="h-4 w-4 mr-1" />
-                      {createTemplate.isPending ? 'Copying...' : 'Copy'}
+                      <Users className="h-3 w-3" />
+                      Publish
                     </Button>
                   )}
                 </div>
@@ -376,13 +260,16 @@ export function KRATemplateManager({ templates, isLoading, permissions }: KRATem
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No KRA Templates</h3>
-            <p className="text-muted-foreground text-center max-w-md mb-6">
-              Create your first KRA template to start managing your team's key result areas.
+            <h3 className="text-lg font-semibold mb-2">No Templates Found</h3>
+            <p className="text-muted-foreground text-center max-w-md mb-4">
+              {permissions.canCreateTemplates
+                ? 'Get started by creating your first KRA template with quarterly evaluation schedules.'
+                : 'No KRA templates have been created yet. Contact your manager or HR to create templates.'
+              }
             </p>
-            {permissions.canCreateTemplates && !permissions.isReadOnly && (
-              <Button onClick={() => setIsCreateDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
+            {permissions.canCreateTemplates && (
+              <Button onClick={handleCreateTemplate} className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
                 Create Your First Template
               </Button>
             )}
@@ -390,91 +277,32 @@ export function KRATemplateManager({ templates, isLoading, permissions }: KRATem
         </Card>
       )}
 
-      {/* Create Template Dialog */}
-      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Create KRA Template</DialogTitle>
-            <DialogDescription>
-              Create a new KRA template with goals and evaluation criteria for your team.
-            </DialogDescription>
-          </DialogHeader>
-          <KRATemplateForm
-            onSubmit={handleCreateTemplate}
-            onCancel={() => setIsCreateDialogOpen(false)}
-            isLoading={createTemplate.isPending}
-          />
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Template Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit KRA Template</DialogTitle>
-            <DialogDescription>
-              Modify the KRA template details and goals.
-            </DialogDescription>
-          </DialogHeader>
-          {selectedTemplate && (
-            <KRATemplateForm
-              template={selectedTemplate}
-              onSubmit={handleUpdateTemplate}
-              onCancel={() => {
-                setIsEditDialogOpen(false);
-                setSelectedTemplate(null);
-              }}
-              isLoading={updateTemplate.isPending}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* View Template Dialog */}
-      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>KRA Template Details</DialogTitle>
-            <DialogDescription>
-              View the complete KRA template with all goals and evaluation criteria.
-            </DialogDescription>
-          </DialogHeader>
-          {selectedTemplate && (
-            <KRATemplateDetails
-              template={selectedTemplate}
-              onClose={() => {
-                setIsViewDialogOpen(false);
-                setSelectedTemplate(null);
-              }}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Assign Template Dialog */}
-      <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Publish to Team Members</DialogTitle>
-            <DialogDescription>
-              Select team members to assign this KRA template and set a due date.
-            </DialogDescription>
-          </DialogHeader>
-          {selectedTemplate && (
-            <KRAAssignDialog
-              template={selectedTemplate}
-              teamMembers={teamMembers || []}
-              existingAssignments={existingAssignments || []}
-              onAssign={handlePublishTemplate}
-              onCancel={() => {
-                setIsAssignDialogOpen(false);
-                setSelectedTemplate(null);
-              }}
-              isLoading={bulkAssignTemplate.isPending}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Template</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the template "{templateToDelete?.template_name}"?
+            </AlertDialogDescription>
+            {templateToDelete && (
+              <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm">
+                <strong>Note:</strong> If this template has been assigned to employees, it will be archived instead of deleted to preserve data integrity.
+              </div>
+            )}
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelDelete}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={deleteTemplateMutation.isPending}
+            >
+              {deleteTemplateMutation.isPending ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

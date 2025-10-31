@@ -84,11 +84,25 @@ export function useEmployeeAttendance(userId: string, year?: number) {
 
 export function useAllEmployeesAttendance(year?: number, month?: number) {
   return useQuery({
-    queryKey: ['all-employees-attendance', year, month],
-    queryFn: () => employeeApi.getAllEmployeesAttendance(year, month),
+    queryKey: ['all-employees-attendance-second-db', year, month],
+    queryFn: () => employeeApi.getAllEmployeesAttendanceFromSecondDB(year, month),
     enabled: false, // Disable by default to prevent automatic loading
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    retry: 2, // Retry failed requests twice
   });
 }
+
+export function useEmployeeDaywiseAttendance(employeeId: string, year: number, month: number) {
+  return useQuery({
+    queryKey: ['employee-daywise-attendance', employeeId, year, month],
+    queryFn: () => employeeApi.getEmployeeDaywiseAttendance(employeeId, year, month),
+    enabled: false, // Disable by default to prevent automatic loading
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    retry: 2,
+  });
+}
+
+
 
 export function useUpdateUserPermissions() {
   const queryClient = useQueryClient();

@@ -2078,6 +2078,7 @@ function WorkInfoEdit({ form, departmentOptions, roleOptions, userOptions, emplo
                 </SelectTrigger>
               </FormControl>
               <SelectContent>
+                
                 <SelectItem value="none">No Manager</SelectItem>
                 {userOptions?.filter((user: any) => user.id !== employee?.id).map((user: any) => (
                   <SelectItem key={user.id} value={user.id}>

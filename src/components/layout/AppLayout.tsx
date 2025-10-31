@@ -28,6 +28,7 @@ export function AppLayout() {
     if (path.startsWith('/ats')) return dashboards.find(d => d.id === 'ats');
     if (path.startsWith('/lms')) return dashboards.find(d => d.id === 'lms');
     if (path.startsWith('/exit')) return dashboards.find(d => d.id === 'exit');
+    if (path.startsWith('/policies')) return dashboards.find(d => d.id === 'policies');
     return dashboards[0];
   };
 
@@ -41,7 +42,7 @@ export function AppLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-yellow-50 to-amber-100 relative">
+    <div className="h-screen bg-gradient-to-br from-orange-50 via-yellow-50 to-amber-100 relative overflow-hidden">
       {/* Floating background elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-20 w-32 h-32 bg-orange-200/30 rounded-full blur-xl"></div>
@@ -55,13 +56,13 @@ export function AppLayout() {
         currentDashboard={currentDashboard}
       />
       <main className={cn(
-        "transition-all duration-300 ease-in-out relative z-10",
-        sidebarCollapsed ? "ml-16" : "ml-64"
+        "transition-all duration-300 ease-in-out relative z-10 h-screen",
+        sidebarCollapsed ? "ml-20" : "ml-68"
       )}>
-        <div className="p-6 min-h-screen max-w-7xl mx-auto relative">
+        <div className="p-6 pr-4 h-full max-w-8xl mx-auto relative flex flex-col">
           <DashboardSwitcher />
-          <div className="mt-6">
-          <Outlet />
+          <div className="mt-6 flex-1 overflow-y-auto">
+            <Outlet />
           </div>
         </div>
       </main>
