@@ -9,6 +9,8 @@ import { usePolicyDashboardPermissions } from '@/hooks/usePolicyDashboardPermiss
 import { AllPoliciesPage } from './AllPoliciesPage';
 import { PolicyLogsPage } from './PolicyLogsPage';
 import { PolicyPermissionsPage } from './PolicyPermissionsPage';
+import { AssignPoliciesPage } from './AssignPoliciesPage';
+import { PolicyHistoryPage } from './PolicyHistoryPage';
 
 export const PolicyDashboard: React.FC = () => {
   const location = useLocation();
@@ -92,6 +94,14 @@ export const PolicyDashboard: React.FC = () => {
         );
       }
       return <PolicyPermissionsPage />;
+    }
+    
+    if (path === '/policies/assign') {
+      return <AssignPoliciesPage />;
+    }
+    
+    if (path === '/policies/history') {
+      return <PolicyHistoryPage />;
     }
     
     // Default to All Policies page for /policies

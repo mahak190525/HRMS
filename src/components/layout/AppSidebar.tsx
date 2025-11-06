@@ -56,7 +56,8 @@ import {
   SquareChartGantt,
   BanknoteArrowUp,
   Shield,
-  Activity
+  Activity,
+  Send
 } from 'lucide-react';
 
 const iconMap = {
@@ -94,7 +95,8 @@ const iconMap = {
   SquareChartGantt,
   BanknoteArrowUp,
   Shield,
-  Activity
+  Activity,
+  Send
 };
 
 interface AppSidebarProps {

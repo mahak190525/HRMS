@@ -383,7 +383,8 @@ export const AllPoliciesPage: React.FC = () => {
             </div>
           </ScrollArea>
         ) : (
-          <ScrollArea className="h-full">
+          <div className="h-full overflow-y-auto">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -455,7 +456,8 @@ export const AllPoliciesPage: React.FC = () => {
                 ))}
               </TableBody>
             </Table>
-          </ScrollArea>
+          </div>
+          </div>
         )}
       </div>
     </div>

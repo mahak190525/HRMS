@@ -580,90 +580,92 @@ export const PolicyLogsPage: React.FC = () => {
             </div>
           </div>
         ) : (
-          <ScrollArea className="h-full">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Policy</TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead>Changes</TableHead>
-                  <TableHead>Time</TableHead>
-                  <TableHead className="w-[100px]">Details</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredLogs.map(log => {
-                  const ActionIcon = ACTION_ICONS[log.action];
-                  const changesSummary = getChangesSummary(log);
-                  
-                  return (
-                    <TableRow key={log.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div className={cn(
-                            "p-1.5 rounded-full border",
-                            ACTION_COLORS[log.action]
-                          )}>
-                            <ActionIcon className="h-3 w-3" />
+          <div className="h-full overflow-y-auto">
+            <div className="overflow-x-auto">
+              <Table className="min-w-[800px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Action</TableHead>
+                    <TableHead>Policy</TableHead>
+                    <TableHead>User</TableHead>
+                    <TableHead>Changes</TableHead>
+                    <TableHead>Time</TableHead>
+                    <TableHead className="w-[100px]">Details</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredLogs.map(log => {
+                    const ActionIcon = ACTION_ICONS[log.action];
+                    const changesSummary = getChangesSummary(log);
+                    
+                    return (
+                      <TableRow key={log.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className={cn(
+                              "p-1.5 rounded-full border",
+                              ACTION_COLORS[log.action]
+                            )}>
+                              <ActionIcon className="h-3 w-3" />
+                            </div>
+                            <span className="capitalize font-medium">
+                              {ACTION_LABELS[log.action]}
+                            </span>
                           </div>
-                          <span className="capitalize font-medium">
-                            {ACTION_LABELS[log.action]}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{log.policy_name}</div>
-                          {log.policy_version && (
-                            <div className="text-xs text-gray-500">v{log.policy_version}</div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {log.user_full_name ? (
+                        </TableCell>
+                        <TableCell>
                           <div>
-                            <div className="font-medium">{log.user_full_name}</div>
-                            {log.user_email && (
-                              <div className="text-xs text-gray-500">{log.user_email}</div>
+                            <div className="font-medium">{log.policy_name}</div>
+                            {log.policy_version && (
+                              <div className="text-xs text-gray-500">v{log.policy_version}</div>
                             )}
                           </div>
-                        ) : (
-                          <span className="text-gray-500">System</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {changesSummary ? (
-                          <div className="text-sm text-gray-600 max-w-xs truncate">
-                            {changesSummary}
+                        </TableCell>
+                        <TableCell>
+                          {log.user_full_name ? (
+                            <div>
+                              <div className="font-medium">{log.user_full_name}</div>
+                              {log.user_email && (
+                                <div className="text-xs text-gray-500">{log.user_email}</div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-gray-500">System</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {changesSummary ? (
+                            <div className="text-sm text-gray-600 max-w-xs truncate">
+                              {changesSummary}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <div className="text-sm">{formatTimeAgo(log.created_at)}</div>
+                            <div className="text-xs text-gray-500">
+                              {new Date(log.created_at).toLocaleDateString()}
+                            </div>
                           </div>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <div className="text-sm">{formatTimeAgo(log.created_at)}</div>
-                          <div className="text-xs text-gray-500">
-                            {new Date(log.created_at).toLocaleDateString()}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </DialogTrigger>
-                          <LogDetailDialog log={log} />
-                        </Dialog>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                        </TableCell>
+                        <TableCell>
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <LogDetailDialog log={log} />
+                          </Dialog>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
             
             {hasMore && (
               <div className="p-4 text-center">
@@ -684,7 +686,7 @@ export const PolicyLogsPage: React.FC = () => {
                 </Button>
               </div>
             )}
-          </ScrollArea>
+          </div>
         )}
       </div>
     </div>
