@@ -357,6 +357,16 @@ function AppRoutes() {
             <PolicyDashboard />
           </GuardedRoute>
         } />
+        <Route path="policies/assign" element={
+          <GuardedRoute>
+            <PolicyDashboard />
+          </GuardedRoute>
+        } />
+        <Route path="policies/history" element={
+          <GuardedRoute>
+            <PolicyDashboard />
+          </GuardedRoute>
+        } />
         <Route path="policies/logs" element={
           <GuardedRoute>
             <PolicyDashboard />

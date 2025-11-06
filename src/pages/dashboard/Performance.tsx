@@ -81,7 +81,7 @@ export function Performance() {
       </div>
 
       {/* Performance Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      {/* <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">Overall Progress</CardTitle>
@@ -133,14 +133,14 @@ export function Performance() {
             <p className="text-xs text-muted-foreground">Average from peers</p>
           </CardContent>
         </Card>
-      </div>
+      </div> */}
 
-      <Tabs defaultValue="goals" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="goals">Goals</TabsTrigger>
+      <Tabs defaultValue="kra" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-1">
+          {/* <TabsTrigger value="goals">Goals</TabsTrigger>
           <TabsTrigger value="evaluations">Evaluations</TabsTrigger>
           <TabsTrigger value="appraisals">Appraisals</TabsTrigger>
-          <TabsTrigger value="feedback">Feedback</TabsTrigger>
+          <TabsTrigger value="feedback">Feedback</TabsTrigger> */}
           <TabsTrigger value="kra">KRA</TabsTrigger>
         </TabsList>
 

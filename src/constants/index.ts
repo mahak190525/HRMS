@@ -195,6 +195,8 @@ export const DASHBOARD_CONFIG = [
     color: 'blue',
     pages: [
       { id: 'all-policies', name: 'All Policies', slug: 'all-policies', path: '/policies', icon: 'FileText' },
+      { id: 'assign', name: 'Assign Policies', slug: 'assign', path: '/policies/assign', icon: 'Send' },
+      { id: 'history', name: 'History', slug: 'history', path: '/policies/history', icon: 'History' },
       { id: 'logs', name: 'Activity Logs', slug: 'logs', path: '/policies/logs', icon: 'BarChart3' },
       // { id: 'permissions', name: 'Permissions', slug: 'permissions', path: '/policies/permissions', icon: 'Settings' },
     ],
@@ -320,4 +322,6 @@ export const NOTIFICATION_TYPES = {
   PROJECT_UNASSIGNED: 'project_unassigned',
   PROJECT_ROLE_UPDATED: 'project_role_updated',
   PROJECT_DELETED: 'project_deleted',
+  POLICY_ASSIGNED: 'policy_assigned',
+  POLICY_ACKNOWLEDGED: 'policy_acknowledged',
 } as const;

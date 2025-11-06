@@ -417,5 +417,79 @@ export const notificationApi = {
         target: 'dashboard/assets'
       }
     });
+  },
+
+  // Policy Notification Helpers
+  async createPolicyAssignmentNotification(assignmentData: {
+    user_id: string;
+    policy_name: string;
+    policy_id: string;
+    assigned_by_name: string;
+    due_date?: string;
+    notes?: string;
+  }) {
+    let message = `You have been assigned the policy "${assignmentData.policy_name}" by ${assignmentData.assigned_by_name}.`;
+    
+    if (assignmentData.due_date) {
+      const dueDate = new Date(assignmentData.due_date).toLocaleDateString();
+      message += ` Please review and acknowledge by ${dueDate}.`;
+    } else {
+      message += ` Please review and acknowledge it.`;
+    }
+
+    if (assignmentData.notes) {
+      message += ` Note: ${assignmentData.notes}`;
+    }
+
+    return this.createNotification({
+      user_id: assignmentData.user_id,
+      title: 'New Policy Assignment',
+      message,
+      type: 'policy_assigned',
+      data: {
+        policy_id: assignmentData.policy_id,
+        policy_name: assignmentData.policy_name,
+        assigned_by_name: assignmentData.assigned_by_name,
+        due_date: assignmentData.due_date,
+        notes: assignmentData.notes,
+        target: 'dashboard/policies'
+      }
+    });
+  },
+
+  async createPolicyAcknowledgedNotification(acknowledgmentData: {
+    employee_id: string;
+    employee_name: string;
+    policy_name: string;
+    policy_id: string;
+    hr_admin_user_ids: string[];
+  }) {
+    const notifications = acknowledgmentData.hr_admin_user_ids.map(userId => ({
+      user_id: userId,
+      title: 'Policy Acknowledged',
+      message: `${acknowledgmentData.employee_name} has acknowledged the policy "${acknowledgmentData.policy_name}".`,
+      type: 'policy_acknowledged',
+      data: {
+        employee_id: acknowledgmentData.employee_id,
+        employee_name: acknowledgmentData.employee_name,
+        policy_id: acknowledgmentData.policy_id,
+        policy_name: acknowledgmentData.policy_name,
+        target: 'policies/history'
+      }
+    }));
+
+    // Create all notifications
+    const results = await Promise.allSettled(
+      notifications.map(notification => this.createNotification(notification))
+    );
+
+    // Log any failures
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        console.error(`Failed to create notification for HR/Admin user ${notifications[index].user_id}:`, result.reason);
+      }
+    });
+
+    return results;
   }
 }
