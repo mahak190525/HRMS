@@ -40,7 +40,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Checkbox } from '@/components/ui/checkbox';
 import { usePolicies } from '@/hooks/usePolicies';
 import { useAllEmployees } from '@/hooks/useEmployees';
@@ -330,11 +330,39 @@ export const AssignPoliciesPage: React.FC = () => {
                           : 'Select employees'}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-[400px] p-0">
+                    <PopoverContent forceMount className="w-[400px] p-0">
                       <Command>
                         <CommandInput placeholder="Search employees..." />
                         <CommandEmpty>No employees found.</CommandEmpty>
-                        <CommandGroup className="max-h-64 overflow-y-auto">
+                        <div className="max-h-[300px] overflow-y-auto" onWheel={e => e.stopPropagation()}>
+                        <CommandGroup>
+                          {/* --- Select All Checkbox Option --- */}
+                          <CommandItem
+                            onSelect={() => {
+                              const allSelected = selectedUserIds.length === filteredEmployees.length;
+                              if (allSelected) {
+                                setSelectedUserIds([]);
+                              } else {
+                                setSelectedUserIds(filteredEmployees.map(e => e.id));
+                              }
+                            }}
+                            className="flex items-center gap-2"
+                          >
+                            <Checkbox
+                              checked={selectedUserIds.length === filteredEmployees.length}
+                              aria-label="Select All"
+                            />
+                            <div className="flex-1">
+                              <div className="font-medium">Select All</div>
+                              <div className="text-sm text-gray-500">
+                                {selectedUserIds.length === filteredEmployees.length
+                                  ? "Deselect all employees"
+                                  : "Select all employees"}
+                              </div>
+                            </div>
+                          </CommandItem>
+
+                          {/* --- Employee List --- */}
                           {filteredEmployees.map((employee) => {
                             const isSelected = selectedUserIds.includes(employee.id);
                             return (
@@ -342,9 +370,9 @@ export const AssignPoliciesPage: React.FC = () => {
                                 key={employee.id}
                                 value={employee.full_name}
                                 onSelect={() => {
-                                  setSelectedUserIds(prev =>
+                                  setSelectedUserIds((prev) =>
                                     isSelected
-                                      ? prev.filter(id => id !== employee.id)
+                                      ? prev.filter((id) => id !== employee.id)
                                       : [...prev, employee.id]
                                   );
                                 }}
@@ -359,6 +387,7 @@ export const AssignPoliciesPage: React.FC = () => {
                             );
                           })}
                         </CommandGroup>
+                        </div>
                       </Command>
                     </PopoverContent>
                   </Popover>
@@ -397,7 +426,13 @@ export const AssignPoliciesPage: React.FC = () => {
               <DialogFooter>
                 <Button
                   variant="outline"
-                  onClick={() => setIsAssignDialogOpen(false)}
+                  onClick={() => {
+                    setIsAssignDialogOpen(false);
+                    setSelectedPolicy('');
+                    setSelectedUserIds([]);
+                    setDueDate('');
+                    setNotes('');
+                  }}
                 >
                   Cancel
                 </Button>
