@@ -21,7 +21,7 @@ const corsHeaders = {
 // Microsoft Graph configuration
 const MICROSOFT_CONFIG = {
   clientId: '3e768a01-348d-4d0a-adec-36f245ce841a',
-  clientSecret: 'fqi8Q~HYY..JtTLva-zKPheR6eTbRhaf6PZyNczm',
+  clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
   tenantId: '85707f27-830a-4b92-aa8c-3830bfb6c6f5',
   fromEmail: 'hrms@mechlintech.com'
 };
