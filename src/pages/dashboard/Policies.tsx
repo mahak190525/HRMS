@@ -28,7 +28,6 @@ import { toast } from 'sonner';
 import { formatDateForDisplay } from '@/utils/dateUtils';
 import type { Policy } from '@/types';
 import { cn } from '@/lib/utils';
-import { notificationApi } from '@/services/notificationApi';
 
 interface PolicyAssignment {
   id: string;
@@ -129,13 +128,9 @@ export function Policies() {
       setAcknowledging(assignmentId);
       
       // Get assignment details before updating
-      const { data: assignmentData, error: fetchError } = await supabase
+      const { error: fetchError } = await supabase
         .from('policy_assignments')
-        .select(`
-          *,
-          policy:policies(id, name),
-          user:users!policy_assignments_user_id_fkey(id, full_name)
-        `)
+        .select('id')
         .eq('id', assignmentId)
         .eq('user_id', user.id)
         .single();
@@ -154,46 +149,8 @@ export function Policies() {
 
       if (error) throw error;
 
-      // Send notifications to HR and Admin
-      if (assignmentData?.policy && assignmentData?.user) {
-        try {
-          // Get HR and Admin users
-          const { data: allUsers, error: usersError } = await supabase
-            .from('users')
-            .select(`
-              id,
-              full_name,
-              role:roles(name),
-              department:departments!users_department_id_fkey(name),
-              "isSA"
-            `)
-            .eq('status', 'active');
-
-          if (!usersError && allUsers) {
-            const hrAdminUsers = allUsers
-              .filter((u: any) => {
-                const isHRRole = u.role?.name && ['hr', 'hrm', 'admin', 'super_admin'].includes(u.role.name);
-                const isSuperAdmin = u.isSA === true;
-                const isHRDepartment = u.department?.name && u.department.name.toLowerCase().includes('hr');
-                return isHRRole || isSuperAdmin || isHRDepartment;
-              })
-              .map((u: any) => u.id);
-
-            if (hrAdminUsers.length > 0) {
-              await notificationApi.createPolicyAcknowledgedNotification({
-                employee_id: assignmentData.user.id,
-                employee_name: assignmentData.user.full_name || 'Employee',
-                policy_name: assignmentData.policy.name,
-                policy_id: assignmentData.policy.id,
-                hr_admin_user_ids: hrAdminUsers
-              });
-            }
-          }
-        } catch (notificationError) {
-          console.error('Error sending policy acknowledgment notifications:', notificationError);
-          // Don't throw - acknowledgment was successful, notification failure shouldn't break the flow
-        }
-      }
+      // Notifications and emails will be sent automatically by database triggers
+      console.log('✅ Policy acknowledged successfully. Notifications and emails will be sent automatically.');
 
       toast.success('Policy acknowledged successfully');
       await fetchAssignments();

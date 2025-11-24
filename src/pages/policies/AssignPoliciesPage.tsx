@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  UserCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,7 +27,6 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   Dialog,
   DialogContent,
@@ -40,16 +38,14 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
 import { Checkbox } from '@/components/ui/checkbox';
 import { usePolicies } from '@/hooks/usePolicies';
 import { useAllEmployees } from '@/hooks/useEmployees';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/services/supabase';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 import type { Policy } from '@/types';
-import { notificationApi } from '@/services/notificationApi';
 
 interface PolicyAssignment {
   id: string;
@@ -77,10 +73,10 @@ interface PolicyAssignment {
 
 export const AssignPoliciesPage: React.FC = () => {
   const { user } = useAuth();
-  const { policies, loading: policiesLoading } = usePolicies();
-  const { data: employees, isLoading: employeesLoading } = useAllEmployees();
+  const { policies } = usePolicies();
+  const { data: employees } = useAllEmployees();
   
-  const [selectedPolicy, setSelectedPolicy] = useState<string>('');
+  const [selectedPolicyIds, setSelectedPolicyIds] = useState<string[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState<string>('');
   const [notes, setNotes] = useState('');
@@ -137,8 +133,8 @@ export const AssignPoliciesPage: React.FC = () => {
   };
 
   const handleAssignPolicies = async () => {
-    if (!selectedPolicy) {
-      toast.error('Please select a policy');
+    if (selectedPolicyIds.length === 0) {
+      toast.error('Please select at least one policy');
       return;
     }
 
@@ -155,62 +151,43 @@ export const AssignPoliciesPage: React.FC = () => {
     try {
       setLoading(true);
 
-      // Create assignments for each selected user
-      const assignmentData = selectedUserIds.map(userId => ({
-        policy_id: selectedPolicy,
-        user_id: userId,
-        assigned_by: user.id,
-        due_date: dueDate || null,
-        notes: notes || null,
-        status: 'pending'
-      }));
+      // Create assignments for each selected user and policy combination
+      const assignmentData = selectedPolicyIds.flatMap(policyId =>
+        selectedUserIds.map(userId => ({
+          policy_id: policyId,
+          user_id: userId,
+          assigned_by: user.id,
+          due_date: dueDate || null,
+          notes: notes || null,
+          status: 'pending'
+        }))
+      );
 
-      const { error, data: insertedAssignments } = await supabase
+      const { error } = await supabase
         .from('policy_assignments')
-        .insert(assignmentData)
-        .select(`
-          id,
-          user_id,
-          policy_id,
-          policy:policies(name)
-        `);
+        .insert(assignmentData);
 
       if (error) throw error;
 
-      // Get the selected policy details
-      const selectedPolicyDetails = policies.find(p => p.id === selectedPolicy);
-      const assignedByName = user?.full_name || user?.email || 'HR';
-
-      // Send notifications to all assigned employees
-      if (insertedAssignments && selectedPolicyDetails) {
+      // Update policy counts in pending emails for bulk assignments
+      if (selectedPolicyIds.length > 1 || selectedUserIds.length > 1) {
         try {
-          const notificationPromises = insertedAssignments.map(async (assignment: any) => {
-            try {
-              await notificationApi.createPolicyAssignmentNotification({
-                user_id: assignment.user_id,
-                policy_name: selectedPolicyDetails.name,
-                policy_id: selectedPolicyDetails.id,
-                assigned_by_name: assignedByName,
-                due_date: dueDate || undefined,
-                notes: notes || undefined
-              });
-            } catch (notificationError) {
-              console.error(`Failed to send notification to user ${assignment.user_id}:`, notificationError);
-              // Don't throw - assignment was successful, notification failure shouldn't break the flow
-            }
-          });
-
-          await Promise.allSettled(notificationPromises);
-        } catch (notificationError) {
-          console.error('Error sending policy assignment notifications:', notificationError);
-          // Don't throw - assignment was successful
+          await supabase.rpc('update_policy_email_counts');
+          console.log('✅ Policy email counts updated for bulk assignment');
+        } catch (emailCountError) {
+          console.warn('Failed to update policy email counts:', emailCountError);
+          // Don't throw - this is not critical
         }
       }
 
-      toast.success(`Successfully assigned policy to ${selectedUserIds.length} employee(s)`);
+      // Notifications and emails will be sent automatically by database triggers
+      console.log(`✅ Policy assignments created successfully. Notifications and emails will be sent automatically.`);
+
+      const totalAssignments = selectedPolicyIds.length * selectedUserIds.length;
+      toast.success(`Successfully created ${totalAssignments} policy assignment(s) for ${selectedUserIds.length} employee(s) and ${selectedPolicyIds.length} policy/policies`);
       
       // Reset form
-      setSelectedPolicy('');
+      setSelectedPolicyIds([]);
       setSelectedUserIds([]);
       setDueDate('');
       setNotes('');
@@ -266,11 +243,11 @@ export const AssignPoliciesPage: React.FC = () => {
     }
   };
 
-  const filteredEmployees = employees?.filter(emp => 
+  const filteredEmployees = employees?.filter((emp: any) => 
     emp.status === 'active'
   ) || [];
 
-  const selectedEmployees = filteredEmployees.filter(emp => 
+  const selectedEmployees = filteredEmployees.filter((emp: any) => 
     selectedUserIds.includes(emp.id)
   );
 
@@ -301,19 +278,93 @@ export const AssignPoliciesPage: React.FC = () => {
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="policy">Policy *</Label>
-                  <Select value={selectedPolicy} onValueChange={setSelectedPolicy}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a policy" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {policies.filter(p => p.is_active).map(policy => (
-                        <SelectItem key={policy.id} value={policy.id}>
-                          {policy.name} (v{policy.version})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>Policies * (Multi-select)</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start"
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        {selectedPolicyIds.length > 0 
+                          ? `${selectedPolicyIds.length} policy/policies selected`
+                          : 'Select policies'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent forceMount className="w-[400px] p-0">
+                      <Command>
+                        <CommandInput placeholder="Search policies..." />
+                        <CommandEmpty>No policies found.</CommandEmpty>
+                        <div className="max-h-[300px] overflow-y-auto" onWheel={(e: React.WheelEvent) => e.stopPropagation()}>
+                        <CommandGroup>
+                          {/* --- Select All Checkbox Option --- */}
+                          <CommandItem
+                            onSelect={() => {
+                              const activePolicies = policies.filter(p => p.is_active);
+                              const allSelected = selectedPolicyIds.length === activePolicies.length;
+                              if (allSelected) {
+                                setSelectedPolicyIds([]);
+                              } else {
+                                setSelectedPolicyIds(activePolicies.map(p => p.id));
+                              }
+                            }}
+                            className="flex items-center gap-2"
+                          >
+                            <Checkbox
+                              checked={selectedPolicyIds.length === policies.filter(p => p.is_active).length}
+                              aria-label="Select All Policies"
+                            />
+                            <div className="flex-1">
+                              <div className="font-medium">Select All</div>
+                              <div className="text-sm text-gray-500">
+                                {selectedPolicyIds.length === policies.filter(p => p.is_active).length
+                                  ? "Deselect all policies"
+                                  : "Select all policies"}
+                              </div>
+                            </div>
+                          </CommandItem>
+
+                          {/* --- Policy List --- */}
+                          {policies.filter(p => p.is_active).map((policy) => {
+                            const isSelected = selectedPolicyIds.includes(policy.id);
+                            return (
+                              <CommandItem
+                                key={policy.id}
+                                value={policy.name}
+                                onSelect={() => {
+                                  setSelectedPolicyIds((prev) =>
+                                    isSelected
+                                      ? prev.filter((id) => id !== policy.id)
+                                      : [...prev, policy.id]
+                                  );
+                                }}
+                                className="flex items-center gap-2"
+                              >
+                                <Checkbox checked={isSelected} aria-label={policy.name} />
+                                <div className="flex-1">
+                                  <div className="font-medium">{policy.name}</div>
+                                  <div className="text-sm text-gray-500">Version {policy.version}</div>
+                                </div>
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                        </div>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  {selectedPolicyIds.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {selectedPolicyIds.map(policyId => {
+                        const policy = policies.find(p => p.id === policyId);
+                        return policy ? (
+                          <Badge key={policy.id} variant="secondary" className="text-xs">
+                            {policy.name} (v{policy.version})
+                          </Badge>
+                        ) : null;
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -334,7 +385,7 @@ export const AssignPoliciesPage: React.FC = () => {
                       <Command>
                         <CommandInput placeholder="Search employees..." />
                         <CommandEmpty>No employees found.</CommandEmpty>
-                        <div className="max-h-[300px] overflow-y-auto" onWheel={e => e.stopPropagation()}>
+                        <div className="max-h-[300px] overflow-y-auto" onWheel={(e: React.WheelEvent) => e.stopPropagation()}>
                         <CommandGroup>
                           {/* --- Select All Checkbox Option --- */}
                           <CommandItem
@@ -343,7 +394,7 @@ export const AssignPoliciesPage: React.FC = () => {
                               if (allSelected) {
                                 setSelectedUserIds([]);
                               } else {
-                                setSelectedUserIds(filteredEmployees.map(e => e.id));
+                                setSelectedUserIds(filteredEmployees.map((e: any) => e.id));
                               }
                             }}
                             className="flex items-center gap-2"
@@ -363,7 +414,7 @@ export const AssignPoliciesPage: React.FC = () => {
                           </CommandItem>
 
                           {/* --- Employee List --- */}
-                          {filteredEmployees.map((employee) => {
+                          {filteredEmployees.map((employee: any) => {
                             const isSelected = selectedUserIds.includes(employee.id);
                             return (
                               <CommandItem
@@ -393,7 +444,7 @@ export const AssignPoliciesPage: React.FC = () => {
                   </Popover>
                   {selectedEmployees.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-2">
-                      {selectedEmployees.map(emp => (
+                      {selectedEmployees.map((emp: any) => (
                         <Badge key={emp.id} variant="secondary" className="text-xs">
                           {emp.full_name}
                         </Badge>
@@ -428,7 +479,7 @@ export const AssignPoliciesPage: React.FC = () => {
                   variant="outline"
                   onClick={() => {
                     setIsAssignDialogOpen(false);
-                    setSelectedPolicy('');
+                    setSelectedPolicyIds([]);
                     setSelectedUserIds([]);
                     setDueDate('');
                     setNotes('');
@@ -438,7 +489,7 @@ export const AssignPoliciesPage: React.FC = () => {
                 </Button>
                 <Button
                   onClick={handleAssignPolicies}
-                  disabled={loading || !selectedPolicy || selectedUserIds.length === 0}
+                  disabled={loading || selectedPolicyIds.length === 0 || selectedUserIds.length === 0}
                 >
                   {loading ? 'Assigning...' : 'Assign Policy'}
                 </Button>

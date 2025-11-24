@@ -310,7 +310,7 @@ export function useUpdateLeaveApplicationStatus() {
       
       return transformedData;
     },
-    onSuccess: (data) => {
+    onSuccess: async(data) => {
       queryClient.invalidateQueries({ queryKey: ['all-leave-applications'] });
       queryClient.invalidateQueries({ queryKey: ['leave-applications'] });
       
@@ -321,6 +321,7 @@ export function useUpdateLeaveApplicationStatus() {
       
       // The database trigger will automatically create the notification
       // and send push notification via the edge function
+      // Email notifications are also sent automatically by the database trigger
       
       toast.success(`Leave application ${data.status} successfully! Balance updated.`);
     },
