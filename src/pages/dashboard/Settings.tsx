@@ -15,6 +15,7 @@ import { formatDateForDisplay } from '@/utils/dateUtils';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { PrintBlockingTest } from '@/components/debug/PrintBlockingTest';
+import { EmailTestComponent } from '@/components/admin/EmailTestComponent';
 import {
   User,
   Bell,
@@ -23,7 +24,8 @@ import {
   Save,
   AlertTriangle,
   Eye,
-  EyeOff
+  EyeOff,
+  Mail
 } from 'lucide-react';
 
 export function Settings() {
@@ -183,8 +185,14 @@ export function Settings() {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-1">
+        <TabsList className={`grid w-full ${user?.role?.name === 'admin' || user?.role?.name === 'super_admin' || user?.isSA ? 'grid-cols-2' : 'grid-cols-1'}`}>
           <TabsTrigger value="profile">Profile</TabsTrigger> 
+          {(user?.role?.name === 'admin' || user?.role?.name === 'super_admin' || user?.isSA) && (
+            <TabsTrigger value="email-test">
+              <Mail className="mr-2 h-4 w-4" />
+              Email Test
+            </TabsTrigger>
+          )}
           {/* <TabsTrigger value="security">Security</TabsTrigger> */}
           {/* <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="appearance">Appearance</TabsTrigger> */}
@@ -771,6 +779,25 @@ export function Settings() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {(user?.role?.name === 'admin' || user?.role?.name === 'super_admin' || user?.isSA) && (
+          <TabsContent value="email-test" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Mail className="h-5 w-5" />
+                  Email Service Testing
+                </CardTitle>
+                <CardDescription>
+                  Test the Microsoft Graph email integration for leave approval notifications.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <EmailTestComponent />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

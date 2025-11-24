@@ -8,6 +8,7 @@ import { RouteGuard } from '@/components/auth/RouteGuard';
 import { Toaster } from 'sonner';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { blockPrinting, initializePrintBlocking } from '@/utils/printBlocker';
+import { emailQueueService } from '@/services/emailQueueService';
 
 // Lazy load components for better performance
 const DashboardOverview = lazy(() => import('@/pages/dashboard/DashboardOverview').then(m => ({ default: m.DashboardOverview })));
@@ -63,6 +64,19 @@ const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+
+  // Initialize email queue service when user is authenticated
+  useEffect(() => {
+    if (user) {
+      console.log('🚀 Starting email queue processor...');
+      emailQueueService.startQueueProcessor(15000); // Check every 15 seconds
+      
+      return () => {
+        console.log('🛑 Stopping email queue processor...');
+        emailQueueService.stopQueueProcessor();
+      };
+    }
+  }, [user]);
 
   if (loading) {
     return (
