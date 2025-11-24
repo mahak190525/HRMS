@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  UserCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,7 +27,6 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   Dialog,
   DialogContent,
@@ -40,16 +38,14 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
 import { Checkbox } from '@/components/ui/checkbox';
 import { usePolicies } from '@/hooks/usePolicies';
 import { useAllEmployees } from '@/hooks/useEmployees';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/services/supabase';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 import type { Policy } from '@/types';
-import { notificationApi } from '@/services/notificationApi';
 
 interface PolicyAssignment {
   id: string;
@@ -77,8 +73,8 @@ interface PolicyAssignment {
 
 export const AssignPoliciesPage: React.FC = () => {
   const { user } = useAuth();
-  const { policies, loading: policiesLoading } = usePolicies();
-  const { data: employees, isLoading: employeesLoading } = useAllEmployees();
+  const { policies } = usePolicies();
+  const { data: employees } = useAllEmployees();
   
   const [selectedPolicyIds, setSelectedPolicyIds] = useState<string[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -167,50 +163,25 @@ export const AssignPoliciesPage: React.FC = () => {
         }))
       );
 
-      const { error, data: insertedAssignments } = await supabase
+      const { error } = await supabase
         .from('policy_assignments')
-        .insert(assignmentData)
-        .select(`
-          id,
-          user_id,
-          policy_id,
-          policy:policies(name)
-        `);
+        .insert(assignmentData);
 
       if (error) throw error;
 
-      // Get the selected policies details
-      const selectedPoliciesDetails = policies.filter(p => selectedPolicyIds.includes(p.id));
-      const assignedByName = user?.full_name || user?.email || 'HR';
-
-      // Send notifications to all assigned employees for each policy
-      if (insertedAssignments && selectedPoliciesDetails.length > 0) {
+      // Update policy counts in pending emails for bulk assignments
+      if (selectedPolicyIds.length > 1 || selectedUserIds.length > 1) {
         try {
-          const notificationPromises = insertedAssignments.map(async (assignment: any) => {
-            try {
-              const policyDetails = selectedPoliciesDetails.find(p => p.id === assignment.policy_id);
-              if (policyDetails) {
-                await notificationApi.createPolicyAssignmentNotification({
-                  user_id: assignment.user_id,
-                  policy_name: policyDetails.name,
-                  policy_id: policyDetails.id,
-                  assigned_by_name: assignedByName,
-                  due_date: dueDate || undefined,
-                  notes: notes || undefined
-                });
-              }
-            } catch (notificationError) {
-              console.error(`Failed to send notification to user ${assignment.user_id}:`, notificationError);
-              // Don't throw - assignment was successful, notification failure shouldn't break the flow
-            }
-          });
-
-          await Promise.allSettled(notificationPromises);
-        } catch (notificationError) {
-          console.error('Error sending policy assignment notifications:', notificationError);
-          // Don't throw - assignment was successful
+          await supabase.rpc('update_policy_email_counts');
+          console.log('✅ Policy email counts updated for bulk assignment');
+        } catch (emailCountError) {
+          console.warn('Failed to update policy email counts:', emailCountError);
+          // Don't throw - this is not critical
         }
       }
+
+      // Notifications and emails will be sent automatically by database triggers
+      console.log(`✅ Policy assignments created successfully. Notifications and emails will be sent automatically.`);
 
       const totalAssignments = selectedPolicyIds.length * selectedUserIds.length;
       toast.success(`Successfully created ${totalAssignments} policy assignment(s) for ${selectedUserIds.length} employee(s) and ${selectedPolicyIds.length} policy/policies`);
@@ -324,7 +295,7 @@ export const AssignPoliciesPage: React.FC = () => {
                       <Command>
                         <CommandInput placeholder="Search policies..." />
                         <CommandEmpty>No policies found.</CommandEmpty>
-                        <div className="max-h-[300px] overflow-y-auto" onWheel={(e: any) => e.stopPropagation()}>
+                        <div className="max-h-[300px] overflow-y-auto" onWheel={(e: React.WheelEvent) => e.stopPropagation()}>
                         <CommandGroup>
                           {/* --- Select All Checkbox Option --- */}
                           <CommandItem
@@ -414,7 +385,7 @@ export const AssignPoliciesPage: React.FC = () => {
                       <Command>
                         <CommandInput placeholder="Search employees..." />
                         <CommandEmpty>No employees found.</CommandEmpty>
-                        <div className="max-h-[300px] overflow-y-auto" onWheel={(e: any) => e.stopPropagation()}>
+                        <div className="max-h-[300px] overflow-y-auto" onWheel={(e: React.WheelEvent) => e.stopPropagation()}>
                         <CommandGroup>
                           {/* --- Select All Checkbox Option --- */}
                           <CommandItem
@@ -423,7 +394,7 @@ export const AssignPoliciesPage: React.FC = () => {
                               if (allSelected) {
                                 setSelectedUserIds([]);
                               } else {
-                                setSelectedUserIds(filteredEmployees.map(e => e.id));
+                                setSelectedUserIds(filteredEmployees.map((e: any) => e.id));
                               }
                             }}
                             className="flex items-center gap-2"

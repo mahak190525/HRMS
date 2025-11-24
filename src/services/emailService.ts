@@ -21,6 +21,14 @@ interface LeaveEmailData {
   reason?: string;
 }
 
+interface PolicyEmailData {
+  employeeName: string;
+  employeeEmail: string;
+  policyCount: number;
+  assignedByName: string;
+  assignedAt: string;
+}
+
 class EmailService {
   /**
    * Call Supabase Edge Function to send email
@@ -146,6 +154,52 @@ class EmailService {
   }
 
   /**
+   * Send policy assignment email notifications
+   */
+  async sendPolicyAssignedEmails(
+    policyData: PolicyEmailData,
+    recipients: {
+      employee: EmailRecipient;
+      adminsAndHR: EmailRecipient[];
+    }
+  ): Promise<void> {
+    try {
+      await this.callEmailFunction({
+        type: 'policy_assignment',
+        leaveData: policyData, // Reusing leaveData field for policy data
+        recipients,
+      });
+      console.log('Policy assignment email sent successfully');
+    } catch (error) {
+      console.error('Failed to send policy assignment emails:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send policy acknowledgment email notifications
+   */
+  async sendPolicyAcknowledgedEmails(
+    policyData: PolicyEmailData,
+    recipients: {
+      employee: EmailRecipient;
+      adminsAndHR: EmailRecipient[];
+    }
+  ): Promise<void> {
+    try {
+      await this.callEmailFunction({
+        type: 'policy_acknowledgment',
+        leaveData: policyData, // Reusing leaveData field for policy data
+        recipients,
+      });
+      console.log('Policy acknowledgment email sent successfully');
+    } catch (error) {
+      console.error('Failed to send policy acknowledgment emails:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Test email functionality
    */
   async testEmail(testRecipient: EmailRecipient): Promise<void> {
@@ -163,4 +217,4 @@ class EmailService {
 }
 
 export const emailService = new EmailService();
-export type { EmailRecipient, LeaveEmailData };
+export type { EmailRecipient, LeaveEmailData, PolicyEmailData };

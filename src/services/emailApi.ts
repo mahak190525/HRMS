@@ -73,6 +73,70 @@ export const emailApi = {
   },
 
   /**
+   * Send policy assignment emails (collective email to prevent spam)
+   */
+  async sendPolicyAssignmentEmails(userIds: string[], assignedByName: string, policyCount: number = 1): Promise<void> {
+    try {
+      // Call the database function that queues the emails
+      const { data, error } = await supabase.rpc('notify_policy_assignments_with_email', {
+        p_user_ids: userIds,
+        p_assigned_by_name: assignedByName,
+        p_policy_count: policyCount
+      });
+
+      if (error) {
+        console.error('Database function error:', error);
+        throw new Error(`Failed to queue policy assignment emails: ${error.message}`);
+      }
+
+      console.log(`Policy assignment emails queued successfully for ${userIds.length} users`);
+      
+      // Trigger immediate processing of the queue
+      await emailQueueService.triggerProcessing();
+      
+      console.log('Email queue processing triggered');
+    } catch (error) {
+      console.error('Policy assignment emails failed:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Send policy acknowledgment email
+   */
+  async sendPolicyAcknowledgmentEmail(
+    employeeId: string, 
+    employeeName: string, 
+    policyName: string, 
+    policyId: string
+  ): Promise<void> {
+    try {
+      // Call the database function that queues the email
+      const { data, error } = await supabase.rpc('notify_policy_acknowledgment_with_email', {
+        p_employee_id: employeeId,
+        p_employee_name: employeeName,
+        p_policy_name: policyName,
+        p_policy_id: policyId
+      });
+
+      if (error) {
+        console.error('Database function error:', error);
+        throw new Error(`Failed to queue policy acknowledgment email: ${error.message}`);
+      }
+
+      console.log('Policy acknowledgment email queued successfully');
+      
+      // Trigger immediate processing of the queue
+      await emailQueueService.triggerProcessing();
+      
+      console.log('Email queue processing triggered');
+    } catch (error) {
+      console.error('Policy acknowledgment email failed:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Get email queue statistics
    */
   async getEmailQueueStats() {

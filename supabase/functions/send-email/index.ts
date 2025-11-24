@@ -326,6 +326,134 @@ class MicrosoftGraphService {
       `;
   }
 
+  generatePolicyAssignedEmailTemplate(policyData, recipientType) {
+    let greeting = '';
+    let mainMessage = '';
+    let footerMessage = '';
+    
+    const policyText = policyData.policyCount === 1 ? '1 policy has' : `${policyData.policyCount} policies have`;
+    
+    if (recipientType === 'employee') {
+      greeting = `Dear ${policyData.employeeName},`;
+      mainMessage = `${policyText} been assigned to you by ${policyData.assignedByName}. Please review and acknowledge them in your HRMS dashboard.`;
+      footerMessage = `You can access your assigned policies in the Policies tab of your HRMS dashboard.`;
+    } else {
+      greeting = `Hello,`;
+      mainMessage = `${policyText} been assigned to ${policyData.employeeName} by ${policyData.assignedByName}.`;
+      footerMessage = `You can monitor policy assignments in the HRMS admin panel.`;
+    }
+    
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Policy Assignment</title>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: #6366f1; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .content { background: #f8f9fa; padding: 20px; border: 1px solid #dee2e6; }
+            .details { background: white; padding: 15px; border-radius: 5px; margin: 15px 0; }
+            .footer { background: #6c757d; color: white; padding: 15px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; }
+            .status-assigned { color: #6366f1; font-weight: bold; }
+            .cta-button { background: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 15px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h2>Policy Assignment</h2>
+            <p>Mechlin Technologies - HRMS</p>
+          </div>
+          <div class="content">
+            <p>${greeting}</p>
+            <p>${mainMessage}</p>
+            
+            <div class="details">
+              <h3>Assignment Details</h3>
+              <p><strong>Status:</strong> <span class="status-assigned">Assigned</span></p>
+              <p><strong>Employee:</strong> ${policyData.employeeName}</p>
+              <p><strong>Number of Policies:</strong> ${policyData.policyCount}</p>
+              <p><strong>Assigned By:</strong> ${policyData.assignedByName}</p>
+              <p><strong>Assigned Date:</strong> ${new Date(policyData.assignedAt).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            </div>
+            
+            ${recipientType === 'employee' ? `
+              <div style="text-align: center;">
+                <a href="https://hrms.mechlintech.com/" class="cta-button">Review Policies in HRMS</a>
+              </div>
+            ` : ''}
+            
+            <p>${footerMessage}</p>
+          </div>
+          <div class="footer">
+            <p>This is an automated notification. Please do not reply to this email.</p>
+          </div>
+        </body>
+      </html>
+      `;
+  }
+
+  generatePolicyAcknowledgedEmailTemplate(policyData, recipientType) {
+    let greeting = '';
+    let mainMessage = '';
+    let footerMessage = '';
+    
+    if (recipientType === 'employee') {
+      // This is for the assigner (primary recipient)
+      greeting = `Dear ${policyData.assigned_by_name || 'Administrator'},`;
+      mainMessage = `${policyData.employeeName} has acknowledged the policy "${policyData.policy_name || 'Policy'}" that you assigned to them.`;
+      footerMessage = `Thank you for managing policy assignments. You can view the complete policy acknowledgment history in the HRMS admin panel.`;
+    } else {
+      // This is for CC recipients (other HR/Admin users)
+      greeting = `Hello,`;
+      mainMessage = `${policyData.employeeName} has acknowledged the policy "${policyData.policy_name || 'Policy'}" assigned by ${policyData.assigned_by_name || 'an administrator'}.`;
+      footerMessage = `You can view policy acknowledgment history in the HRMS admin panel.`;
+    }
+    
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Policy Acknowledged</title>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: #10b981; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .content { background: #f8f9fa; padding: 20px; border: 1px solid #dee2e6; }
+            .details { background: white; padding: 15px; border-radius: 5px; margin: 15px 0; }
+            .footer { background: #6c757d; color: white; padding: 15px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; }
+            .status-acknowledged { color: #10b981; font-weight: bold; }
+            .policy-name { color: #6366f1; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h2>Policy Acknowledged</h2>
+            <p>Mechlin Technologies - HRMS</p>
+          </div>
+          <div class="content">
+            <p>${greeting}</p>
+            <p>${mainMessage}</p>
+            
+            <div class="details">
+              <h3>Acknowledgment Details</h3>
+              <p><strong>Status:</strong> <span class="status-acknowledged">Acknowledged</span></p>
+              <p><strong>Employee:</strong> ${policyData.employeeName}</p>
+              <p><strong>Policy:</strong> <span class="policy-name">${policyData.policy_name || 'Policy'}</span></p>
+              <p><strong>Assigned By:</strong> ${policyData.assigned_by_name || 'Administrator'}</p>
+              <p><strong>Acknowledged Date:</strong> ${new Date(policyData.acknowledged_at || policyData.assignedAt).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            </div>
+            
+            <p>${footerMessage}</p>
+          </div>
+          <div class="footer">
+            <p>This is an automated notification. Please do not reply to this email.</p>
+          </div>
+        </body>
+      </html>
+      `;
+  }
+
   generateLeaveWithdrawalEmailTemplate(leaveData, recipientType) {
     const formatDate = (dateString)=>{
       return new Date(dateString).toLocaleDateString('en-US', {
@@ -606,6 +734,66 @@ serve(async (req)=>{
       return new Response(JSON.stringify({
         success: true,
         message: 'Leave withdrawal emails sent successfully'
+      }), {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        },
+        status: 200
+      });
+    } else if (requestData.type === 'policy_assignment') {
+      // Send policy assignment emails
+      if (!requestData.leaveData || !requestData.recipients) {
+        throw new Error('Policy data and recipients are required for policy assignment email');
+      }
+      // Generate email body (employee-focused since they're the primary recipient)
+      const emailBody = emailService.generatePolicyAssignedEmailTemplate(requestData.leaveData, 'employee');
+      // Send email to employee with admins/HR as CC
+      await emailService.sendEmail({
+        to: [
+          requestData.recipients.employee
+        ] as any,
+        cc: requestData.recipients.adminsAndHR && requestData.recipients.adminsAndHR.length > 0 ? requestData.recipients.adminsAndHR : undefined,
+        subject: `Policy Assignment - Action Required`,
+        body: emailBody,
+        isHtml: true
+      });
+      return new Response(JSON.stringify({
+        success: true,
+        message: 'Policy assignment email sent successfully'
+      }), {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        },
+        status: 200
+      });
+    } else if (requestData.type === 'policy_acknowledgment') {
+      // Send policy acknowledgment email TO the assigner with HR/Admin in CC
+      if (!requestData.leaveData || !requestData.recipients) {
+        throw new Error('Policy data and recipients are required for policy acknowledgment email');
+      }
+      
+      // Generate email body for the primary recipient (assigner)
+      const emailBody = emailService.generatePolicyAcknowledgedEmailTemplate(requestData.leaveData, 'employee');
+      
+      // Prepare recipients
+      const toRecipients = [requestData.recipients.employee]; // Assigner
+      const ccRecipients = requestData.recipients.adminsAndHR || []; // Other HR/Admin users
+      
+      console.log(`📧 Policy acknowledgment email - TO: ${toRecipients[0]?.name} (${toRecipients[0]?.email}), CC: ${ccRecipients.length} recipients`);
+      
+      // Send email TO the assigner with others in CC
+      await emailService.sendEmail({
+        to: toRecipients as any,
+        cc: ccRecipients.length > 0 ? ccRecipients as any : undefined,
+        subject: `Policy Acknowledged - ${requestData.leaveData.employeeName}`,
+        body: emailBody,
+        isHtml: true
+      });
+      return new Response(JSON.stringify({
+        success: true,
+        message: 'Policy acknowledgment email sent successfully'
       }), {
         headers: {
           ...corsHeaders,

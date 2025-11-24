@@ -3,7 +3,9 @@ import { emailService } from './emailService';
 
 interface QueuedEmail {
   queue_id: string;
-  leave_application_id: string;
+  leave_application_id: string | null;
+  reference_id: string | null;
+  module_type: string;
   email_type: string;
   recipients: {
     employee: { email: string; name: string };
@@ -12,12 +14,13 @@ interface QueuedEmail {
     managers?: Array<{ email: string; name: string }>;
   };
   leave_data: {
-    employeeName: string;
-    employeeEmail: string;
-    leaveType: string;
-    startDate: string;
-    endDate: string;
-    daysCount: number;
+    // Leave-specific fields
+    employeeName?: string;
+    employeeEmail?: string;
+    leaveType?: string;
+    startDate?: string;
+    endDate?: string;
+    daysCount?: number;
     daysDisplay?: string;
     isHalfDay?: boolean;
     halfDayPeriod?: string;
@@ -25,6 +28,18 @@ interface QueuedEmail {
     approverTitle?: string;
     comments?: string;
     reason?: string;
+    // Policy-specific fields
+    policyCount?: number;
+    assignedByName?: string;
+    assignedAt?: string;
+    policy_assignment_id?: string;
+    policy_id?: string;
+    policy_name?: string;
+    employee_id?: string;
+    employee_name?: string;
+    acknowledged_at?: string;
+    due_date?: string;
+    notes?: string;
   };
 }
 
@@ -100,8 +115,13 @@ class EmailQueueService {
    */
   private async processQueuedEmail(queuedEmail: QueuedEmail): Promise<void> {
     try {
-      console.log(`Processing ${queuedEmail.email_type} email for leave application: ${queuedEmail.leave_application_id}`);
+      const referenceInfo = queuedEmail.leave_application_id 
+        ? `leave application: ${queuedEmail.leave_application_id}`
+        : `${queuedEmail.module_type} reference: ${queuedEmail.reference_id}`;
+      console.log(`Processing ${queuedEmail.email_type} email for ${referenceInfo}`);
 
+      console.log(`🔍 Processing email type: "${queuedEmail.email_type}" (module: ${queuedEmail.module_type})`);
+      
       switch (queuedEmail.email_type) {
         case 'leave_approval':
           await emailService.sendLeaveApprovalEmails(
@@ -151,7 +171,32 @@ class EmailQueueService {
           console.log(`✅ Leave withdrawal email sent for application: ${queuedEmail.leave_application_id}`);
           break;
 
+        case 'policy_assignment':
+          console.log(`📋 Processing policy assignment email for ${queuedEmail.recipients.employee.name}`);
+          await emailService.sendPolicyAssignedEmails(
+            queuedEmail.leave_data as any, // Policy data is stored in leave_data field
+            {
+              employee: queuedEmail.recipients.employee,
+              adminsAndHR: queuedEmail.recipients.adminsAndHR
+            }
+          );
+          console.log(`✅ Policy assignment email sent to: ${queuedEmail.recipients.employee.name}`);
+          break;
+
+        case 'policy_acknowledgment':
+          console.log(`📋 Processing policy acknowledgment email for ${queuedEmail.recipients.employee.name}`);
+          await emailService.sendPolicyAcknowledgedEmails(
+            queuedEmail.leave_data as any, // Policy data is stored in leave_data field
+            {
+              employee: queuedEmail.recipients.employee,
+              adminsAndHR: queuedEmail.recipients.adminsAndHR
+            }
+          );
+          console.log(`✅ Policy acknowledgment email sent to: ${queuedEmail.recipients.employee.name}`);
+          break;
+
         default:
+          console.error(`❌ Unknown email type: "${queuedEmail.email_type}" - Available types: leave_approval, leave_submission, leave_rejection, leave_withdrawal, policy_assignment, policy_acknowledgment`);
           throw new Error(`Unknown email type: ${queuedEmail.email_type}`);
       }
 
