@@ -32,7 +32,7 @@ export interface EmployeeDocument {
 export class EmployeeDocumentService {
   private static readonly BUCKET_NAME = 'employee-documents';
   private static readonly MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-  private static readonly ALLOWED_TYPES = ['application/pdf'];
+  // ALLOWED_TYPES removed - all file types are now allowed
 
   /**
    * Get HR users for notifications
@@ -272,12 +272,8 @@ export class EmployeeDocumentService {
       };
     }
 
-    if (!this.ALLOWED_TYPES.includes(file.type)) {
-      return { 
-        isValid: false, 
-        error: 'Invalid file type. Please upload PDF files only.' 
-      };
-    }
+    // File type validation removed - all file types are now allowed
+    // MIME types will be handled manually in the bucket
 
     return { isValid: true };
   }
