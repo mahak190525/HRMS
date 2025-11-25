@@ -1493,7 +1493,6 @@ function DocumentsView({
                         <div className="relative">
                           <input
                             type="file"
-                            accept="application/pdf"
                             onChange={(e) => handleFileUpload(e, docType.id)}
                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                             disabled={isUploading}

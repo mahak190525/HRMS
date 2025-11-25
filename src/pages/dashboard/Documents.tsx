@@ -301,11 +301,10 @@ export function Documents() {
                         type="file"
                         onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
                         className="mt-1"
-                        accept=".pdf"
                         required
                       />
                       <p className="text-xs text-muted-foreground mt-1">
-                        Supported format: PDF only (Max 10MB)
+                        Supported format: Any file type (Max 10MB)
                       </p>
                     </div>
 
