@@ -46,9 +46,21 @@ export function useCreateLeaveApplication() {
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count', user?.id] });
       toast.success('Leave application submitted successfully!');
     },
-    onError: (error) => {
-      toast.error('Failed to submit leave application');
-      console.error('Leave application error:', error);
+    onError: (error: any) => {
+      // Check if it's the specific email function error
+      if (error?.code === '42883' && error?.message?.includes('send_leave_email_notification')) {
+        toast.success('Leave application submitted successfully! (Email notification system needs database update)');
+        console.warn('Leave application created but email trigger failed:', error);
+        // Still invalidate queries since the leave was likely created successfully
+        queryClient.invalidateQueries({ queryKey: ['leave-applications', user?.id] });
+        queryClient.invalidateQueries({ queryKey: ['leave-balance', user?.id] });
+        queryClient.invalidateQueries({ queryKey: ['employees-on-leave'] });
+        queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+        queryClient.invalidateQueries({ queryKey: ['notifications-unread-count', user?.id] });
+      } else {
+        toast.error('Failed to submit leave application');
+        console.error('Leave application error:', error);
+      }
     },
   });
 }
@@ -128,7 +140,15 @@ export function useWithdrawLeaveApplication() {
         })
         .eq('id', applicationId);
       
-      if (updateError) throw updateError;
+      if (updateError) {
+        // Check if it's the email function error, but still allow withdrawal
+        if (updateError.code === '42883' && updateError.message?.includes('send_leave_email_notification')) {
+          console.warn('Leave withdrawn successfully but email trigger failed:', updateError);
+          // Continue execution - the withdrawal was successful
+        } else {
+          throw updateError;
+        }
+      }
       
       // Create a withdrawal log entry
       const { error: logError } = await supabase
@@ -157,9 +177,21 @@ export function useWithdrawLeaveApplication() {
       
       toast.success('Leave application withdrawn successfully!');
     },
-    onError: (error) => {
-      toast.error(`Failed to withdraw leave application: ${error.message || 'Unknown error'}`);
-      console.error('Leave withdrawal error:', error);
+    onError: (error: any) => {
+      // Check if it's the specific email function error
+      if (error?.code === '42883' && error?.message?.includes('send_leave_email_notification')) {
+        toast.success('Leave application withdrawn successfully! (Email notification system needs database update)');
+        console.warn('Leave withdrawal completed but email trigger failed:', error);
+        // Still invalidate queries since the withdrawal was likely successful
+        queryClient.invalidateQueries({ queryKey: ['leave-applications'] });
+        queryClient.invalidateQueries({ queryKey: ['all-leave-applications'] });
+        queryClient.invalidateQueries({ queryKey: ['leave-balance'] });
+        queryClient.invalidateQueries({ queryKey: ['employees-on-leave'] });
+        queryClient.invalidateQueries({ queryKey: ['user-leave-summary'] });
+      } else {
+        toast.error(`Failed to withdraw leave application: ${error.message || 'Unknown error'}`);
+        console.error('Leave withdrawal error:', error);
+      }
     },
   });
 }

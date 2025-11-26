@@ -1,46 +1,42 @@
 import { supabase } from './supabase';
-import { emailService } from './emailService';
 
 interface QueuedEmail {
   queue_id: string;
-  leave_application_id: string | null;
-  reference_id: string | null;
   module_type: string;
+  reference_id: string;
   email_type: string;
+  subject: string;
+  priority: string;
   recipients: {
-    employee: { email: string; name: string };
-    adminsAndHR: Array<{ email: string; name: string }>;
-    manager?: { email: string; name: string };
-    managers?: Array<{ email: string; name: string }>;
+    to: Array<{ email: string; name: string }>;
+    cc_static?: Array<{ email: string; name: string }>;
+    cc_dynamic_resolved?: Array<{ email: string; name: string }>;
   };
-  leave_data: {
+  email_data: {
     // Leave-specific fields
-    employeeName?: string;
-    employeeEmail?: string;
-    leaveType?: string;
-    startDate?: string;
-    endDate?: string;
-    daysCount?: number;
-    daysDisplay?: string;
-    isHalfDay?: boolean;
-    halfDayPeriod?: string;
-    approverName?: string;
-    approverTitle?: string;
-    comments?: string;
-    reason?: string;
-    // Policy-specific fields
-    policyCount?: number;
-    assignedByName?: string;
-    assignedAt?: string;
-    policy_assignment_id?: string;
-    policy_id?: string;
-    policy_name?: string;
-    employee_id?: string;
     employee_name?: string;
-    acknowledged_at?: string;
-    due_date?: string;
-    notes?: string;
+    employee_email?: string;
+    leave_type?: string;
+    start_date?: string;
+    end_date?: string;
+    days_count?: number;
+    approver_name?: string;
+    approver_title?: string;
+    comments?: string;
+    user_id?: string;
+    // Policy-specific fields
+    policy_count?: number;
+    assigned_by_name?: string;
+    assigned_at?: string;
+    policy_names?: string[];
+    // Performance-specific fields
+    kra_title?: string;
+    manager_name?: string;
+    // Generic fields
+    [key: string]: any;
   };
+  scheduled_at: string;
+  retry_count: number;
 }
 
 class EmailQueueService {
@@ -84,132 +80,44 @@ class EmailQueueService {
     this.isProcessing = true;
 
     try {
-      // Get pending emails from the queue
-      const { data: queuedEmails, error } = await supabase.rpc('process_email_queue');
+      console.log('🔄 Calling edge function to process email queue...');
+      
+      // Call the edge function's process-queue endpoint directly
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/send-email/process-queue`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({})
+      });
 
-      if (error) {
-        console.error('Failed to fetch email queue:', error);
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error(`❌ Edge function returned ${response.status}:`, data);
+        console.error('Response headers:', Object.fromEntries(response.headers.entries()));
         return;
       }
 
-      if (!queuedEmails || queuedEmails.length === 0) {
-        return; // No emails to process
-      }
-
-      console.log(`Processing ${queuedEmails.length} queued emails...`);
-
-      // Process each email
-      for (const email of queuedEmails as QueuedEmail[]) {
-        await this.processQueuedEmail(email);
+      if (data?.success) {
+        console.log(`✅ Edge function processed ${data.processed || 0} emails`);
+      } else {
+        console.error('⚠️ Edge function failed:', data);
       }
 
     } catch (error) {
-      console.error('Error processing email queue:', error);
+      console.error('❌ Failed to call edge function for queue processing:', error);
     } finally {
       this.isProcessing = false;
     }
   }
 
-  /**
-   * Process a single queued email
-   */
-  private async processQueuedEmail(queuedEmail: QueuedEmail): Promise<void> {
-    try {
-      const referenceInfo = queuedEmail.leave_application_id 
-        ? `leave application: ${queuedEmail.leave_application_id}`
-        : `${queuedEmail.module_type} reference: ${queuedEmail.reference_id}`;
-      console.log(`Processing ${queuedEmail.email_type} email for ${referenceInfo}`);
-
-      console.log(`🔍 Processing email type: "${queuedEmail.email_type}" (module: ${queuedEmail.module_type})`);
-      
-      switch (queuedEmail.email_type) {
-        case 'leave_approval':
-          await emailService.sendLeaveApprovalEmails(
-            queuedEmail.leave_data,
-            {
-              employee: queuedEmail.recipients.employee,
-              adminsAndHR: queuedEmail.recipients.adminsAndHR,
-              manager: queuedEmail.recipients.manager
-            }
-          );
-          console.log(`✅ Leave approval email sent for application: ${queuedEmail.leave_application_id}`);
-          break;
-
-        case 'leave_submission':
-          await emailService.sendLeaveSubmissionEmails(
-            queuedEmail.leave_data,
-            {
-              employee: queuedEmail.recipients.employee,
-              adminsAndHR: queuedEmail.recipients.adminsAndHR,
-              managers: queuedEmail.recipients.managers
-            }
-          );
-          console.log(`✅ Leave submission email sent for application: ${queuedEmail.leave_application_id}`);
-          break;
-
-        case 'leave_rejection':
-          await emailService.sendLeaveRejectionEmails(
-            queuedEmail.leave_data,
-            {
-              employee: queuedEmail.recipients.employee,
-              adminsAndHR: queuedEmail.recipients.adminsAndHR,
-              manager: queuedEmail.recipients.manager
-            }
-          );
-          console.log(`✅ Leave rejection email sent for application: ${queuedEmail.leave_application_id}`);
-          break;
-
-        case 'leave_withdrawal':
-          await emailService.sendLeaveWithdrawalEmails(
-            queuedEmail.leave_data,
-            {
-              employee: queuedEmail.recipients.employee,
-              adminsAndHR: queuedEmail.recipients.adminsAndHR,
-              manager: queuedEmail.recipients.manager
-            }
-          );
-          console.log(`✅ Leave withdrawal email sent for application: ${queuedEmail.leave_application_id}`);
-          break;
-
-        case 'policy_assignment':
-          console.log(`📋 Processing policy assignment email for ${queuedEmail.recipients.employee.name}`);
-          await emailService.sendPolicyAssignedEmails(
-            queuedEmail.leave_data as any, // Policy data is stored in leave_data field
-            {
-              employee: queuedEmail.recipients.employee,
-              adminsAndHR: queuedEmail.recipients.adminsAndHR
-            }
-          );
-          console.log(`✅ Policy assignment email sent to: ${queuedEmail.recipients.employee.name}`);
-          break;
-
-        case 'policy_acknowledgment':
-          console.log(`📋 Processing policy acknowledgment email for ${queuedEmail.recipients.employee.name}`);
-          await emailService.sendPolicyAcknowledgedEmails(
-            queuedEmail.leave_data as any, // Policy data is stored in leave_data field
-            {
-              employee: queuedEmail.recipients.employee,
-              adminsAndHR: queuedEmail.recipients.adminsAndHR
-            }
-          );
-          console.log(`✅ Policy acknowledgment email sent to: ${queuedEmail.recipients.employee.name}`);
-          break;
-
-        default:
-          console.error(`❌ Unknown email type: "${queuedEmail.email_type}" - Available types: leave_approval, leave_submission, leave_rejection, leave_withdrawal, policy_assignment, policy_acknowledgment`);
-          throw new Error(`Unknown email type: ${queuedEmail.email_type}`);
-      }
-
-      // Mark as processed successfully
-      await this.markEmailProcessed(queuedEmail.queue_id, true);
-
-    } catch (error: any) {
-      console.error(`❌ Failed to send ${queuedEmail.email_type} email for application ${queuedEmail.leave_application_id}:`, error);
-      
-      // Mark as failed
-      await this.markEmailProcessed(queuedEmail.queue_id, false, error.message);
-    }
-  }
+  // OLD METHOD REMOVED: processQueuedEmail is no longer needed
+  // All email processing is now handled by the edge function via /process-queue endpoint
 
   /**
    * Mark an email as processed in the database
@@ -223,7 +131,8 @@ class EmailQueueService {
       const { error } = await supabase.rpc('mark_email_processed', {
         p_queue_id: queueId,
         p_success: success,
-        p_error_message: errorMessage || null
+        p_error_message: errorMessage || null,
+        p_error_details: errorMessage ? { message: errorMessage } : null
       });
 
       if (error) {

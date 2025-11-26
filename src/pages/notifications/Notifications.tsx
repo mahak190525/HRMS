@@ -50,7 +50,7 @@ export function NotificationsPage() {
                 ) : (
                   <div className="space-y-2">
                     {unread.map(n => (
-                      <div key={n.id} className="flex items-start gap-3 p-3 rounded-md border hover:bg-orange-50/40 cursor-pointer" onClick={() => go(n)}>
+                      <div key={n.id} className="flex items-start gap-3 p-3 rounded-md border hover:bg-orange-50/40" onClick={() => go(n)}>
                         <div className="shrink-0 mt-1"><Bell className="h-4 w-4 text-orange-600" /></div>
                         <div className="flex-1">
                           <div className="flex items-center justify-between">
@@ -83,7 +83,7 @@ export function NotificationsPage() {
                 ) : (
                   <div className="space-y-2">
                     {notifications.map(n => (
-                      <div key={n.id} className="flex items-start gap-3 p-3 rounded-md border hover:bg-orange-50/40 cursor-pointer" onClick={() => go(n)}>
+                      <div key={n.id} className="flex items-start gap-3 p-3 rounded-md border hover:bg-orange-50/40" onClick={() => go(n)}>
                         <div className="shrink-0 mt-1"><Bell className="h-4 w-4 text-orange-600" /></div>
                         <div className="flex-1">
                           <div className="flex items-center justify-between">

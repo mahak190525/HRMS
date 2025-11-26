@@ -108,7 +108,7 @@ BEGIN
       VALUES (
         NULL, -- No leave application for policy emails
         NEW.id, -- Policy assignment ID as reference
-        'policy', -- Module type
+        'policy_management', -- Module type
         'policy_acknowledgment',
         jsonb_build_object(
           'employee', jsonb_build_object(

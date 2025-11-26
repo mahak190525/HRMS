@@ -49,10 +49,20 @@ export const emailApi = {
    */
   async sendLeaveEmail(leaveApplicationId: string, emailType: string): Promise<void> {
     try {
-      // Call the database function that queues the email
-      const { data, error } = await supabase.rpc('send_leave_email_notification', {
+      // Map old email types to new enum values
+      const emailTypeMap: Record<string, string> = {
+        'leave_approval': 'leave_approved',
+        'leave_submission': 'leave_submitted',
+        'leave_rejection': 'leave_rejected',
+        'leave_withdrawal': 'leave_withdrawn'
+      };
+      
+      const mappedEmailType = emailTypeMap[emailType] || emailType;
+
+      // Call the database function that queues the email (using new generic function)
+      const { data, error } = await supabase.rpc('send_leave_email_notification_generic', {
         p_leave_application_id: leaveApplicationId,
-        p_email_type: emailType
+        p_email_type: mappedEmailType
       });
 
       if (error) {

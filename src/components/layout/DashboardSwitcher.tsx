@@ -57,7 +57,7 @@ export function DashboardSwitcher() {
               key={dashboard.id}
               onClick={() => handleDashboardSwitch(dashboard)}
               className={cn(
-                "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-200 whitespace-nowrap min-w-fit backdrop-blur-sm border-0 h-auto",
+                "flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-200 whitespace-nowrap min-w-fit backdrop-blur-sm border-0 h-auto cursor-pointer",
                 isActive
                   ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-200/50"
                   : "text-orange-700 hover:text-orange-800 hover:bg-orange-100/60 hover:shadow-md disabled:opacity-100"
