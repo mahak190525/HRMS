@@ -65,8 +65,8 @@ BEGIN
     -- This prevents duplicate emails during bulk operations
     SELECT COUNT(*) INTO existing_email_count
     FROM email_queue eq
-    WHERE eq.module_type = 'policy'
-    AND eq.email_type = 'policy_assignment'
+    WHERE eq.module_type = 'policy_management'
+    AND eq.email_type = 'policy_assigned'
     AND eq.status = 'pending'
     AND eq.created_at >= (NOW() - INTERVAL '10 seconds')
     AND eq.leave_data->>'employeeEmail' = (SELECT email FROM users WHERE id = NEW.user_id)
@@ -87,8 +87,8 @@ BEGIN
       SELECT 
         NULL, -- No leave application for policy emails
         NEW.id, -- Policy assignment ID as reference
-        'policy', -- Module type
-        'policy_assignment',
+        'policy_management', -- Module type
+        'policy_assigned',
         jsonb_build_object(
           'employee', jsonb_build_object(
             'email', u.email,
@@ -145,8 +145,8 @@ BEGIN
   FOR email_record IN
     SELECT id, leave_data
     FROM email_queue
-    WHERE module_type = 'policy'
-    AND email_type = 'policy_assignment'
+    WHERE module_type = 'policy_management'
+    AND email_type = 'policy_assigned'
     AND status = 'pending'
     AND created_at >= (NOW() - INTERVAL '30 seconds') -- Only recent emails
   LOOP

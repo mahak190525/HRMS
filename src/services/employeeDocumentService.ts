@@ -210,7 +210,7 @@ export class EmployeeDocumentService {
 
     // Professional Documents (All employment types)
     { name: 'Offer Letter', is_mandatory: true, category: 'professional' },
-    { name: 'Signed Copy Received', is_mandatory: true, category: 'professional' },
+    { name: 'Signed Appointment Letter', is_mandatory: true, category: 'professional' },
 
     // Professional Documents (Not required for Associate)
     { 

@@ -61,7 +61,7 @@ create_employee_documents_bucket.sql
 
 4. **Professional Documents**
    - Offer Letter
-   - Signed Copy Received
+   - Signed Appointment Letter
    - Relieving Letter and Experience Certificates (not for associates)
    - Copy of Resignation Email (not for associates)
    - Last Drawn Salary Slip / Certificate (not for associates)

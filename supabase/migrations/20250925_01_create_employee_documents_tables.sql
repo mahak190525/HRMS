@@ -111,7 +111,7 @@ INSERT INTO employee_document_types (name, is_mandatory, category, applicable_em
 
 -- Professional Documents (All employment types)
 ('Offer Letter', true, 'professional', NULL, NULL, NULL),
-('Signed Offer Letter', true, 'professional', NULL, NULL, NULL),
+('Appointment Letter', true, 'professional', NULL, NULL, NULL),
 
 -- Professional Documents (Not required for Associate)
 ('Relieving Letter and Experience Certificates', false, 'professional', ARRAY['full_time', 'part_time'], NULL, NULL),
