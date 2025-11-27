@@ -186,6 +186,11 @@ export interface KRAAssignment {
     full_name: string;
     email: string;
     employee_id?: string;
+    department_id?: string;
+    department?: {
+      id: string;
+      name: string;
+    };
   };
   assigned_by_user?: {
     id: string;
@@ -611,7 +616,10 @@ export function useAllKRAAssignments() {
             id, template_name, evaluation_period_start, evaluation_period_end, description
           ),
           employee:users!kra_assignments_employee_id_fkey (
-            id, full_name, email, employee_id, position, department_id
+            id, full_name, email, employee_id, position, department_id,
+            department:departments!users_department_id_fkey (
+              id, name
+            )
           ),
           assigned_by_user:users!kra_assignments_assigned_by_fkey (
             id, full_name, email, position

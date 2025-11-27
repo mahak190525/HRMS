@@ -506,7 +506,7 @@ export function PerformanceOverview() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pr-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -606,7 +606,7 @@ export function PerformanceOverview() {
       </Card>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -653,7 +653,7 @@ export function PerformanceOverview() {
           </CardContent>
         </Card>
 
-        <Card>
+        {/* <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
@@ -669,7 +669,7 @@ export function PerformanceOverview() {
                 kraPercentageData.length > 0 ? `${Math.round(kraPercentageData[0].percentage)}%` : 'No data'}
             </p>
           </CardContent>
-        </Card>
+        </Card> */}
       </div>
 
       {/* Main KRA Performance Chart */}
