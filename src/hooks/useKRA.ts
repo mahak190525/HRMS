@@ -575,7 +575,10 @@ export function useKRAAssignments() {
             id, template_name, evaluation_period_start, evaluation_period_end
           ),
           employee:users!kra_assignments_employee_id_fkey (
-            id, full_name, email, employee_id
+            id, full_name, email, employee_id, position, department_id,
+            department:departments!users_department_id_fkey (
+              id, name
+            )
           ),
           assigned_by_user:users!kra_assignments_assigned_by_fkey (
             id, full_name, email
