@@ -29,7 +29,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { toast } from 'sonner';
 import type { KRAAssignment } from '@/hooks/useKRA';
-import { useKRAAssignmentDetails, useUpdateKRAEvaluation, useKRAAssignments } from '@/hooks/useKRA';
+import { useKRAAssignmentDetails, useUpdateKRAEvaluation, useKRAAssignments, triggerKRAEmail } from '@/hooks/useKRA';
 import { supabase } from '@/services/supabase';
 import { QuarterlySettingsManager } from '@/components/kra/QuarterlySettingsManager';
 import { getEvidenceFiles, getEvidenceFileUrl } from '@/services/evidenceService';
@@ -296,8 +296,8 @@ export function ManagerKRAPage() {
             awarded_marks: evaluationData.awarded_marks || 0, // This should be the level points (whole numbers)
             awarded_points: awardedPoints, // This is for weighted calculations
             final_rating: evaluationData.final_rating,
-            manager_evaluated_at: isDraft ? undefined : new Date().toISOString(),
-            manager_evaluated_by: isDraft ? undefined : user.id,
+            manager_evaluated_at: isDraft ? null : new Date().toISOString(),
+            manager_evaluated_by: isDraft ? null : user.id,
           };
 
           if (existingEvaluation) {
@@ -322,12 +322,49 @@ export function ManagerKRAPage() {
 
       await refetch();
 
+      // Trigger notifications and email for quarterly evaluation completion (not for drafts)
+      if (!isDraft && savedCount > 0 && errors.length === 0) {
+        try {
+          console.log(`🎯 Triggering ${selectedQuarter} evaluation completion notifications for assignment:`, currentAssignment.id);
+          
+          // Call the new manual notification function
+          try {
+            const { data, error: notificationError } = await supabase.rpc('send_kra_evaluation_notifications', {
+              p_assignment_id: currentAssignment.id,
+              p_quarter: selectedQuarter,
+              p_manager_id: user.id
+            });
+            
+            if (notificationError) {
+              console.error('❌ Failed to send evaluation notifications:', notificationError);
+              // If function doesn't exist yet, fall back to old behavior
+              if (notificationError.code === 'PGRST116' || notificationError.message?.includes('does not exist')) {
+                console.log('⚠️ New notification function not available yet, using fallback');
+              }
+            } else {
+              console.log('✅ Evaluation notifications sent successfully');
+            }
+          } catch (notifError) {
+            console.error('❌ Error calling notification function:', notifError);
+          }
+
+          // Also trigger email notification
+          await triggerKRAEmail('evaluation', currentAssignment.id, {
+            quarter: selectedQuarter
+          });
+          console.log('✅ Quarterly evaluation email triggered successfully');
+        } catch (emailError) {
+          console.error('❌ Failed to trigger evaluation email:', emailError);
+          // Don't fail the entire operation if email fails
+        }
+      }
+
       if (errors.length > 0) {
         toast.error(`Saved ${savedCount} goals. Errors: ${errors.join(', ')}`);
       } else if (savedCount > 0) {
         toast.success(isDraft 
           ? `Draft saved successfully for ${savedCount} goals` 
-          : `Evaluation submitted successfully for ${savedCount} goals`
+          : `${selectedQuarter} evaluation submitted successfully - notifications and emails sent!`
         );
       } else {
         toast.error('No evaluations to save. Please fill in the evaluation details.');

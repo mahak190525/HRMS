@@ -20,8 +20,9 @@ import {
 } from 'lucide-react';
 import { formatDateForDisplay, getCurrentISTDate, parseToISTDate } from '@/utils/dateUtils';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 import type { KRAAssignment } from '@/hooks/useKRA';
-import { useKRAAssignmentDetails, useUpdateKRAEvaluation } from '@/hooks/useKRA';
+import { useKRAAssignmentDetails, useUpdateKRAEvaluation, triggerKRAEmail } from '@/hooks/useKRA';
 import { supabase } from '@/services/supabase';
 
 interface KRAEmployeeFormProps {
@@ -161,6 +162,13 @@ export function KRAEmployeeForm({ assignment, isReadOnly = false, onClose }: KRA
       // Update assignment status to submitted
       await updateAssignmentStatus('submitted');
       
+      // Trigger email notification for submission
+      console.log('🎯 Triggering submission email for assignment:', assignment.id);
+      await triggerKRAEmail('submission', assignment.id, {
+        quarter: 'Overall KRA' // This form submits the overall KRA, not quarter-specific
+      });
+      
+      toast.success('KRA submitted for manager review - notifications and emails sent!');
       await refetch();
       onClose();
     } finally {

@@ -27,10 +27,12 @@ import {
   useTemplateAssignments,
   useCreateKRAGoal,
   useUpdateKRAGoal,
+  triggerKRAEmail,
   type KRATemplate 
 } from '@/hooks/useKRA';
-import { toast } from 'sonner';
+import { notificationApi } from '@/services/notificationApi';
 import { supabase } from '@/services/supabase';
+import { toast } from 'sonner';
 
 export function KRATemplatePage() {
   const navigate = useNavigate();
@@ -45,7 +47,7 @@ export function KRATemplatePage() {
   // Hooks
   const { data: template, isLoading: templateLoading } = useKRATemplate(templateId || '');
   const { data: teamMembers } = useTeamMembers();
-  const { data: existingAssignments } = useTemplateAssignments(templateId || '');
+  const { data: existingAssignments, refetch: refetchAssignments } = useTemplateAssignments(templateId || '');
   
   const createTemplate = useCreateKRATemplate();
   const updateTemplate = useUpdateKRATemplate();
@@ -214,12 +216,57 @@ export function KRATemplatePage() {
           if (error) throw error;
         }
       } else {
-        // For new assignments, insert new records
-        const { error } = await supabase
+        // For new assignments, check for existing assignments first
+        const { data: existingAssignments } = await supabase
           .from('kra_assignments')
-          .insert(assignments);
-        
-        if (error) throw error;
+          .select('employee_id')
+          .eq('template_id', templateId)
+          .in('employee_id', selectedEmployees);
+
+        if (existingAssignments && existingAssignments.length > 0) {
+          const existingEmployeeIds = existingAssignments.map(a => a.employee_id);
+          const duplicateEmployees = selectedEmployees.filter(id => existingEmployeeIds.includes(id));
+          
+          if (duplicateEmployees.length > 0) {
+            const shouldReassign = window.confirm(
+              `${duplicateEmployees.length} employee(s) already have this KRA assigned. Do you want to reassign it to them?`
+            );
+            
+            if (shouldReassign) {
+              // Use reassign mode for all employees
+              return handlePublishTemplate(templateId, selectedEmployees, 'reassign');
+            } else {
+              // Only assign to new employees
+              const newEmployees = selectedEmployees.filter(id => !existingEmployeeIds.includes(id));
+              if (newEmployees.length === 0) {
+                toast.error('All selected employees already have this KRA assigned');
+                return;
+              }
+              // Update assignments to only include new employees
+              const filteredAssignments = assignments.filter(a => newEmployees.includes(a.employee_id));
+              const { error } = await supabase
+                .from('kra_assignments')
+                .insert(filteredAssignments);
+              
+              if (error) throw error;
+              toast.success(`KRA assigned to ${newEmployees.length} new employee(s). ${duplicateEmployees.length} employee(s) already had this KRA.`);
+            }
+          } else {
+            // No duplicates, proceed with normal insertion
+            const { error } = await supabase
+              .from('kra_assignments')
+              .insert(assignments);
+            
+            if (error) throw error;
+          }
+        } else {
+          // No existing assignments, proceed with normal insertion
+          const { error } = await supabase
+            .from('kra_assignments')
+            .insert(assignments);
+          
+          if (error) throw error;
+        }
       }
 
       setIsAssignDialogOpen(false);
@@ -227,6 +274,193 @@ export function KRATemplatePage() {
     } catch (error) {
       console.error('Error publishing template:', error);
       toast.error('Failed to publish template');
+    }
+  };
+
+  // NEW: Simplified function using the hook that triggers both notifications AND emails
+  const handlePublishTemplateWithEmails = async (templateId: string, selectedEmployees: string[], mode: 'assign' | 'reassign') => {
+    try {
+      // Prepare assignments data for the hook
+      const assignments = selectedEmployees.map(employeeId => ({
+        employeeId,
+        dueDate: null, // Will be set individually in Team KRA section
+        assignedBy: user?.id || ''
+      }));
+
+      // Use the hook which will trigger BOTH notifications AND emails
+      const result = await bulkAssignTemplate.mutateAsync({
+        templateId,
+        assignments,
+        mode
+      });
+
+      // Create in-app notifications for reassignments to Admin, Manager, HR, and Employee
+      if (mode === 'reassign' && Array.isArray(result)) {
+        console.log('🔔 Creating in-app notifications for reassignments to all stakeholders:', result);
+        
+        for (const assignment of result) {
+          if (assignment?.id && assignment?.employee_id) {
+            try {
+              // Get employee details for notification context
+              const { data: employeeData } = await supabase
+                .from('users')
+                .select('full_name, email, manager_id')
+                .eq('id', assignment.employee_id)
+                .single();
+
+              const employeeName = employeeData?.full_name || 'Employee';
+              const templateName = template?.template_name || 'KRA Template';
+              const managerName = user?.full_name || 'Manager';
+
+              // 1. Notification to Employee
+              await notificationApi.createNotification({
+                user_id: assignment.employee_id,
+                title: 'KRA Reassignment',
+                message: `Your KRA "${templateName}" has been reassigned by ${managerName}. Please review the updated details.`,
+                type: 'kra_assignment',
+                data: {
+                  assignment_id: assignment.id,
+                  template_id: templateId,
+                  template_name: templateName,
+                  assigned_by: user?.id,
+                  manager_name: managerName,
+                  reassignment: true,
+                  target: 'performance/my-kra'
+                }
+              });
+              console.log('✅ Reassignment notification sent to Employee:', assignment.employee_id);
+
+              // 2. Notification to Manager (if different from current user)
+              if (employeeData?.manager_id && employeeData.manager_id !== user?.id) {
+                await notificationApi.createNotification({
+                  user_id: employeeData.manager_id,
+                  title: 'KRA Reassignment - Team Member',
+                  message: `${employeeName}'s KRA "${templateName}" has been reassigned by ${managerName}. Monitor progress as needed.`,
+                  type: 'kra_assignment',
+                  data: {
+                    assignment_id: assignment.id,
+                    template_id: templateId,
+                    template_name: templateName,
+                    employee_name: employeeName,
+                    assigned_by: user?.id,
+                    manager_name: managerName,
+                    reassignment: true,
+                    target: 'performance/team-kra'
+                  }
+                });
+                console.log('✅ Reassignment notification sent to Manager:', employeeData.manager_id);
+              }
+
+              // 3. Notifications to HR Users
+              const { data: hrUsers, error: hrError } = await supabase
+                .from('users')
+                .select('id, roles!inner(name)')
+                .eq('status', 'active')
+                .eq('roles.name', 'hr');
+
+              console.log('🔍 HR Users Query Result:', { hrUsers, hrError });
+
+              if (hrError) {
+                console.error('❌ Error fetching HR users:', hrError);
+              } else if (hrUsers && hrUsers.length > 0) {
+                for (const hrUser of hrUsers) {
+                  try {
+                    await notificationApi.createNotification({
+                      user_id: hrUser.id,
+                      title: 'KRA Reassignment - HR Notice',
+                      message: `${employeeName}'s KRA "${templateName}" has been reassigned by ${managerName}. Review for compliance and tracking.`,
+                      type: 'kra_assignment',
+                      data: {
+                        assignment_id: assignment.id,
+                        template_id: templateId,
+                        template_name: templateName,
+                        employee_name: employeeName,
+                        assigned_by: user?.id,
+                        manager_name: managerName,
+                        reassignment: true,
+                        target: 'performance/all-kra'
+                      }
+                    });
+                    console.log('✅ HR notification sent to user:', hrUser.id);
+                  } catch (hrNotificationError) {
+                    console.error('❌ Failed to send HR notification:', hrNotificationError);
+                  }
+                }
+                console.log(`✅ Reassignment notifications sent to ${hrUsers.length} HR users`);
+              } else {
+                console.log('ℹ️ No HR users found');
+              }
+
+              // 4. Notifications to Admin Users
+              const { data: adminUsers, error: adminError } = await supabase
+                .from('users')
+                .select('id, roles!inner(name)')
+                .eq('status', 'active')
+                .in('roles.name', ['admin', 'super_admin']);
+
+              console.log('🔍 Admin Users Query Result:', { adminUsers, adminError });
+
+              if (adminError) {
+                console.error('❌ Error fetching Admin users:', adminError);
+              } else if (adminUsers && adminUsers.length > 0) {
+                for (const adminUser of adminUsers) {
+                  try {
+                    await notificationApi.createNotification({
+                      user_id: adminUser.id,
+                      title: 'KRA Reassignment - Admin Notice',
+                      message: `${employeeName}'s KRA "${templateName}" has been reassigned by ${managerName}. System oversight notification.`,
+                      type: 'kra_assignment',
+                      data: {
+                        assignment_id: assignment.id,
+                        template_id: templateId,
+                        template_name: templateName,
+                        employee_name: employeeName,
+                        assigned_by: user?.id,
+                        manager_name: managerName,
+                        reassignment: true,
+                        target: 'performance/all-kra'
+                      }
+                    });
+                    console.log('✅ Admin notification sent to user:', adminUser.id);
+                  } catch (adminNotificationError) {
+                    console.error('❌ Failed to send Admin notification:', adminNotificationError);
+                  }
+                }
+                console.log(`✅ Reassignment notifications sent to ${adminUsers.length} Admin users`);
+              } else {
+                console.log('ℹ️ No Admin users found');
+              }
+
+            } catch (notificationError) {
+              console.error('❌ Failed to create reassignment notifications:', notificationError);
+            }
+          }
+        }
+      }
+
+      // ALSO trigger emails directly for each assignment
+      console.log('🎯 Triggering direct emails for assignments:', result);
+      if (Array.isArray(result)) {
+        for (const assignment of result) {
+          if (assignment?.id) {
+            await triggerKRAEmail(
+              mode === 'reassign' ? 'reassignment' : 'assignment',
+              assignment.id
+            );
+          }
+        }
+      }
+
+      setIsAssignDialogOpen(false);
+      toast.success(`Template ${mode === 'reassign' ? 'reassigned' : 'assigned'} successfully with notifications and emails sent!`);
+      
+      // Refresh assignments data
+      if (refetchAssignments) {
+        refetchAssignments();
+      }
+    } catch (error) {
+      console.error('Error publishing template:', error);
+      toast.error(`Failed to ${mode} template`);
     }
   };
 
@@ -355,7 +589,7 @@ export function KRATemplatePage() {
           template={template}
           teamMembers={teamMembers || []}
           existingAssignments={existingAssignments || []}
-          onAssign={handlePublishTemplate}
+          onAssign={handlePublishTemplateWithEmails}
           isLoading={bulkAssignTemplate.isPending}
         />
       )}

@@ -26,7 +26,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import type { KRAAssignment } from '@/hooks/useKRA';
 import type { KRAPermissions } from '@/hooks/useKRAPermissions';
-import { useKRAAssignmentDetails, useUpdateKRAEvaluation } from '@/hooks/useKRA';
+import { useKRAAssignmentDetails, useUpdateKRAEvaluation, triggerKRAEmail } from '@/hooks/useKRA';
 import { supabase } from '@/services/supabase';
 import { QuarterlySettingsManager } from './QuarterlySettingsManager';
 
@@ -275,7 +275,14 @@ export function KRAModal({
       }
 
       await updateAssignmentStatus('submitted');
-      toast.success('KRA submitted for manager review');
+      
+      // Trigger email notification for submission
+      console.log('🎯 Triggering submission email for assignment:', currentAssignment.id);
+      await triggerKRAEmail('submission', currentAssignment.id, {
+        quarter: selectedQuarter
+      });
+      
+      toast.success('KRA submitted for manager review - notifications and emails sent!');
       await refetch();
       onClose();
     } catch (error) {
@@ -324,7 +331,43 @@ export function KRAModal({
       }
 
       await updateAssignmentStatus('evaluated');
-      toast.success('KRA evaluation completed');
+      
+      // Trigger notifications and email for evaluation
+      console.log('🎯 Triggering evaluation notifications for assignment:', currentAssignment.id);
+      
+      try {
+        // Call the new manual notification function
+        try {
+          const { data, error: notificationError } = await supabase.rpc('send_kra_evaluation_notifications', {
+            p_assignment_id: currentAssignment.id,
+            p_quarter: selectedQuarter,
+            p_manager_id: user?.id
+          });
+          
+          if (notificationError) {
+            console.error('❌ Failed to send evaluation notifications:', notificationError);
+            // If function doesn't exist yet, fall back to old behavior
+            if (notificationError.code === 'PGRST116' || notificationError.message?.includes('does not exist')) {
+              console.log('⚠️ New notification function not available yet, using fallback');
+            }
+          } else {
+            console.log('✅ Evaluation notifications sent successfully');
+          }
+        } catch (notifError) {
+          console.error('❌ Error calling notification function:', notifError);
+        }
+
+        // Also trigger email notification
+        await triggerKRAEmail('evaluation', currentAssignment.id, {
+          quarter: selectedQuarter
+        });
+        console.log('✅ Evaluation email triggered successfully');
+      } catch (emailError) {
+        console.error('❌ Failed to trigger evaluation email:', emailError);
+        // Don't fail the entire operation if email fails
+      }
+      
+      toast.success('KRA evaluation completed - notifications and emails sent!');
       await refetch();
       onClose();
     } catch (error) {

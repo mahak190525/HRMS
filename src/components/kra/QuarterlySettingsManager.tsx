@@ -17,9 +17,8 @@ import {
 } from 'lucide-react';
 import { formatDateForDisplay, getCurrentISTDate, sanitizeDateFields } from '@/utils/dateUtils';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/services/supabase';
 import { toast } from 'sonner';
-import type { KRAAssignment } from '@/hooks/useKRA';
+import { useUpdateKRAAssignment, triggerKRAEmail, type KRAAssignment } from '@/hooks/useKRA';
 
 interface QuarterlySettingsManagerProps {
   assignment: KRAAssignment;
@@ -40,6 +39,7 @@ interface QuarterlySettings {
 
 export function QuarterlySettingsManager({ assignment, onUpdate, canManage = false }: QuarterlySettingsManagerProps) {
   const { user } = useAuth();
+  const updateAssignment = useUpdateKRAAssignment();
   const [settings, setSettings] = useState<QuarterlySettings>({
     q1_due_date: assignment.q1_due_date || '',
     q2_due_date: assignment.q2_due_date || '',
@@ -98,14 +98,26 @@ export function QuarterlySettingsManager({ assignment, onUpdate, canManage = fal
         }
       });
 
-      const { error } = await supabase
-        .from('kra_assignments')
-        .update(updateData)
-        .eq('id', assignment.id);
+      // Use the hook instead of direct Supabase call - this will trigger BOTH notifications AND emails
+      await updateAssignment.mutateAsync({
+        id: assignment.id,
+        ...updateData
+      });
 
-      if (error) throw error;
+      // ALSO trigger emails directly for any newly enabled quarters
+      quarters.forEach(async ({ key }) => {
+        const wasEnabled = assignment[`${key}_enabled` as keyof KRAAssignment] as boolean;
+        const isNowEnabled = settings[`${key}_enabled` as keyof QuarterlySettings];
+        
+        if (!wasEnabled && isNowEnabled) {
+          console.log(`🎯 Triggering email for ${key.toUpperCase()} enablement`);
+          await triggerKRAEmail('quarter_enabled', assignment.id, {
+            quarter: key.toUpperCase()
+          });
+        }
+      });
 
-      toast.success('Quarterly settings updated successfully');
+      toast.success('Quarterly settings updated successfully with notifications and emails sent!');
       onUpdate();
     } catch (error) {
       console.error('Error updating quarterly settings:', error);

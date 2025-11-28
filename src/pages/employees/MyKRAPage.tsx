@@ -28,7 +28,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { toast } from 'sonner';
 import type { KRAAssignment } from '@/hooks/useKRA';
-import { useKRAAssignmentDetails, useUpdateKRAEvaluation, useMyKRAAssignments } from '@/hooks/useKRA';
+import { useKRAAssignmentDetails, useUpdateKRAEvaluation, useMyKRAAssignments, triggerKRAEmail } from '@/hooks/useKRA';
 import { supabase } from '@/services/supabase';
 import { EvidenceUploadModal } from '@/components/kra/EvidenceUploadModal';
 import { getEvidenceFiles, getEvidenceFileUrl, deleteEvidenceFile } from '@/services/evidenceService';
@@ -346,6 +346,14 @@ export function MyKRAPage() {
 
       await refetch();
 
+      // Trigger email notification for quarter submission (not for drafts)
+      if (!isDraft && successCount > 0) {
+        console.log(`🎯 Triggering ${selectedQuarter} submission email for assignment:`, currentAssignment.id);
+        await triggerKRAEmail('submission', currentAssignment.id, {
+          quarter: selectedQuarter
+        });
+      }
+
       // Provide comprehensive feedback
       if (isDraft) {
         if (successCount === goalCount) {
@@ -357,9 +365,9 @@ export function MyKRAPage() {
         }
       } else {
         if (successCount === goalCount) {
-          toast.success(`${selectedQuarter} evaluation submitted successfully - all ${goalCount} goals processed`);
+          toast.success(`${selectedQuarter} evaluation submitted successfully - notifications and emails sent!`);
         } else if (successCount > 0) {
-          toast.success(`${selectedQuarter} evaluation submitted - ${successCount} of ${goalCount} goals processed`);
+          toast.success(`${selectedQuarter} evaluation submitted - ${successCount} of ${goalCount} goals processed - notifications and emails sent!`);
           if (errorCount > 0) {
             toast.error(`${errorCount} goals had errors and were not submitted`);
           }

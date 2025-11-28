@@ -1,6 +1,140 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/services/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { emailQueueService } from '@/services/emailQueueService';
+
+// DEPRECATED: This function is no longer used - triggerKRAEmail is the new approach
+// Removed to avoid linting warnings and potential 500 errors
+
+// Export a direct function that can be called from components to trigger emails
+export async function triggerKRAEmail(
+  emailType: 'assignment' | 'reassignment' | 'quarter_enabled' | 'submission' | 'evaluation',
+  assignmentId: string,
+  additionalData?: any
+) {
+  console.log('🎯 triggerKRAEmail called:', { emailType, assignmentId, additionalData });
+  
+  try {
+    // Fetch assignment details with employee and manager info
+    const { data: assignment, error: fetchError } = await supabase
+      .from('kra_assignments')
+      .select(`
+        *,
+        employee:users!kra_assignments_employee_id_fkey (
+          id, full_name, email
+        ),
+        assigned_by_user:users!kra_assignments_assigned_by_fkey (
+          id, full_name, email
+        ),
+        template:kra_templates (
+          id, template_name
+        )
+      `)
+      .eq('id', assignmentId)
+      .single();
+
+    if (fetchError) {
+      if (fetchError.code === 'PGRST116') {
+        console.error('❌ Assignment not found:', assignmentId);
+        return;
+      }
+      console.error('❌ Failed to fetch assignment details:', fetchError);
+      return;
+    }
+
+    if (!assignment) {
+      console.error('❌ Assignment data is null:', assignmentId);
+      return;
+    }
+
+    console.log('📋 Assignment details fetched:', assignment);
+
+    // Use the simple queue function for all KRA email types
+    let emailType_db: string;
+    
+    switch (emailType) {
+      case 'assignment':
+      case 'reassignment':
+      case 'quarter_enabled':
+        emailType_db = 'kra_assigned';
+        break;
+      case 'submission':
+        emailType_db = 'kra_submitted';
+        break;
+      case 'evaluation':
+        emailType_db = 'kra_approved';
+        break;
+      default:
+        console.error('❌ Unknown email type:', emailType);
+        return;
+    }
+
+    console.log('📧 Manually inserting into email queue...');
+
+    // Manually insert into email queue table
+    const emailSubject = `KRA ${emailType === 'submission' ? 'Submission' : emailType === 'evaluation' ? 'Evaluation Completed' : 'Assignment'} - ${assignment.employee?.full_name} - Action Required`;
+    
+    const recipients = {
+      to: [{
+        email: emailType_db === 'kra_submitted' ? assignment.assigned_by_user?.email : assignment.employee?.email,
+        name: emailType_db === 'kra_submitted' ? assignment.assigned_by_user?.full_name : assignment.employee?.full_name
+      }],
+      cc_static: [
+        { email: 'mechlinpeopleworkplace@mechlintech.com', name: 'People & Workplace' },
+        { email: 'awasthy.mukesh@mechlintech.com', name: 'Mukesh Kumar' }
+      ],
+      cc_dynamic_resolved: [{
+        email: emailType_db === 'kra_submitted' ? assignment.employee?.email : assignment.assigned_by_user?.email,
+        name: emailType_db === 'kra_submitted' ? assignment.employee?.full_name : assignment.assigned_by_user?.full_name
+      }]
+    };
+
+    // Build email data with proper date fields based on email type
+    const currentTime = new Date().toISOString();
+    const emailData = {
+      employee_name: assignment.employee?.full_name,
+      manager_name: assignment.assigned_by_user?.full_name,
+      assignment_id: assignmentId,
+      quarter: additionalData?.quarter || 'Q1',
+      action_time: currentTime,
+      // Add specific date fields that email templates expect
+      ...(emailType === 'assignment' && { assigned_at: currentTime }),
+      ...(emailType === 'reassignment' && { reassigned_at: currentTime }),
+      ...(emailType === 'quarter_enabled' && { enabled_at: currentTime }),
+      ...(emailType === 'submission' && { submitted_at: currentTime }),
+      ...(emailType === 'evaluation' && { evaluated_at: currentTime })
+    };
+
+    const { data: insertResult, error: insertError } = await supabase
+      .from('email_queue')
+      .insert({
+        module_type: 'performance_management',
+        reference_id: assignmentId,
+        email_type: emailType_db,
+        subject: emailSubject,
+        priority: 'normal',
+        recipients: recipients,
+        email_data: emailData,
+        status: 'pending',
+        scheduled_at: new Date().toISOString()
+      })
+      .select();
+
+    if (insertError) {
+      console.error('❌ Failed to insert email into queue:', insertError);
+      return;
+    }
+
+    console.log('✅ Email queued successfully:', insertResult);
+
+    // Now trigger the queue processing using the email queue service
+    console.log('🔄 Triggering email queue processing...');
+    await emailQueueService.triggerProcessing();
+    
+  } catch (error) {
+    console.error('💥 Error in triggerKRAEmail:', error);
+  }
+}
 
 // Types
 export interface KRACategory {
@@ -186,6 +320,11 @@ export interface KRAAssignment {
     full_name: string;
     email: string;
     employee_id?: string;
+    department_id?: string;
+    department?: {
+      id: string;
+      name: string;
+    };
   };
   assigned_by_user?: {
     id: string;
@@ -302,7 +441,12 @@ export function useKRATemplate(templateId: string) {
         .eq('id', templateId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === 'PGRST116') {
+          throw new Error(`Template not found: ${templateId}`);
+        }
+        throw error;
+      }
       return data as KRATemplate;
     },
     enabled: !!templateId,
@@ -562,6 +706,10 @@ export function useKRAAssignments() {
   return useQuery({
     queryKey: ['kra-assignments', user?.id],
     queryFn: async () => {
+      if (!user?.id) {
+        return [];
+      }
+
       const { data, error } = await supabase
         .from('kra_assignments')
         .select(`
@@ -570,18 +718,25 @@ export function useKRAAssignments() {
             id, template_name, evaluation_period_start, evaluation_period_end
           ),
           employee:users!kra_assignments_employee_id_fkey (
-            id, full_name, email, employee_id
+            id, full_name, email, employee_id, position, department_id,
+            department:departments!users_department_id_fkey (
+              id, name
+            )
           ),
           assigned_by_user:users!kra_assignments_assigned_by_fkey (
             id, full_name, email
           )
         `)
-        .eq('assigned_by', user?.id)
+        .eq('assigned_by', user.id)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      return data as KRAAssignment[];
+      if (error) {
+        console.error('Error fetching KRA assignments:', error);
+        return [];
+      }
+      return (data as KRAAssignment[]) || [];
     },
+    enabled: !!user?.id,
   });
 }
 
@@ -592,7 +747,9 @@ export function useAllKRAAssignments() {
   return useQuery({
     queryKey: ['all-kra-assignments', user?.id],
     queryFn: async () => {
-      if (!user) throw new Error('User not authenticated');
+      if (!user) {
+        return [];
+      }
 
       // Check if user has admin/HR permissions
       const roleName = user.role?.name || user.role_id || '';
@@ -600,7 +757,8 @@ export function useAllKRAAssignments() {
       const isHR = roleName === 'hr' || roleName === 'hrm';
 
       if (!isAdmin && !isHR) {
-        throw new Error('Insufficient permissions to view all KRA assignments');
+        console.warn('Insufficient permissions to view all KRA assignments');
+        return [];
       }
 
       const { data, error } = await supabase
@@ -611,7 +769,10 @@ export function useAllKRAAssignments() {
             id, template_name, evaluation_period_start, evaluation_period_end, description
           ),
           employee:users!kra_assignments_employee_id_fkey (
-            id, full_name, email, employee_id, position, department_id
+            id, full_name, email, employee_id, position, department_id,
+            department:departments!users_department_id_fkey (
+              id, name
+            )
           ),
           assigned_by_user:users!kra_assignments_assigned_by_fkey (
             id, full_name, email, position
@@ -619,8 +780,11 @@ export function useAllKRAAssignments() {
         `)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      return data as KRAAssignment[];
+      if (error) {
+        console.error('Error fetching all KRA assignments:', error);
+        return [];
+      }
+      return (data as KRAAssignment[]) || [];
     },
     enabled: !!user,
   });
@@ -633,6 +797,10 @@ export function useMyKRAAssignments() {
   return useQuery({
     queryKey: ['my-kra-assignments', user?.id],
     queryFn: async () => {
+      if (!user?.id) {
+        return [];
+      }
+
       const { data, error } = await supabase
         .from('kra_assignments')
         .select(`
@@ -644,11 +812,14 @@ export function useMyKRAAssignments() {
             id, full_name, email
           )
         `)
-        .eq('employee_id', user?.id)
+        .eq('employee_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      return data as KRAAssignment[];
+      if (error) {
+        console.error('Error fetching my KRA assignments:', error);
+        return [];
+      }
+      return (data as KRAAssignment[]) || [];
     },
     enabled: !!user?.id,
   });
@@ -659,6 +830,10 @@ export function useKRAAssignmentDetails(assignmentId: string) {
   return useQuery({
     queryKey: ['kra-assignment-details', assignmentId],
     queryFn: async () => {
+      if (!assignmentId) {
+        return null;
+      }
+
       const { data, error } = await supabase
         .from('kra_assignments')
         .select(`
@@ -688,7 +863,14 @@ export function useKRAAssignmentDetails(assignmentId: string) {
         .eq('id', assignmentId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === 'PGRST116') {
+          console.warn(`Assignment not found: ${assignmentId}`);
+          return null;
+        }
+        console.error('Error fetching assignment details:', error);
+        throw error;
+      }
       return data as KRAAssignment;
     },
     enabled: !!assignmentId,
@@ -701,13 +883,38 @@ export function useCreateKRAAssignment() {
 
   return useMutation({
     mutationFn: async (assignmentData: Partial<KRAAssignment>) => {
+      // Check for existing assignment first
+      if (assignmentData.template_id && assignmentData.employee_id) {
+        const { data: existing, error: existingError } = await supabase
+          .from('kra_assignments')
+          .select('id')
+          .eq('template_id', assignmentData.template_id)
+          .eq('employee_id', assignmentData.employee_id)
+          .single();
+
+        // Only throw error if it's not "no rows found"
+        if (existingError && existingError.code !== 'PGRST116') {
+          throw existingError;
+        }
+
+        if (existing) {
+          throw new Error(`Employee already has this KRA assigned. Use reassign mode instead.`);
+        }
+      }
+
       const { data, error } = await supabase
         .from('kra_assignments')
         .insert(assignmentData)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        // Handle duplicate key error specifically
+        if (error.code === '23505' && error.message.includes('kra_assignments_template_id_employee_id_key')) {
+          throw new Error('This employee already has this KRA assigned. Please use the reassign option instead.');
+        }
+        throw error;
+      }
       return data;
     },
     onSuccess: () => {
@@ -753,7 +960,7 @@ export function useBulkAssignKRATemplate() {
       mode 
     }: { 
       templateId: string; 
-      assignments: Array<{ employeeId: string; dueDate: string; assignedBy: string }>; 
+      assignments: Array<{ employeeId: string; dueDate: string | null; assignedBy: string }>; 
       mode: 'assign' | 'reassign' 
     }) => {
       
@@ -773,7 +980,7 @@ export function useBulkAssignKRATemplate() {
           }
 
           if (existingAssignment) {
-            // Update existing assignment
+            // Update existing assignment - Reset everything to initial state
             const { data, error } = await supabase
               .from('kra_assignments')
               .update({
@@ -789,6 +996,55 @@ export function useBulkAssignKRATemplate() {
                 total_possible_score: 0,
                 overall_percentage: 0,
                 overall_rating: null,
+                // Reset all quarterly fields to initial state
+                q1_enabled: true, // Q1 enabled by default
+                q1_enabled_by: assignedBy,
+                q1_enabled_at: new Date().toISOString(),
+                q1_due_date: null,
+                q1_status: 'not_started',
+                q1_submitted_at: null,
+                q1_submitted_by: null,
+                q1_evaluated_at: null,
+                q1_evaluated_by: null,
+                q1_total_score: 0,
+                q1_total_possible_score: 0,
+                q1_overall_percentage: 0,
+                q2_enabled: false,
+                q2_enabled_by: null,
+                q2_enabled_at: null,
+                q2_due_date: null,
+                q2_status: 'not_started',
+                q2_submitted_at: null,
+                q2_submitted_by: null,
+                q2_evaluated_at: null,
+                q2_evaluated_by: null,
+                q2_total_score: 0,
+                q2_total_possible_score: 0,
+                q2_overall_percentage: 0,
+                q3_enabled: false,
+                q3_enabled_by: null,
+                q3_enabled_at: null,
+                q3_due_date: null,
+                q3_status: 'not_started',
+                q3_submitted_at: null,
+                q3_submitted_by: null,
+                q3_evaluated_at: null,
+                q3_evaluated_by: null,
+                q3_total_score: 0,
+                q3_total_possible_score: 0,
+                q3_overall_percentage: 0,
+                q4_enabled: false,
+                q4_enabled_by: null,
+                q4_enabled_at: null,
+                q4_due_date: null,
+                q4_status: 'not_started',
+                q4_submitted_at: null,
+                q4_submitted_by: null,
+                q4_evaluated_at: null,
+                q4_evaluated_by: null,
+                q4_total_score: 0,
+                q4_total_possible_score: 0,
+                q4_overall_percentage: 0,
                 updated_at: new Date().toISOString()
               })
               .eq('id', existingAssignment.id)
@@ -813,7 +1069,18 @@ export function useBulkAssignKRATemplate() {
                 assigned_by: assignedBy,
                 assigned_date: new Date().toISOString().split('T')[0],
                 due_date: dueDate,
-                status: 'assigned'
+                status: 'assigned',
+                // Enable Q1 by default for new assignments
+                q1_enabled: true,
+                q1_enabled_by: assignedBy,
+                q1_enabled_at: new Date().toISOString(),
+                q1_status: 'not_started',
+                q2_enabled: false,
+                q3_enabled: false,
+                q4_enabled: false,
+                q2_status: 'not_started',
+                q3_status: 'not_started',
+                q4_status: 'not_started'
               })
               .select();
 
@@ -831,7 +1098,18 @@ export function useBulkAssignKRATemplate() {
           assigned_by: assignedBy,
           assigned_date: new Date().toISOString().split('T')[0],
           due_date: dueDate,
-          status: 'assigned' as const
+          status: 'assigned' as const,
+          // Enable Q1 by default for new assignments
+          q1_enabled: true,
+          q1_enabled_by: assignedBy,
+          q1_enabled_at: new Date().toISOString(),
+          q1_status: 'not_started',
+          q2_enabled: false,
+          q3_enabled: false,
+          q4_enabled: false,
+          q2_status: 'not_started',
+          q3_status: 'not_started',
+          q4_status: 'not_started'
         }));
 
         const { data, error } = await supabase
@@ -843,12 +1121,61 @@ export function useBulkAssignKRATemplate() {
         return data;
       }
     },
-    onSuccess: (_, variables) => {
+    onSuccess: async (result, variables) => {
+      console.log('🎯 useBulkAssignKRATemplate onSuccess triggered:', { result, variables });
+      
       queryClient.invalidateQueries({ queryKey: ['kra-assignments'] });
       queryClient.invalidateQueries({ queryKey: ['template-assignments', variables.templateId] });
+      
+      // Email notifications are now handled by the direct triggerKRAEmail calls in components
+      console.log('📧 Email notifications handled by component-level triggerKRAEmail calls');
     },
     onError: (error) => {
       console.error('Failed to assign KRA template:', error);
+    },
+  });
+}
+
+// Hook for updating KRA assignments (e.g., enabling quarters)
+export function useUpdateKRAAssignment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, ...assignmentData }: Partial<KRAAssignment> & { id: string }) => {
+      const { data, error } = await supabase
+        .from('kra_assignments')
+        .update(assignmentData)
+        .eq('id', id)
+        .select(`
+          *,
+          employee:users!kra_assignments_employee_id_fkey (
+            id, full_name, email
+          ),
+          assigned_by_user:users!kra_assignments_assigned_by_fkey (
+            id, full_name, email
+          )
+        `)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          throw new Error(`Assignment not found for update: ${id}`);
+        }
+        throw error;
+      }
+      return data;
+    },
+    onSuccess: async (result, variables) => {
+      console.log('🎯 useUpdateKRAAssignment onSuccess triggered:', { result, variables });
+      
+      queryClient.invalidateQueries({ queryKey: ['kra-assignments'] });
+      queryClient.invalidateQueries({ queryKey: ['kra-assignment-details', result.id] });
+      
+      // Email notifications are now handled by the direct triggerKRAEmail calls in components
+      console.log('📧 Email notifications handled by component-level triggerKRAEmail calls');
+    },
+    onError: (error) => {
+      console.error('Failed to update KRA assignment:', error);
     },
   });
 }
@@ -882,9 +1209,14 @@ export function useUpdateKRAEvaluation() {
         return data;
       }
     },
-    onSuccess: (data) => {
+    onSuccess: async (data, variables) => {
+      console.log('🎯 useUpdateKRAEvaluation onSuccess triggered:', { data, variables });
+      
       queryClient.invalidateQueries({ queryKey: ['kra-assignment-details', data.assignment_id] });
       queryClient.invalidateQueries({ queryKey: ['my-kra-assignments'] });
+      
+      // Email notifications are now handled by the direct triggerKRAEmail calls in components
+      console.log('📧 Email notifications handled by component-level triggerKRAEmail calls');
     },
     onError: (error) => {
       console.error('Failed to update evaluation:', error);
