@@ -20,7 +20,7 @@ import { formatDateForDisplay, getCurrentISTDate } from '@/utils/dateUtils';
 import { useAuth } from '@/contexts/AuthContext';
 import type { KRAAssignment } from '@/hooks/useKRA';
 import type { KRAPermissions } from '@/hooks/useKRAPermissions';
-import { useKRAAssignmentDetails, useUpdateKRAEvaluation } from '@/hooks/useKRA';
+import { useKRAAssignmentDetails, useUpdateKRAEvaluation, triggerKRAEmail } from '@/hooks/useKRA';
 import { supabase } from '@/services/supabase';
 
 interface KRAManagerEvaluationFormProps {
@@ -133,7 +133,7 @@ export function KRAManagerEvaluationForm({ assignment, assignmentId, permissions
             awarded_points: evaluation.awarded_points,
             final_rating: evaluation.final_rating,
             manager_evaluation_comments: evaluation.manager_evaluation_comments,
-            manager_evaluated_at: undefined, // Don't mark as evaluated for draft
+            manager_evaluated_at: null, // Don't mark as evaluated for draft
             manager_evaluated_by: user?.id,
           });
         }
@@ -184,6 +184,51 @@ export function KRAManagerEvaluationForm({ assignment, assignmentId, permissions
       // Update assignment status to evaluated
       await updateAssignmentStatus('evaluated');
       
+      // Trigger notifications and email for evaluation completion
+      console.log('🎯 Triggering evaluation completion notifications for assignment:', assignmentId);
+      
+      try {
+        // Call the new manual notification function for all quarters
+        // Note: This form evaluates all quarters at once, so we need to handle that
+        try {
+          const quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
+          for (const quarter of quarters) {
+            try {
+              const { data, error: notificationError } = await supabase.rpc('send_kra_evaluation_notifications', {
+                p_assignment_id: assignmentId,
+                p_quarter: quarter,
+                p_manager_id: user?.id
+              });
+              
+              if (notificationError) {
+                console.error(`❌ Failed to send evaluation notifications for ${quarter}:`, notificationError);
+                // If function doesn't exist yet, fall back to old behavior
+                if (notificationError.code === 'PGRST116' || notificationError.message?.includes('does not exist')) {
+                  console.log('⚠️ New notification function not available yet, using fallback');
+                  break; // Don't try other quarters if function doesn't exist
+                }
+              } else {
+                console.log(`✅ Evaluation notifications sent successfully for ${quarter}`);
+              }
+            } catch (notifError) {
+              console.error(`❌ Error calling notification function for ${quarter}:`, notifError);
+            }
+          }
+        } catch (error) {
+          console.error('❌ Error in notification loop:', error);
+        }
+
+        // Also trigger email notification
+        await triggerKRAEmail('evaluation', assignmentId, {
+          quarter: 'All Quarters' // This form evaluates all quarters at once
+        });
+        console.log('✅ Evaluation email triggered successfully');
+      } catch (emailError) {
+        console.error('❌ Failed to trigger evaluation email:', emailError);
+        // Don't fail the entire operation if email fails
+      }
+      
+      toast.success('KRA evaluation completed - notifications and emails sent!');
       await refetch();
       onClose();
     } finally {

@@ -31,7 +31,7 @@ SELECT add_column_if_not_exists_v2('kra_assignments', 'q3_due_date', 'date');
 SELECT add_column_if_not_exists_v2('kra_assignments', 'q4_due_date', 'date');
 
 -- Add quarterly visibility controls (checkboxes to enable evidence submission)
-SELECT add_column_if_not_exists_v2('kra_assignments', 'q1_enabled', 'boolean DEFAULT false');
+SELECT add_column_if_not_exists_v2('kra_assignments', 'q1_enabled', 'boolean DEFAULT true');
 SELECT add_column_if_not_exists_v2('kra_assignments', 'q2_enabled', 'boolean DEFAULT false');
 SELECT add_column_if_not_exists_v2('kra_assignments', 'q3_enabled', 'boolean DEFAULT false');
 SELECT add_column_if_not_exists_v2('kra_assignments', 'q4_enabled', 'boolean DEFAULT false');

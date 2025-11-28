@@ -164,6 +164,10 @@ class MicrosoftGraphService {
         return this.generatePolicyAcknowledgedEmailTemplate(emailData, recipientType);
       case 'kra_assigned':
         return this.generateKRAAssignedEmailTemplate(emailData, recipientType);
+      case 'kra_submitted':
+        return this.generateKRASubmittedEmailTemplate(emailData, recipientType);
+      case 'kra_approved':
+        return this.generateKRAEvaluatedEmailTemplate(emailData, recipientType);
       case 'payslip_generated':
         return this.generatePayslipEmailTemplate(emailData, recipientType);
       default:
@@ -203,15 +207,16 @@ class MicrosoftGraphService {
     let mainMessage = '';
     let footerMessage = '';
 
+    // Use consistent subject line format for all recipients
+    subject = `Leave Request Approved - ${leaveData.employee_name} - Action Required`;
+    
     if (recipientType === 'employee') {
-      subject = `Your Leave Request Has Been Approved`;
       greeting = `Dear ${leaveData.employee_name},`;
       mainMessage = leaveData.approver_title ? 
         `Your leave request has been approved by ${leaveData.approver_title}.` :
         `Your leave request has been approved.`;
       footerMessage = `You can view your leave details in the HRMS portal.`;
     } else {
-      subject = `Leave Request Approved - ${leaveData.employee_name}`;
       greeting = `Hello,`;
       mainMessage = leaveData.approver_title ?
         `${leaveData.employee_name}'s leave request has been approved by ${leaveData.approver_title}.` :
@@ -224,7 +229,7 @@ class MicrosoftGraphService {
       <html>
         <head>
           <meta charset="utf-8">
-          <title>Leave Request Approved</title>
+          <title>${subject}</title>
           <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
             .header { background: #28a745; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
@@ -292,6 +297,9 @@ class MicrosoftGraphService {
       leaveData.approver_title = `${leaveData.approver_name} (${formattedRole})`;
     }
 
+    // Use consistent subject line format for all recipients
+    const subject = `Leave Request Rejected - ${leaveData.employee_name} - Action Required`;
+
     let greeting = '';
     let mainMessage = '';
     let footerMessage = '';
@@ -315,7 +323,7 @@ class MicrosoftGraphService {
       <html>
         <head>
           <meta charset="utf-8">
-          <title>Leave Request Rejected</title>
+          <title>${subject}</title>
           <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
             .header { background: #dc3545; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
@@ -371,6 +379,9 @@ class MicrosoftGraphService {
       });
     };
 
+    // Use consistent subject line format for all recipients
+    const subject = `Leave Request Submitted - ${leaveData.employee_name} - Action Required`;
+
     let greeting = '';
     let mainMessage = '';
     let footerMessage = '';
@@ -390,7 +401,7 @@ class MicrosoftGraphService {
       <html>
         <head>
           <meta charset="utf-8">
-          <title>Leave Request Submitted</title>
+          <title>${subject}</title>
           <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
             .header { background: #007bff; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
@@ -440,6 +451,9 @@ class MicrosoftGraphService {
       });
     };
 
+    // Use consistent subject line format for all recipients
+    const subject = `Leave Request Withdrawn - ${leaveData.employee_name} - Action Required`;
+
     let greeting = '';
     let mainMessage = '';
     let footerMessage = '';
@@ -459,7 +473,7 @@ class MicrosoftGraphService {
       <html>
         <head>
           <meta charset="utf-8">
-          <title>Leave Request Withdrawn</title>
+          <title>${subject}</title>
           <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
             .header { background: #ffc107; color: #212529; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
@@ -619,18 +633,58 @@ class MicrosoftGraphService {
   }
 
   generateKRAAssignedEmailTemplate(kraData: any, recipientType: string) {
+    // Use consistent subject line format for all recipients
+    let subject = `KRA Assignment - ${kraData.employee_name} - Action Required`;
+    
     let greeting = '';
     let mainMessage = '';
     let footerMessage = '';
+    let headerTitle = 'KRA Assignment';
+    let statusColor = '#8b5cf6';
+    let statusText = 'Assigned';
     
-    if (recipientType === 'employee') {
-      greeting = `Dear ${kraData.employee_name},`;
-      mainMessage = `A new KRA (Key Result Area) has been assigned to you by ${kraData.manager_name || 'your manager'}.`;
-      footerMessage = `Please review your KRA details and objectives in the HRMS portal.`;
+    // Check if this is a reassignment or quarter enabled scenario
+    if (kraData.reassigned_at) {
+      subject = `KRA Reassignment - ${kraData.employee_name} - Action Required`;
+      headerTitle = 'KRA Reassignment';
+      statusText = 'Reassigned';
+      statusColor = '#f59e0b';
+      
+      if (recipientType === 'employee') {
+        greeting = `Dear ${kraData.employee_name},`;
+        mainMessage = `Your KRA has been reassigned by ${kraData.manager_name || 'your manager'}.`;
+        footerMessage = `Please review your updated KRA details and objectives in the HRMS portal.`;
+      } else {
+        greeting = `Hello,`;
+        mainMessage = `${kraData.employee_name}'s KRA has been reassigned.`;
+        footerMessage = `You can monitor KRA assignments and progress in the HRMS admin panel.`;
+      }
+    } else if (kraData.quarter && kraData.enabled_at) {
+      subject = `KRA Quarter Enabled - ${kraData.employee_name} - Action Required`;
+      headerTitle = 'KRA Quarter Enabled';
+      statusText = `${kraData.quarter} Enabled`;
+      statusColor = '#10b981';
+      
+      if (recipientType === 'employee') {
+        greeting = `Dear ${kraData.employee_name},`;
+        mainMessage = `${kraData.manager_name || 'Your manager'} has enabled ${kraData.quarter} for your KRA. You can now submit evidence for this quarter.`;
+        footerMessage = `Please submit your KRA evidence for ${kraData.quarter} in the HRMS portal.`;
+      } else {
+        greeting = `Hello,`;
+        mainMessage = `${kraData.quarter} has been enabled for ${kraData.employee_name}'s KRA.`;
+        footerMessage = `You can monitor KRA progress in the HRMS admin panel.`;
+      }
     } else {
-      greeting = `Hello,`;
-      mainMessage = `A new KRA has been assigned to ${kraData.employee_name}.`;
-      footerMessage = `You can monitor KRA assignments and progress in the HRMS admin panel.`;
+      // Regular assignment
+      if (recipientType === 'employee') {
+        greeting = `Dear ${kraData.employee_name},`;
+        mainMessage = `A new KRA has been assigned to you by ${kraData.manager_name || 'your manager'}.`;
+        footerMessage = `Please review your KRA details and objectives in the HRMS portal.`;
+      } else {
+        greeting = `Hello,`;
+        mainMessage = `A new KRA has been assigned to ${kraData.employee_name}.`;
+        footerMessage = `You can monitor KRA assignments and progress in the HRMS admin panel.`;
+      }
     }
     
     return `
@@ -638,7 +692,7 @@ class MicrosoftGraphService {
       <html>
         <head>
           <meta charset="utf-8">
-          <title>KRA Assignment</title>
+          <title>${subject}</title>
           <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
             .header { background: #8b5cf6; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
@@ -649,8 +703,8 @@ class MicrosoftGraphService {
           </style>
         </head>
         <body>
-          <div class="header">
-            <h2>KRA Assignment</h2>
+          <div class="header" style="background: ${statusColor};">
+            <h2>${headerTitle}</h2>
             <p>Mechlin Technologies - HRMS</p>
           </div>
           <div class="content">
@@ -658,11 +712,133 @@ class MicrosoftGraphService {
             <p>${mainMessage}</p>
             
             <div class="details">
-              <h3>Assignment Details</h3>
-              <p><strong>Status:</strong> <span class="status-assigned">Assigned</span></p>
+              <h3>${headerTitle} Details</h3>
+              <p><strong>Status:</strong> <span class="status-assigned" style="color: ${statusColor};">${statusText}</span></p>
               <p><strong>Employee:</strong> ${kraData.employee_name}</p>
               <p><strong>Manager:</strong> ${kraData.manager_name || 'Not specified'}</p>
-              <p><strong>Assigned Date:</strong> ${new Date(kraData.assigned_at).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+              ${kraData.quarter ? `<p><strong>Quarter:</strong> ${kraData.quarter}</p>` : ''}
+              <p><strong>Date:</strong> ${new Date(kraData.assigned_at || kraData.reassigned_at || kraData.enabled_at).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            </div>
+            
+            <p>${footerMessage}</p>
+          </div>
+          <div class="footer">
+            <p>This is an automated notification. Please do not reply to this email.</p>
+          </div>
+        </body>
+      </html>
+    `;
+  }
+
+  generateKRASubmittedEmailTemplate(kraData: any, recipientType: string) {
+    // Use consistent subject line format for all recipients
+    const subject = `KRA Submission - ${kraData.employee_name} - Action Required`;
+    
+    let greeting = '';
+    let mainMessage = '';
+    let footerMessage = '';
+    
+    if (recipientType === 'manager') {
+      greeting = `Dear Manager,`;
+      mainMessage = `${kraData.employee_name} has submitted their KRA evidence for ${kraData.quarter}. Please review and evaluate the submission.`;
+      footerMessage = `Please review the KRA submission in the HRMS portal and provide your evaluation.`;
+    } else {
+      greeting = `Hello,`;
+      mainMessage = `${kraData.employee_name} has submitted their KRA evidence for ${kraData.quarter}.`;
+      footerMessage = `You can view the KRA submission details in the HRMS admin panel.`;
+    }
+    
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>${subject}</title>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: #10b981; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .content { background: #f8f9fa; padding: 20px; border: 1px solid #dee2e6; }
+            .details { background: white; padding: 15px; border-radius: 5px; margin: 15px 0; }
+            .footer { background: #6c757d; color: white; padding: 15px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; }
+            .status-submitted { color: #10b981; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h2>KRA Submission</h2>
+            <p>Mechlin Technologies - HRMS</p>
+          </div>
+          <div class="content">
+            <p>${greeting}</p>
+            <p>${mainMessage}</p>
+            
+            <div class="details">
+              <h3>Submission Details</h3>
+              <p><strong>Status:</strong> <span class="status-submitted">Submitted</span></p>
+              <p><strong>Employee:</strong> ${kraData.employee_name}</p>
+              <p><strong>Quarter:</strong> ${kraData.quarter}</p>
+              <p><strong>Submitted Date:</strong> ${new Date(kraData.submitted_at).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            </div>
+            
+            <p>${footerMessage}</p>
+          </div>
+          <div class="footer">
+            <p>This is an automated notification. Please do not reply to this email.</p>
+          </div>
+        </body>
+      </html>
+    `;
+  }
+
+  generateKRAEvaluatedEmailTemplate(kraData: any, recipientType: string) {
+    // Use consistent subject line format for all recipients
+    const subject = `KRA Evaluation Completed - ${kraData.employee_name} - Action Required`;
+    
+    let greeting = '';
+    let mainMessage = '';
+    let footerMessage = '';
+    
+    if (recipientType === 'employee') {
+      greeting = `Dear ${kraData.employee_name},`;
+      mainMessage = `Your KRA submission for ${kraData.quarter} has been evaluated by ${kraData.manager_name || 'your manager'}.`;
+      footerMessage = `Please check your KRA evaluation results in the HRMS portal.`;
+    } else {
+      greeting = `Hello,`;
+      mainMessage = `${kraData.manager_name} has completed the evaluation for ${kraData.employee_name}'s KRA submission (${kraData.quarter}).`;
+      footerMessage = `You can view the evaluation details in the HRMS admin panel.`;
+    }
+    
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>${subject}</title>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: #3b82f6; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .content { background: #f8f9fa; padding: 20px; border: 1px solid #dee2e6; }
+            .details { background: white; padding: 15px; border-radius: 5px; margin: 15px 0; }
+            .footer { background: #6c757d; color: white; padding: 15px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; }
+            .status-evaluated { color: #3b82f6; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h2>KRA Evaluation Completed</h2>
+            <p>Mechlin Technologies - HRMS</p>
+          </div>
+          <div class="content">
+            <p>${greeting}</p>
+            <p>${mainMessage}</p>
+            
+            <div class="details">
+              <h3>Evaluation Details</h3>
+              <p><strong>Status:</strong> <span class="status-evaluated">Evaluated</span></p>
+              <p><strong>Employee:</strong> ${kraData.employee_name}</p>
+              <p><strong>Quarter:</strong> ${kraData.quarter}</p>
+              <p><strong>Evaluated By:</strong> ${kraData.manager_name || 'Manager'}</p>
+              <p><strong>Evaluation Date:</strong> ${new Date(kraData.evaluated_at).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
             </div>
             
             <p>${footerMessage}</p>
