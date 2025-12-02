@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useKRAPermissions } from './useKRAPermissions';
+import { getAllUserRoleNames } from '@/utils/multipleRoles';
 import type { KRAAssignment } from './useKRA';
 
 export interface ContextualKRAPermissions {
@@ -39,11 +40,11 @@ export function useContextualKRAPermissions(
       };
     }
 
-    // Get user role information
-    const roleName = user.role?.name || user.role_id || '';
-    const isAdmin = user.isSA || roleName === 'admin' || roleName === 'super_admin';
-    const isHR = roleName === 'hr' || roleName === 'hrm';
-    const isManager = ['sdm', 'bdm', 'qam'].includes(roleName);
+    // Get user role information from all assigned roles
+    const userRoles = getAllUserRoleNames(user);
+    const isAdmin = user.isSA || userRoles.some(role => ['admin', 'super_admin'].includes(role));
+    const isHR = userRoles.some(role => ['hr', 'hrm'].includes(role));
+    const isManager = userRoles.some(role => ['sdm', 'bdm', 'qam', 'manager'].includes(role));
     
     // Check if user is the direct manager of this assignment
     const isDirectManager = assignment.assigned_by === user.id;

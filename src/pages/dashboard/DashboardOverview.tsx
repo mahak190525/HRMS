@@ -28,6 +28,10 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { toast } from 'sonner';
 import {supabase} from '@/services/supabase'
 import { getTodayIST } from '@/utils/dateUtils';
+import { RoleRefresher } from '@/components/debug/RoleRefresher';
+import { RoleDisplay } from '@/components/ui/role-display';
+import { AssetManagementRoleTest } from '@/components/admin/AssetManagementRoleTest';
+import { isUserAdmin } from '@/utils/multipleRoles';
 
 export function DashboardOverview() {
   const { user } = useAuth();
@@ -243,9 +247,10 @@ export function DashboardOverview() {
         </div>
         <div className="flex items-center gap-4">
           <div className="text-right">
-            <Badge variant="outline" className="px-3 mb-2">
-              {(user?.role?.name || user?.role_id)?.replace('_', ' ').toUpperCase()}
-            </Badge>
+            {/* User Roles Display */}
+            <div className="mb-2">
+              <RoleDisplay user={user} variant="detailed" showLabels={false} />
+            </div>
             <p className="text-xs font-semibold px-1 py-1 rounded-md border border-orange-200/50 bg-white/70 text-orange-700 shadow-lg shadow-orange-200/30">{user?.email}</p>
           </div>
           <Avatar className="h-12 w-12">
@@ -254,6 +259,14 @@ export function DashboardOverview() {
           </Avatar>
         </div>
       </div>
+
+      {/* Debug: Role Refresher (only for admin users or development) */}
+      {/* {(isUserAdmin(user) || process.env.NODE_ENV === 'development') && (
+        <div className="mb-6 space-y-4">
+          <RoleRefresher />
+          <AssetManagementRoleTest />
+        </div>
+      )} */}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

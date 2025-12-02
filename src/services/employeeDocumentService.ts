@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { v4 as uuidv4 } from 'uuid';
 import { notificationApi } from './notificationApi';
 import JSZip from 'jszip';
+import { getAllUserRoleNames, isUserAdmin, isUserHR } from '@/utils/multipleRoles';
 
 export interface EmployeeDocumentType {
   id: string;
@@ -41,7 +42,7 @@ export class EmployeeDocumentService {
     try {
       console.log('Fetching HR users for notifications...');
       
-      // Get all active users with their role and department info
+      // Get all active users with their role, additional roles and department info
       const { data: allUsers, error } = await supabase
         .from('users')
         .select(`
@@ -49,7 +50,9 @@ export class EmployeeDocumentService {
           full_name,
           role:roles(name),
           department:departments!users_department_id_fkey(name),
-          "isSA"
+          "isSA",
+          additional_role_ids,
+          additional_roles:roles(id, name)
         `)
         .eq('status', 'active');
 
@@ -60,17 +63,18 @@ export class EmployeeDocumentService {
 
       console.log(`Found ${allUsers?.length || 0} active users`);
 
-      // Filter to find HR users
+      // Filter to find HR users using multiple role support
       const hrUsers = allUsers?.filter(user => {
-        const isHRRole = user.role?.name && ['hr', 'hrm', 'admin', 'super_admin'].includes(user.role.name);
-        const isSuperAdmin = user.isSA === true;
+        const isAdmin = isUserAdmin(user);
+        const isHR = isUserHR(user);
         const isHRDepartment = user.department?.name && 
           user.department.name.toLowerCase().includes('hr');
         
-        const isHRUser = isHRRole || isSuperAdmin || isHRDepartment;
+        const isHRUser = isAdmin || isHR || isHRDepartment;
         
         if (isHRUser) {
-          console.log(`HR User found: ${user.full_name} - Role: ${user.role?.name}, Super Admin: ${user.isSA}, Department: ${user.department?.name}`);
+          const userRoles = getAllUserRoleNames(user);
+          console.log(`HR User found: ${user.full_name} - Roles: ${userRoles.join(', ')}, Super Admin: ${user.isSA}, Department: ${user.department?.name}`);
         }
         
         return isHRUser;

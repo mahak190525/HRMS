@@ -5,6 +5,7 @@ import { atsApi } from './atsApi';
 import { notificationApi } from './notificationApi';
 import { FileUploadService } from './fileUpload';
 import { getTodayIST, getISTDateOffset, formatDateForDatabase } from '@/utils/dateUtils';
+import { getAllUserRoleNames, isUserAdmin, isUserHR } from '@/utils/multipleRoles';
 import type {
   User,
   LeaveApplication,
@@ -30,7 +31,29 @@ export const authApi = {
       .single();
 
     if (error && error.code !== 'PGRST116') throw error;
-    return data;
+    
+    if (!data) return null;
+
+    // Enhance with additional roles data
+    let enhancedUser = data;
+    if (data.additional_role_ids && data.additional_role_ids.length > 0) {
+      const { data: additionalRoles } = await supabase
+        .from('roles')
+        .select('id, name, description')
+        .in('id', data.additional_role_ids);
+      
+      enhancedUser = {
+        ...data,
+        additional_roles: additionalRoles || []
+      };
+    } else {
+      enhancedUser = {
+        ...data,
+        additional_roles: []
+      };
+    }
+
+    return enhancedUser;
   },
 
   async updateProfile(userId: string, updates: Partial<User>): Promise<User> {
@@ -39,7 +62,7 @@ export const authApi = {
       // Essential profile fields
       'full_name', 'email', 'phone', 'address', 'date_of_birth', 'password_hash',
       'avatar_url', 'extra_permissions', 'position', 'company_email',
-      'employee_id', 'role_id', 'department_id', 'manager_id', 'salary', 'status',
+      'employee_id', 'role_id', 'additional_role_ids', 'department_id', 'manager_id', 'salary', 'status',
       // Extended profile fields from migration
       'personal_email', 'alternate_contact_no', 'level_grade', 'skill',
       'current_office_location', 'blood_group', 'religion', 'gender',
@@ -62,6 +85,12 @@ export const authApi = {
         obj[key] = updates[key as keyof User];
         return obj;
       }, {} as any);
+
+    // Debug: Log additional roles data
+    if (updates.additional_role_ids !== undefined) {
+      console.log('🔍 API received additional_role_ids:', updates.additional_role_ids);
+      console.log('🔍 Filtered additional_role_ids:', filteredUpdates.additional_role_ids);
+    }
 
     // Coerce empty date strings to null to satisfy Postgres date type
     const dateFields = ['date_of_birth', 'date_of_joining', 'date_of_marriage_anniversary', 'father_dob', 'mother_dob'];
@@ -90,6 +119,17 @@ export const authApi = {
     // Coerce empty employee_id to null to satisfy unique constraint
     if (filteredUpdates.employee_id === '') {
       filteredUpdates.employee_id = null;
+    }
+
+    // Handle additional_role_ids array - ensure it's always an array
+    if (filteredUpdates.additional_role_ids !== undefined) {
+      if (!Array.isArray(filteredUpdates.additional_role_ids)) {
+        filteredUpdates.additional_role_ids = [];
+      }
+      // Filter out any empty string UUIDs
+      filteredUpdates.additional_role_ids = filteredUpdates.additional_role_ids.filter(
+        (id: string) => id && id.trim() !== ''
+      );
     }
 
     // Handle empty string fields that should be null
@@ -630,7 +670,7 @@ async function getHRAndAdminUsers(): Promise<{ id: string; full_name: string }[]
   try {
     console.log('Fetching HR and Admin users for referral notifications...');
 
-    // Get all active users with their role and department info
+    // Get all active users with their role, additional roles and department info
     const { data: allUsers, error } = await supabase
       .from('users')
       .select(`
@@ -638,7 +678,9 @@ async function getHRAndAdminUsers(): Promise<{ id: string; full_name: string }[]
         full_name,
         role:roles(name),
         department:departments!users_department_id_fkey(name),
-        "isSA"
+        "isSA",
+        additional_role_ids,
+        additional_roles:roles(id, name)
       `)
       .eq('status', 'active');
 
@@ -649,17 +691,18 @@ async function getHRAndAdminUsers(): Promise<{ id: string; full_name: string }[]
 
     console.log(`Found ${allUsers?.length || 0} active users`);
 
-    // Filter to find HR and Admin users
+    // Filter to find HR and Admin users using multiple role support
     const hrAdminUsers = allUsers?.filter(user => {
-      const isHRRole = user.role?.name && ['hr', 'hrm', 'admin', 'super_admin'].includes(user.role.name);
-      const isSuperAdmin = user.isSA === true;
+      const isAdmin = isUserAdmin(user);
+      const isHR = isUserHR(user);
       const isHRDepartment = user.department?.name &&
         user.department.name.toLowerCase().includes('hr');
 
-      const isHRAdminUser = isHRRole || isSuperAdmin || isHRDepartment;
+      const isHRAdminUser = isAdmin || isHR || isHRDepartment;
 
       if (isHRAdminUser) {
-        console.log(`HR/Admin User found: ${user.full_name} - Role: ${user.role?.name}, Super Admin: ${user.isSA}, Department: ${user.department?.name}`);
+        const userRoles = getAllUserRoleNames(user);
+        console.log(`HR/Admin User found: ${user.full_name} - Roles: ${userRoles.join(', ')}, Super Admin: ${user.isSA}, Department: ${user.department?.name}`);
       }
 
       return isHRAdminUser;
@@ -1038,8 +1081,27 @@ export const employeeApi = {
 
     if (error) throw error;
 
+    // Enhance with additional roles data
+    const enhancedData = await Promise.all(
+      (data || []).map(async (row: any) => {
+        let additionalRoles = [];
+        if (row.additional_role_ids && row.additional_role_ids.length > 0) {
+          const { data: roles } = await supabase
+            .from('roles')
+            .select('id, name')
+            .in('id', row.additional_role_ids);
+          additionalRoles = roles || [];
+        }
+        
+        return {
+          ...row,
+          additional_roles: additionalRoles
+        };
+      })
+    );
+
     // Transform the data to match the expected structure
-    return data?.map((row: any) => ({
+    return enhancedData?.map((row: any) => ({
       id: row.id,
       auth_provider: row.auth_provider,
       provider_user_id: row.provider_user_id,
@@ -1048,6 +1110,8 @@ export const employeeApi = {
       full_name: row.full_name,
       employee_id: row.employee_id,
       role_id: row.role_id,
+      additional_role_ids: row.additional_role_ids,
+      additional_roles: row.additional_roles,
       department_id: row.department_id,
       position: row.position,
       avatar_url: row.avatar_url,

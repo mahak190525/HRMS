@@ -26,6 +26,8 @@ export const ROLES = {
   CANDIDATE: 'candidate',
   FINANCE: 'finance',
   FINANCE_MANAGER: 'finance_manager',
+  OFFICE_ADMIN: 'office_admin',
+  IT_HELPDESK: 'it_helpdesk',
 } as const;
 
 // Role Name Maps
@@ -42,6 +44,8 @@ export const roleNameMap = {
   candidate: "Candidate",
   finance: "Finance",
   finance_manager: "Finance Manager",
+  office_admin: "Office Admin",
+  it_helpdesk: "IT Helpdesk",
 } as const;
 
 export const getRoleDisplayName = (role: string) => {
@@ -86,6 +90,7 @@ export const DASHBOARD_CONFIG = [
       // { id: 'attendance', name: 'Attendance Reports', slug: 'attendance', path: '/employees/attendance', icon: 'Clock' },
       // { id: 'projects', name: 'Project Management', slug: 'projects', path: '/employees/projects', icon: 'Building' },
       { id: 'feedback', name: 'HRMS Feedback', slug: 'feedback', path: '/employees/feedback', icon: 'MessageSquare' },
+      { id: 'role-permissions', name: 'Role Permissions', slug: 'role-permissions', path: '/admin/role-permissions', icon: 'Shield' },
     ],
   },
   {
@@ -262,6 +267,14 @@ export const ROLE_DASHBOARD_MAPPING = {
     DASHBOARDS.SELF,
     DASHBOARDS.ATS,
     DASHBOARDS.LMS,
+  ],
+  [ROLES.OFFICE_ADMIN]: [
+    DASHBOARDS.SELF,
+    DASHBOARDS.EMPLOYEE_MANAGEMENT, // Only for Asset Management tab
+  ],
+  [ROLES.IT_HELPDESK]: [
+    DASHBOARDS.SELF,
+    DASHBOARDS.EMPLOYEE_MANAGEMENT, // Only for Asset Management tab
   ],
 } as const;
 

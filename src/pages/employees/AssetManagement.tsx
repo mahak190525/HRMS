@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEmployeePermissions } from '@/hooks/useEmployeePermissions';
+import { useAssetManagementPermissions } from '@/hooks/useAssetManagementPermissions';
 import { 
   useAssets, 
   useAssetAssignments, 
@@ -216,6 +217,7 @@ type AssetRequestActionFormData = z.infer<typeof assetRequestActionSchema>;
 export function AssetManagement() {
   const { user } = useAuth();
   const permissions = useEmployeePermissions();
+  const assetPermissions = useAssetManagementPermissions();
   const { data: assets } = useAssets();
   const { data: assignments, isLoading: assignmentsLoading } = useAssetAssignments();
   const { data: allAssignments } = useAllAssetAssignments(); // New: includes all assignments (active + returned)
@@ -245,62 +247,295 @@ export function AssetManagement() {
   const { data: managerComplaints } = useManagerAssetComplaints();
   const updateAssetRequest = useUpdateAssetRequest();
 
-  // Choose the appropriate data source based on user permissions
-  // For managers: use ONLY manager-specific data
-  // For HR/Admin: use all data
-  const assetRequestsData = permissions.canViewAllEmployees ? allAssetRequests : managerAssetRequests;
+  // Check if user is a view-only manager (can view but not assign)
+  // This is used throughout to determine if user should see filtered data
+  const isViewOnlyManager = permissions.canManageAssets && !assetPermissions.canAssignAssets;
   
-  // Debug: Log the actual data being used
-  console.log('AssetManagement - Final Data Debug:', {
-    userRole: user?.role?.name,
-    accessLevel: permissions.accessLevel,
-    canViewAllEmployees: permissions.canViewAllEmployees,
-    finalAssetRequestsData: assetRequestsData,
-    finalAssetRequestsCount: assetRequestsData?.length || 0
-  });
+  // Choose the appropriate data source based on user permissions
+  // ROLE-CENTERED: Office Admin and IT Helpdesk see ALL requests of their allowed asset type
+  // USER-CENTERED: Managers see only their team's requests
+  let assetRequestsData: any[] = [];
+  
+  if (assetPermissions.canAccessAssetManagement && !isViewOnlyManager) {
+    // Role-centered: Office Admin and IT Helpdesk see ALL requests (not just manager's team), filtered by asset type
+    if (assetPermissions.isOfficeAdmin || assetPermissions.isITHelpdesk) {
+      // Use allAssetRequests to get ALL requests, not just manager's team
+      const allRequests = allAssetRequests || [];
+      assetRequestsData = allRequests.filter((request: any) => {
+        // STRICT CHECK: Only "Virtual Machine" category is considered a VM
+        const isVMRequest = request.category?.name?.toLowerCase() === 'virtual machine';
+        
+        if (assetPermissions.isOfficeAdmin) {
+          // Office Admin: See ALL requests for regular assets (no VMs)
+          return !isVMRequest;
+        }
+        if (assetPermissions.isITHelpdesk) {
+          // IT Helpdesk: See ALL requests for VMs ONLY (strict: only "Virtual Machine" category)
+          return isVMRequest;
+        }
+        return true;
+      });
+    } else {
+      // Admin: see all requests
+      assetRequestsData = permissions.canViewAllEmployees ? (allAssetRequests || []) : (managerAssetRequests || []);
+    }
+  } else {
+    // User-centered: Managers (view-only or regular) see only their team's requests
+    // Use managerAssetRequests which already filters by manager_id on the backend
+    // But also filter out the manager's own requests - managers should only see their managed employees' requests
+    const managerRequests = managerAssetRequests || [];
+    assetRequestsData = managerRequests.filter((request: any) => {
+      // Exclude manager's own requests - only show requests from employees they manage
+      return request.user_id !== user?.id;
+    });
+  }
+  
   // Filter employees based on permissions
-  const filteredEmployees = permissions.canViewAllEmployees 
+  // Office Admin and IT Helpdesk can assign to ANY employee
+  // Other managers can only assign to their team members
+  const filteredEmployees = (permissions.canViewAllEmployees || assetPermissions.canAccessAssetManagement)
     ? employees 
     : employees?.filter((emp: any) => emp.manager_id === user?.id);
 
-  // Filter assignments data based on permissions
-  const assignmentsData = permissions.canViewAllEmployees 
-    ? allAssignments 
-    : allAssignments?.filter(assignment => assignment.user?.manager_id === user?.id);
+  // Helper function to check if an asset is a VM
+  // STRICT: Only returns true if category is exactly "Virtual Machine"
+  const isVMAsset = (asset: any): boolean => {
+    if (!asset) return false;
+    // STRICT CHECK: Only "Virtual Machine" category is considered a VM
+    // This ensures IT Helpdesk only sees Virtual Machine category assets
+    return asset.category?.name?.toLowerCase() === 'virtual machine';
+  };
   
-  // Filter assets based on permissions - managers should see:
-  // 1. Assets assigned to their team members
-  // 2. Available assets (for potential assignment)
-  const roleBasedFilteredAssets = permissions.canViewAllEmployees 
-    ? assets 
-    : assets?.filter(asset => {
-        // Always show available assets
-        if (!asset.current_assignment || asset.current_assignment.length === 0) {
-          return true;
+  // Helper function to check if an assignment is for a VM
+  // STRICT: Only returns true if category is exactly "Virtual Machine" or has vm_id set
+  const isVMAssignment = (assignment: any): boolean => {
+    if (!assignment) return false;
+    // Check if assignment has a vm_id (direct VM assignment)
+    if (assignment.vm_id !== null && assignment.vm_id !== undefined) return true;
+    // STRICT CHECK: Only "Virtual Machine" category is considered a VM
+    return assignment.asset?.category?.name?.toLowerCase() === 'virtual machine';
+  };
+
+  // Filter assignments data based on permissions
+  // ROLE-CENTERED: Office Admin and IT Helpdesk see ALL assignments of their allowed type
+  // USER-CENTERED: Managers (BDM, QAM, SDM, Finance Manager) see only their team's assignments
+  let assignmentsData: any[] = [];
+  
+  if (assetPermissions.canAccessAssetManagement && !isViewOnlyManager) {
+    // Role-centered filtering: Office Admin and IT Helpdesk see ALL assignments of appropriate type
+    if (assetPermissions.isOfficeAdmin || assetPermissions.isITHelpdesk) {
+      const allAssignmentsData = allAssignments || [];
+      assignmentsData = allAssignmentsData.filter((assignment: any) => {
+        const isVM = isVMAssignment(assignment);
+        
+        if (assetPermissions.isOfficeAdmin) {
+          // Office Admin: See ALL regular asset assignments (no VMs)
+          return !isVM;
         }
-        // Show assets assigned to team members
+        if (assetPermissions.isITHelpdesk) {
+          // IT Helpdesk: See ALL VM assignments ONLY (strict: only "Virtual Machine" category)
+          return isVM;
+        }
+        return true;
+      });
+    } else {
+      // Admin or other roles with full access: show all
+      assignmentsData = allAssignments || [];
+    }
+  } else {
+    // User-centered filtering: Managers (BDM, QAM, SDM, Finance Manager) see only their team's assignments
+    // Check if user can view team employees (managers) or all employees (finance/admin)
+    if (permissions.canViewAllEmployees && !permissions.canAccessAssetManagement) {
+      // Finance Manager or other roles with canViewAllEmployees but not role-centered access
+      // For asset management, they should see only their team's assignments
+      assignmentsData = (allAssignments || []).filter(assignment => assignment.user?.manager_id === user?.id);
+    } else if (permissions.canViewTeamEmployees || isViewOnlyManager) {
+      // Managers (BDM, QAM, SDM) or view-only managers see only their team's assignments
+      assignmentsData = (allAssignments || []).filter(assignment => assignment.user?.manager_id === user?.id);
+    } else {
+      // Fallback: show all if canViewAllEmployees
+      assignmentsData = permissions.canViewAllEmployees 
+        ? (allAssignments || [])
+        : [];
+    }
+  }
+  
+  // Filter assets based on permissions
+  // ROLE-CENTERED: Office Admin and IT Helpdesk see ALL assets of their allowed type
+  // USER-CENTERED: Managers see ONLY assets assigned to their team members (no available/unassigned assets)
+  let roleBasedFilteredAssets: any[] = [];
+  
+  if (assetPermissions.canAccessAssetManagement) {
+    // Role-centered filtering: Office Admin and IT Helpdesk see ALL assets of appropriate type
+    if (assetPermissions.isOfficeAdmin || assetPermissions.isITHelpdesk) {
+      const allAssets = assets || [];
+      roleBasedFilteredAssets = allAssets.filter((asset: any) => {
+        const isVM = isVMAsset(asset);
+        
+        if (assetPermissions.isOfficeAdmin) {
+          // Office Admin: See ALL regular assets (no VMs)
+          return !isVM;
+        }
+        if (assetPermissions.isITHelpdesk) {
+          // IT Helpdesk: Only show VMs (but since VMs are in separate table, 
+          // we might not have VM assets in the assets table, so this filters them out)
+          return isVM;
+        }
+        return true;
+      });
+    } else {
+      // Admin or other roles with full access: show all
+      roleBasedFilteredAssets = assets || [];
+    }
+  } else {
+    // User-centered filtering: Managers (BDM, QAM, SDM, Finance Manager) see ONLY assets assigned to their team members
+    // They should NOT see available/unassigned assets
+    // Check if user can view team employees (managers) or all employees (finance/admin)
+    if (permissions.canViewAllEmployees && !permissions.canAccessAssetManagement) {
+      // Finance Manager or other roles with canViewAllEmployees but not role-centered access
+      // For asset management, they should see ONLY assets assigned to their team members
+      roleBasedFilteredAssets = (assets || []).filter(asset => {
+        // Only show assets that are assigned to team members
+        // Do NOT show available/unassigned assets
+        if (!asset.current_assignment || asset.current_assignment.length === 0) {
+          return false; // Don't show unassigned assets
+        }
+        // Show only assets assigned to team members
         return asset.current_assignment?.some((assignment: any) => 
           assignment.user?.manager_id === user?.id
         );
       });
+    } else if (permissions.canViewTeamEmployees) {
+      // Managers (BDM, QAM, SDM) see ONLY assets assigned to their team members
+      // Do NOT show available/unassigned assets
+      roleBasedFilteredAssets = (assets || []).filter(asset => {
+        // Only show assets that are assigned to team members
+        // Do NOT show available/unassigned assets
+        if (!asset.current_assignment || asset.current_assignment.length === 0) {
+          return false; // Don't show unassigned assets
+        }
+        // Show only assets assigned to team members
+        return asset.current_assignment?.some((assignment: any) => 
+          assignment.user?.manager_id === user?.id
+        );
+      });
+    } else {
+      // Fallback: show all if canViewAllEmployees
+      roleBasedFilteredAssets = permissions.canViewAllEmployees 
+        ? (assets || [])
+        : [];
+    }
+  }
   
-  const complaintsData = permissions.canViewAllEmployees ? allComplaints : managerComplaints;
+  // Filter complaints based on permissions
+  // ROLE-CENTERED: Office Admin and IT Helpdesk see ALL complaints of their allowed asset type
+  // USER-CENTERED: Managers (BDM, QAM, SDM, Finance Manager) see only their team's complaints
+  let complaintsData: any[] = [];
+  
+  if (assetPermissions.canAccessAssetManagement && !isViewOnlyManager) {
+    // Role-centered: Office Admin and IT Helpdesk see ALL complaints (not just manager's team), filtered by asset type
+    if (assetPermissions.isOfficeAdmin || assetPermissions.isITHelpdesk) {
+      // Use allComplaints to get ALL complaints, not just manager's team
+      complaintsData = (allComplaints || []).filter((complaint: any) => {
+        // STRICT CHECK: Only "Virtual Machine" category is considered a VM
+        const isVMComplaint = complaint.asset?.category?.name?.toLowerCase() === 'virtual machine';
+        
+        if (assetPermissions.isOfficeAdmin) {
+          // Office Admin: See ALL complaints for regular assets (no VMs)
+          return !isVMComplaint;
+        }
+        if (assetPermissions.isITHelpdesk) {
+          // IT Helpdesk: See ALL complaints for VMs ONLY (strict: only "Virtual Machine" category)
+          return isVMComplaint;
+        }
+        return true;
+      });
+    } else {
+      // Admin: see all complaints
+      complaintsData = permissions.canViewAllEmployees ? (allComplaints || []) : (managerComplaints || []);
+    }
+  } else {
+    // User-centered: Managers (BDM, QAM, SDM, Finance Manager) see only their team's complaints
+    // Use managerComplaints which already filters by manager_id on the backend
+    // But also filter out the manager's own complaints - managers should only see their managed employees' complaints
+    const managerComplaintsList = managerComplaints || [];
+    complaintsData = managerComplaintsList.filter((complaint: any) => {
+      // Exclude manager's own complaints - only show complaints from employees they manage
+      return complaint.user_id !== user?.id;
+    });
+  }
 
-  // Debug logging for data selection
+  // Debug logging for data selection (after all filtering is complete)
   console.log('AssetManagement - Data Selection Debug:', {
-    canViewAllEmployees: permissions.canViewAllEmployees,
-    allAssetRequestsCount: allAssetRequests?.length || 0,
+    userId: user?.id,
+    userRole: user?.role?.name,
+    userRoles: user?.all_role_names,
+    accessLevel: permissions.accessLevel,
+    isViewOnlyManager,
+    canManageAssets: permissions.canManageAssets,
+    canAssignAssets: assetPermissions.canAssignAssets,
+    canAccessAssetManagement: assetPermissions.canAccessAssetManagement,
     managerAssetRequestsCount: managerAssetRequests?.length || 0,
-    selectedDataCount: assetRequestsData?.length || 0,
+    allAssetRequestsCount: allAssetRequests?.length || 0,
+    assetRequestsDataCount: assetRequestsData?.length || 0,
+    managerComplaintsCount: managerComplaints?.length || 0,
+    allComplaintsCount: allComplaints?.length || 0,
+    complaintsDataCount: complaintsData?.length || 0,
+    canViewAllEmployees: permissions.canViewAllEmployees,
     selectedDataSource: permissions.canViewAllEmployees ? 'allAssetRequests' : 'managerAssetRequests',
     allAssignmentsCount: allAssignments?.length || 0,
     filteredAssignmentsCount: assignmentsData?.length || 0,
     allAssetsCount: assets?.length || 0,
-    filteredAssetsCount: roleBasedFilteredAssets?.length || 0
+    filteredAssetsCount: roleBasedFilteredAssets?.length || 0,
+    filteredComplaintsCount: (complaintsData || []).length || 0
   });
   
   // For VM data, we'll need to fetch directly from the API
   const [vmData, setVMData] = useState<any[]>([]);
+  
+  // Filter VM data based on asset management permissions
+  const filteredVMData = useMemo(() => {
+    if (!vmData || vmData.length === 0) return [];
+    
+    // If user doesn't have VM permissions, return empty array
+    if (!assetPermissions.canManageVMs && !assetPermissions.canViewVMDetails) {
+      return [];
+    }
+    
+    // Office Admin: No VMs
+    if (assetPermissions.isOfficeAdmin) {
+      return [];
+    }
+    
+    // IT Helpdesk or Admin: Show all VMs
+    return vmData;
+  }, [vmData, assetPermissions]);
+
+  // Filter available assets for assignment dropdown based on role permissions
+  const filteredAvailableAssets = useMemo(() => {
+    if (!availableAssets || availableAssets.length === 0) return [];
+    
+    // If user has asset management access, filter by role
+    if (assetPermissions.canAccessAssetManagement) {
+      if (assetPermissions.isOfficeAdmin) {
+        // Office Admin: Only regular assets (no VMs)
+        return availableAssets.filter((asset: any) => {
+          return asset.category?.name?.toLowerCase() !== 'virtual machine';
+        });
+      }
+      if (assetPermissions.isITHelpdesk) {
+        // IT Helpdesk: Only VMs
+        return availableAssets.filter((asset: any) => {
+          return asset.category?.name?.toLowerCase() === 'virtual machine';
+        });
+      }
+      // Admin: Show all available assets
+      return availableAssets;
+    }
+    
+    // For other users, show all available assets
+    return availableAssets;
+  }, [availableAssets, assetPermissions]);
 
   // Fetch VM data when component loads
   useEffect(() => {
@@ -396,34 +631,51 @@ export function AssetManagement() {
       assetsToFilter = roleBasedFilteredAssets ? roleBasedFilteredAssets.filter(asset => asset.status !== 'archived') : [];
     }
     filteredAssets = assetsToFilter ? applyFilters(assetsToFilter, assetFilters) : [];
-    filteredVMs = vmData ? applyFilters(vmData, vmFilters) : [];
+    filteredVMs = filteredVMData ? applyFilters(filteredVMData, vmFilters) : [];
     filteredComplaints = complaintsData ? applyFilters(complaintsData, complaintFilters) : [];
     
     // Enhanced users with assignment history from the new assignment logs system
     if (usersWithHistory && employees) {
-      enhancedUsersWithHistory = usersWithHistory.map((userHistoryData: any) => {
-        // Get current employee data for status and other details
+      let mappedHistory = usersWithHistory.map((userHistoryData: any) => {
+        // Find matching employee data to get manager_id
+        const matchingEmployee = employees.find((emp: any) => emp.id === userHistoryData.user_id);
+        
+        const userData = matchingEmployee || {
+          id: userHistoryData.user_id,
+          full_name: userHistoryData.user_name,
+          employee_id: userHistoryData.user_employee_id,
+          department: { name: userHistoryData.user_department },
+          status: userHistoryData.user_status || 'active'
+        };
+        
+        // Add manager_id if available from matching employee
+        if (matchingEmployee?.manager_id) {
+          (userData as any).manager_id = matchingEmployee.manager_id;
+        }
         
         return {
           userId: userHistoryData.user_id,
-          user: {
-            id: userHistoryData.user_id,
-            full_name: userHistoryData.user_name,
-            employee_id: userHistoryData.user_employee_id,
-            department: { name: userHistoryData.user_department },
-            status: userHistoryData.user_status || 'active'
-          },
+          user: userData,
           totalCount: userHistoryData.total_assignments,
           activeCount: userHistoryData.active_assignments,
           lastAssignmentDate: userHistoryData.last_assignment_date
         };
-      }).sort((a: any, b: any) => a.user.full_name.localeCompare(b.user.full_name));
+      });
+      
+      // Filter to only show history for employees they manage (if view-only manager)
+      if (isViewOnlyManager) {
+        enhancedUsersWithHistory = mappedHistory.filter((userData: any) => {
+          return userData.user?.manager_id === user?.id;
+        }).sort((a: any, b: any) => a.user.full_name.localeCompare(b.user.full_name));
+      } else {
+        enhancedUsersWithHistory = mappedHistory.sort((a: any, b: any) => a.user.full_name.localeCompare(b.user.full_name));
+      }
     }
   } catch (error) {
     console.error('Error computing filtered data:', error);
     filteredAssignments = assignmentsData || [];
     filteredAssets = assets || [];
-    filteredVMs = vmData || [];
+    filteredVMs = filteredVMData || [];
     filteredComplaints = complaintsData || [];
     enhancedUsersWithHistory = [];
   }
@@ -2011,7 +2263,7 @@ export function AssetManagement() {
               }
             }}
           >
-            {permissions.canViewAllEmployees && (
+            {assetPermissions.canCreateAssets && (
               <DialogTrigger asChild>
                 <Button variant="outline">
                   <Plus className="h-4 w-4 mr-2" />
@@ -2521,7 +2773,7 @@ export function AssetManagement() {
               }
             }}
           >
-            {(permissions.canViewAllEmployees || permissions.canViewTeamEmployees) && (
+            {assetPermissions.canAssignAssets && (
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="h-4 w-4 mr-2" />
@@ -2551,7 +2803,7 @@ export function AssetManagement() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {availableAssets?.map((asset) => {
+                            {filteredAvailableAssets?.map((asset) => {
                               const assignmentCount = assignmentsData?.filter(a => a.asset_id === asset.id && a.is_active).length || 0;
                               const isAssigned = asset.status === 'assigned';
                               
@@ -2806,13 +3058,23 @@ export function AssetManagement() {
 
       {/* Main Asset Management Tabs */}
       <Tabs defaultValue="assignments" className="w-full">
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="assignments">Asset Assignments</TabsTrigger>
-          <TabsTrigger value="assets">All Assets</TabsTrigger>
-          <TabsTrigger value="archived">Archived Assets</TabsTrigger>
-          <TabsTrigger value="requests">Asset Requests</TabsTrigger>
-          <TabsTrigger value="maintenance">Asset Maintenance & Support</TabsTrigger>
-          <TabsTrigger value="user-history">Asset History</TabsTrigger>
+        <TabsList className={`grid w-full ${
+          // View-only managers (can view but not assign) should not see "All Assets" and "Archived Assets" tabs
+          (permissions.canManageAssets && !assetPermissions.canAssignAssets) 
+            ? 'grid-cols-4' 
+            : 'grid-cols-6'
+        }`}>
+          <TabsTrigger value="assignments" className="cursor-pointer">Asset Assignments</TabsTrigger>
+          {/* Hide "All Assets" and "Archived Assets" tabs for view-only managers */}
+          {!(permissions.canManageAssets && !assetPermissions.canAssignAssets) && (
+            <>
+              <TabsTrigger value="assets" className="cursor-pointer">All Assets</TabsTrigger>
+              <TabsTrigger value="archived" className="cursor-pointer">Archived Assets</TabsTrigger>
+            </>
+          )}
+          <TabsTrigger value="requests" className="cursor-pointer">Asset Requests</TabsTrigger>
+          <TabsTrigger value="maintenance" className="cursor-pointer">Asset Maintenance & Support</TabsTrigger>
+          <TabsTrigger value="user-history" className="cursor-pointer">Asset History</TabsTrigger>
         </TabsList>
 
         
@@ -3202,7 +3464,8 @@ export function AssetManagement() {
                         </Dialog>
                         
                         {(permissions.canEditAllEmployees || 
-                          (permissions.canEditTeamEmployees && assignment.user?.manager_id === user?.id)) && (
+                          (permissions.canEditTeamEmployees && assignment.user?.manager_id === user?.id)) && 
+                          assetPermissions.canAssignAssets && (
                           <Button 
                             size="sm" 
                             variant="outline"
@@ -3212,36 +3475,40 @@ export function AssetManagement() {
                           </Button>
                         )}
                         
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => {
-                            const confirmed = window.confirm(`Are you sure you want to unassign ${assignment.user?.full_name} from this asset?`);
-                            if (confirmed) {
-                              unassignSpecificUser.mutate({ 
-                                assignmentId: assignment.id,
-                                returnCondition: 'good',
-                                returnNotes: `User ${assignment.user?.full_name} unassigned by HR`
-                              });
-                            }
-                          }}
-                          disabled={unassignSpecificUser.isPending}
-                        >
-                          Unassign User
-                        </Button>
+                        {assetPermissions.canAssignAssets && (
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => {
+                              const confirmed = window.confirm(`Are you sure you want to unassign ${assignment.user?.full_name} from this asset?`);
+                              if (confirmed) {
+                                unassignSpecificUser.mutate({ 
+                                  assignmentId: assignment.id,
+                                  returnCondition: 'good',
+                                  returnNotes: `User ${assignment.user?.full_name} unassigned by HR`
+                                });
+                              }
+                            }}
+                            disabled={unassignSpecificUser.isPending}
+                          >
+                            Unassign User
+                          </Button>
+                        )}
                         
-                        <ConfirmDelete
-                          trigger={(
-                            <Button size="sm" variant="outline">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                          title="Delete Assignment"
-                          description="Are you sure you want to delete this asset assignment? This will make the asset available for reassignment."
-                          confirmText="Delete Assignment"
-                          onConfirm={() => deleteAssignment.mutate(assignment.id)}
-                          loading={deleteAssignment.isPending}
-                        />
+                        {assetPermissions.canAssignAssets && (
+                          <ConfirmDelete
+                            trigger={(
+                              <Button size="sm" variant="outline">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                            title="Delete Assignment"
+                            description="Are you sure you want to delete this asset assignment? This will make the asset available for reassignment."
+                            confirmText="Delete Assignment"
+                            onConfirm={() => deleteAssignment.mutate(assignment.id)}
+                            loading={deleteAssignment.isPending}
+                          />
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -3255,10 +3522,28 @@ export function AssetManagement() {
         
         <TabsContent value="assets">
           {/* Sub-tabs for Assets */}
-          <Tabs defaultValue="regular-assets" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="regular-assets">Assets</TabsTrigger>
-              <TabsTrigger value="virtual-machines">Virtual Machines</TabsTrigger>
+          <Tabs 
+            defaultValue={
+              assetPermissions.isITHelpdesk 
+                ? "virtual-machines" 
+                : assetPermissions.isOfficeAdmin 
+                  ? "regular-assets" 
+                  : "regular-assets"
+            } 
+            className="w-full"
+          >
+            <TabsList className={`grid w-full ${
+              // Hide tabs based on role: IT Helpdesk only sees VMs, Office Admin only sees regular assets
+              assetPermissions.isITHelpdesk || assetPermissions.isOfficeAdmin 
+                ? 'grid-cols-1' 
+                : 'grid-cols-2'
+            }`}>
+              {!assetPermissions.isITHelpdesk && (
+                <TabsTrigger value="regular-assets" className="cursor-pointer">Assets</TabsTrigger>
+              )}
+              {!assetPermissions.isOfficeAdmin && (
+                <TabsTrigger value="virtual-machines" className="cursor-pointer">Virtual Machines</TabsTrigger>
+              )}
             </TabsList>
             
             <TabsContent value="regular-assets">
@@ -3272,7 +3557,7 @@ export function AssetManagement() {
                       <CardDescription>
                         {permissions.canViewAllEmployees 
                           ? 'Complete inventory of all company assets (excluding Virtual Machines)'
-                          : 'Assets assigned to your team members and available assets (excluding Virtual Machines)'
+                          : 'Assets assigned to your team members only (excluding Virtual Machines)'
                         }
                       </CardDescription>
                     </div>
@@ -3460,7 +3745,7 @@ export function AssetManagement() {
                           <Edit className="h-4 w-4" />
                         </Button>
                         
-                        {asset.status === 'assigned' && (
+                        {asset.status === 'assigned' && assetPermissions.canAssignAssets && (
                           <Button 
                             size="sm" 
                             variant="outline"
@@ -4550,37 +4835,39 @@ export function AssetManagement() {
                                                 </DialogContent>
                                               </Dialog>
                                               
-                                              <Button 
-                                                size="sm" 
-                                                variant={isEmployeeInactive ? "destructive" : "outline"}
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  const actionText = isEmployeeInactive 
-                                                    ? `⚠ URGENT: Employee is inactive. Are you sure you want to unassign this asset from ${log.user_name}?`
-                                                    : `Are you sure you want to unassign ${log.user_name} from this asset?`;
-                                                  
-                                                  const confirmed = window.confirm(actionText);
-                                                  if (confirmed) {
-                                                    unassignSpecificUser.mutate({ 
-                                                      assignmentId: log.assignment_id,
-                                                      returnCondition: 'good',
-                                                      returnNotes: isEmployeeInactive 
-                                                        ? `Asset revoked - Employee ${log.user_name} is inactive`
-                                                        : `User ${log.user_name} unassigned by HR`
-                                                    });
-                                                  }
-                                                }}
-                                                disabled={unassignSpecificUser.isPending}
-                                              >
-                                                {isEmployeeInactive ? (
-                                                  <>
-                                                    <AlertTriangle className="h-4 w-4 mr-1" />
-                                                    Revoke Asset
-                                                  </>
-                                                ) : (
-                                                  'Unassign'
-                                                )}
-                                              </Button>
+                                              {assetPermissions.canAssignAssets && (
+                                                <Button 
+                                                  size="sm" 
+                                                  variant={isEmployeeInactive ? "destructive" : "outline"}
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const actionText = isEmployeeInactive 
+                                                      ? `⚠ URGENT: Employee is inactive. Are you sure you want to unassign this asset from ${log.user_name}?`
+                                                      : `Are you sure you want to unassign ${log.user_name} from this asset?`;
+                                                    
+                                                    const confirmed = window.confirm(actionText);
+                                                    if (confirmed) {
+                                                      unassignSpecificUser.mutate({ 
+                                                        assignmentId: log.assignment_id,
+                                                        returnCondition: 'good',
+                                                        returnNotes: isEmployeeInactive 
+                                                          ? `Asset revoked - Employee ${log.user_name} is inactive`
+                                                          : `User ${log.user_name} unassigned by HR`
+                                                      });
+                                                    }
+                                                  }}
+                                                  disabled={unassignSpecificUser.isPending}
+                                                >
+                                                  {isEmployeeInactive ? (
+                                                    <>
+                                                      <AlertTriangle className="h-4 w-4 mr-1" />
+                                                      Revoke Asset
+                                                    </>
+                                                  ) : (
+                                                    'Unassign'
+                                                  )}
+                                                </Button>
+                                              )}
                                             </div>
                                           )}
                                         </div>
@@ -5185,7 +5472,7 @@ export function AssetManagement() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {availableAssets?.map((asset) => (
+                        {filteredAvailableAssets?.map((asset) => (
                           <SelectItem key={asset.id} value={asset.id}>
                             <div className="flex items-center gap-2">
                               {React.createElement(getAssetIcon(asset.category?.name || ''), { className: "h-4 w-4" })}

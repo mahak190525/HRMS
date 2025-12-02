@@ -28,7 +28,7 @@ export function NotificationBell({ variant = 'default', isCollapsed = false }: N
   return (
     <Button
       variant="ghost"
-      className={triggerClasses}
+      className={cn(triggerClasses, 'cursor-pointer')}
       title={isCollapsed && variant === 'sidebar' ? 'Notifications' : undefined}
       onClick={handleOpenPage}
     >

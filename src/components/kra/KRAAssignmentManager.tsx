@@ -127,11 +127,11 @@ export function KRAAssignmentManager({ assignments, isLoading, permissions, cont
       {/* Tabs for different views */}
       <Tabs defaultValue="assignments" className="space-y-6">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="assignments" className="flex items-center gap-2">
+          <TabsTrigger value="assignments" className="flex items-center gap-2 cursor-pointer">
             <Users className="h-4 w-4" />
             Team Assignments
           </TabsTrigger>
-          <TabsTrigger value="comparison-matrix" className="flex items-center gap-2">
+          <TabsTrigger value="comparison-matrix" className="flex items-center gap-2 cursor-pointer">
             <Grid3X3 className="h-4 w-4" />
             Quarterly Comparison Matrix
           </TabsTrigger>

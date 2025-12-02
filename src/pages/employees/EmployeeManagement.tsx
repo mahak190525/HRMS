@@ -36,6 +36,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import {getRoleDisplayName} from '@/constants/index';
 import { EmployeeDetailsModal } from '@/components/employees/EmployeeDetailsModal';
 import { PrintBlockingLogs } from '@/components/admin/PrintBlockingLogs';
+import { RoleDisplay } from '@/components/ui/role-display';
 
 
 interface Employee {
@@ -190,19 +191,19 @@ export function EmployeeManagement() {
 
       <Tabs defaultValue="employees" className="space-y-6">
         <TabsList className={`grid w-full ${
-          // permissions.canManageAssets && canAccessSecurityLogs ? 'grid-cols-3' : 
-          permissions.canManageAssets && canAccessSecurityLogs ? 'grid-cols-2' : 
-          permissions.canManageAssets || canAccessSecurityLogs ? 'grid-cols-2' : 
+          // permissions.canAccessAssetManagement && canAccessSecurityLogs ? 'grid-cols-3' : 
+          permissions.canAccessAssetManagement && canAccessSecurityLogs ? 'grid-cols-2' : 
+          permissions.canAccessAssetManagement || canAccessSecurityLogs ? 'grid-cols-2' : 
           'grid-cols-1'
         }`}>
-          <TabsTrigger value="employees">
+          <TabsTrigger value="employees" className="cursor-pointer">
             {permissions.accessLevel === 'all' ? 'All Employees' : permissions.accessLevel === 'team' ? 'My Team' : 'My Profile'}
           </TabsTrigger>
-          {permissions.canManageAssets && (
-            <TabsTrigger value="assets">Asset Management</TabsTrigger>
+          {permissions.canAccessAssetManagement && (
+            <TabsTrigger value="assets" className="cursor-pointer">Asset Management</TabsTrigger>
           )}
           {/* {canAccessSecurityLogs && (
-            <TabsTrigger value="security-logs">
+            <TabsTrigger value="security-logs" className="cursor-pointer">
               <FileText className="h-4 w-4 mr-2" />
               Security Logs
             </TabsTrigger>
@@ -334,9 +335,7 @@ export function EmployeeManagement() {
                         </div>
                       </TableCell>
                       <TableCell>
-                          <Badge variant="secondary" className="capitalize">
-                            {getRoleDisplayName(employee.role?.name || '') || 'Not assigned'}
-                          </Badge>
+                        <RoleDisplay user={employee} variant="default" showLabels={false} />
                       </TableCell>
                       <TableCell>
                         <Badge className={getStatusBadge(employee.status)}>
@@ -406,7 +405,7 @@ export function EmployeeManagement() {
           </Card>
         </TabsContent>
 
-        {permissions.canManageAssets && (
+        {permissions.canAccessAssetManagement && (
           <TabsContent value="assets" className="space-y-6">
   {/* Top-right button */}
   <div className="flex justify-end">

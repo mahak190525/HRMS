@@ -1,5 +1,6 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { useMemo } from 'react';
+import { getAllUserRoleNames, isUserAdmin, isUserHR, isUserManager } from '@/utils/multipleRoles';
 
 export interface KRAPermissions {
   // View permissions
@@ -58,84 +59,15 @@ export function useKRAPermissions(): KRAPermissions {
       };
     }
 
-    // Get user role
-    const roleName = user.role?.name || user.role_id || '';
-    const isAdmin = user.isSA || roleName === 'admin' || roleName === 'super_admin';
-    const isHR = roleName === 'hr' || roleName === 'hrm';
-    const isManager = ['sdm', 'bdm', 'qam'].includes(roleName);
+    // Get all user roles for aggregated permissions
+    const userRoles = getAllUserRoleNames(user);
+    const userIsAdmin = isUserAdmin(user);
+    const userIsHR = isUserHR(user);
+    const userIsManager = isUserManager(user);
 
-    // Admin and Super Admin have full access
-    if (isAdmin) {
-      return {
-        canViewOwnKRA: true,
-        canViewTeamKRA: true,
-        canViewAllKRA: true,
-        canCreateTemplates: true,
-        canEditTemplates: true,
-        canDeleteTemplates: true,
-        canAssignKRA: true,
-        canViewAssignments: true,
-        canEditAssignments: true,
-        canEvaluateOwn: true,
-        canEvaluateTeam: true,
-        canEvaluateAll: true,
-        canEditEvaluations: true,
-        canAddManagerComments: true,
-        canApproveEvaluations: true,
-        accessLevel: 'all',
-        isReadOnly: false,
-      };
-    }
-
-    // HR has comprehensive access but limited editing
-    if (isHR) {
-      return {
-        canViewOwnKRA: true,
-        canViewTeamKRA: true,
-        canViewAllKRA: true,
-        canCreateTemplates: true,
-        canEditTemplates: true,
-        canDeleteTemplates: false,
-        canAssignKRA: true,
-        canViewAssignments: true,
-        canEditAssignments: false,
-        canEvaluateOwn: true,
-        canEvaluateTeam: false,
-        canEvaluateAll: false,
-        canEditEvaluations: false,
-        canAddManagerComments: false,
-        canApproveEvaluations: true,
-        accessLevel: 'all',
-        isReadOnly: false,
-      };
-    }
-
-    // Managers can manage their team's KRAs
-    if (isManager) {
-      return {
-        canViewOwnKRA: true,
-        canViewTeamKRA: true,
-        canViewAllKRA: false,
-        canCreateTemplates: true,
-        canEditTemplates: true,
-        canDeleteTemplates: false,
-        canAssignKRA: true,
-        canViewAssignments: true,
-        canEditAssignments: true,
-        canEvaluateOwn: true,
-        canEvaluateTeam: true,
-        canEvaluateAll: false,
-        canEditEvaluations: true,
-        canAddManagerComments: true,
-        canApproveEvaluations: false,
-        accessLevel: 'team',
-        isReadOnly: false,
-      };
-    }
-
-    // Regular employees have limited access
-    return {
-      canViewOwnKRA: true,
+    // Initialize permissions object - start with employee defaults
+    const permissions: KRAPermissions = {
+      canViewOwnKRA: true, // Everyone can view their own KRA
       canViewTeamKRA: false,
       canViewAllKRA: false,
       canCreateTemplates: false,
@@ -144,7 +76,7 @@ export function useKRAPermissions(): KRAPermissions {
       canAssignKRA: false,
       canViewAssignments: false,
       canEditAssignments: false,
-      canEvaluateOwn: true,
+      canEvaluateOwn: true, // Everyone can evaluate their own KRA
       canEvaluateTeam: false,
       canEvaluateAll: false,
       canEditEvaluations: false,
@@ -153,7 +85,63 @@ export function useKRAPermissions(): KRAPermissions {
       accessLevel: 'own',
       isReadOnly: false,
     };
-  }, [user?.role_id, user?.role?.name, user?.isSA]);
+
+    // Aggregate permissions from all roles
+    for (const roleName of userRoles) {
+      // Admin roles grant full access
+      if (['admin', 'super_admin'].includes(roleName) || user.isSA) {
+        permissions.canViewTeamKRA = true;
+        permissions.canViewAllKRA = true;
+        permissions.canCreateTemplates = true;
+        permissions.canEditTemplates = true;
+        permissions.canDeleteTemplates = true;
+        permissions.canAssignKRA = true;
+        permissions.canViewAssignments = true;
+        permissions.canEditAssignments = true;
+        permissions.canEvaluateTeam = true;
+        permissions.canEvaluateAll = true;
+        permissions.canEditEvaluations = true;
+        permissions.canAddManagerComments = true;
+        permissions.canApproveEvaluations = true;
+        permissions.accessLevel = 'all';
+      }
+      
+      // HR roles grant comprehensive access
+      if (['hr', 'hrm'].includes(roleName)) {
+        permissions.canViewTeamKRA = true;
+        permissions.canViewAllKRA = true;
+        permissions.canCreateTemplates = true;
+        permissions.canEditTemplates = true;
+        permissions.canAssignKRA = true;
+        permissions.canViewAssignments = true;
+        permissions.canApproveEvaluations = true;
+        if (permissions.accessLevel === 'own') permissions.accessLevel = 'all';
+      }
+      
+      // Manager roles grant team-level access
+      if (['sdm', 'bdm', 'qam', 'manager', 'finance_manager'].includes(roleName)) {
+        permissions.canViewTeamKRA = true;
+        permissions.canCreateTemplates = true;
+        permissions.canEditTemplates = true;
+        permissions.canAssignKRA = true;
+        permissions.canViewAssignments = true;
+        permissions.canEditAssignments = true;
+        permissions.canEvaluateTeam = true;
+        permissions.canEditEvaluations = true;
+        permissions.canAddManagerComments = true;
+        if (permissions.accessLevel === 'own') permissions.accessLevel = 'team';
+      }
+      
+      // Finance roles get some viewing access
+      if (['finance'].includes(roleName)) {
+        permissions.canViewTeamKRA = true;
+        permissions.canViewAllKRA = false;
+        if (permissions.accessLevel === 'own') permissions.accessLevel = 'all';
+      }
+    }
+
+    return permissions;
+  }, [user?.role_id, user?.role?.name, user?.isSA, user?.additional_role_ids]);
 }
 
 export function useCanAccessKRADashboard(): boolean {

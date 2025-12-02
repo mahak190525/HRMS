@@ -751,10 +751,10 @@ export function useAllKRAAssignments() {
         return [];
       }
 
-      // Check if user has admin/HR permissions
-      const roleName = user.role?.name || user.role_id || '';
-      const isAdmin = user.isSA || roleName === 'admin' || roleName === 'super_admin';
-      const isHR = roleName === 'hr' || roleName === 'hrm';
+      // Check if user has admin/HR permissions using multiple roles
+      const { isUserAdmin, isUserHR } = await import('@/utils/multipleRoles');
+      const isAdmin = isUserAdmin(user);
+      const isHR = isUserHR(user);
 
       if (!isAdmin && !isHR) {
         console.warn('Insufficient permissions to view all KRA assignments');

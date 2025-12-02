@@ -6,6 +6,7 @@ import { useLeaveWithdrawalLogs } from '@/hooks/useLeave';
 // import { useRecalculateAllApprovedLeaveBalances } from '@/hooks/useSandwichLeave';
 import { useHolidays, useCreateHoliday, useDeleteHoliday } from '@/hooks/useHolidays';
 import { useEmployeePermissions } from '@/hooks/useEmployeePermissions';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -612,7 +613,12 @@ function LeaveBalanceAdjustment({ employee, onClose, onSuccess }: {
 export function LeaveManagement() {
   const { user } = useAuth();
   const permissions = useEmployeePermissions();
+  const { hasAccess } = usePermissions(); // Check page-level permissions
   const [activeTab, setActiveTab] = useState('applications');
+  
+  // Check if user has page-level access to leave management
+  // User-level or role-level page permissions take precedence
+  const hasPageAccess = hasAccess('employee_management', 'leave');
   
   // Leave Applications data
   const { data: leaveApplications, isLoading: applicationsLoading } = useAllLeaveApplications();
@@ -625,19 +631,21 @@ export function LeaveManagement() {
   const { data: withdrawalLogs, isLoading: withdrawalLogsLoading } = useLeaveWithdrawalLogs();
 
   // Filter data based on permissions
-  const filteredLeaveBalances = permissions.canViewAllEmployees 
+  // If user has page access but not employee permissions, grant view access to all
+  const canViewAll = hasPageAccess || permissions.canViewAllEmployees;
+  const filteredLeaveBalances = canViewAll 
     ? leaveBalances 
     : leaveBalances?.filter((balance: any) => balance.user?.manager_id === user?.id);
 
-  const filteredAdjustmentHistory = permissions.canViewAllEmployees 
+  const filteredAdjustmentHistory = canViewAll 
     ? adjustmentHistory 
     : adjustmentHistory?.filter((adj: any) => adj.user?.manager_id === user?.id);
 
-  const filteredWithdrawalLogs = permissions.canViewAllEmployees 
+  const filteredWithdrawalLogs = canViewAll 
     ? withdrawalLogs 
     : withdrawalLogs?.filter((log: any) => log.leave_application?.user?.manager_id === user?.id);
 
-  const filteredLeaveApplications = permissions.canViewAllEmployees 
+  const filteredLeaveApplications = canViewAll 
     ? leaveApplications 
     : leaveApplications?.filter((app: any) => app.user?.manager_id === user?.id);
   
@@ -807,7 +815,8 @@ export function LeaveManagement() {
     : 0;
 
   // Check if user has permission to access leave management
-  if (!permissions.canViewAllEmployees && !permissions.canViewTeamEmployees) {
+  // Grant access if user has page-level permissions OR employee permissions
+  if (!hasPageAccess && !permissions.canViewAllEmployees && !permissions.canViewTeamEmployees) {
     return (
       <div className="flex items-center justify-center py-8">
         <div className="text-center">
@@ -883,13 +892,31 @@ export function LeaveManagement() {
       </Alert>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className={`grid w-full ${permissions.canViewAllEmployees ? 'grid-cols-5' : 'grid-cols-4'}`}>
-          <TabsTrigger value="applications">Leave Applications</TabsTrigger>
-          <TabsTrigger value="balances">Leave Balances</TabsTrigger>
-          <TabsTrigger value="history">Adjustment History</TabsTrigger>
-          <TabsTrigger value="withdrawals">Withdrawal Logs</TabsTrigger>
+        <TabsList className={`grid w-full ${
+          // Managers (who can view team but not all) should only see "Leave Applications" tab
+          permissions.canViewAllEmployees 
+            ? 'grid-cols-5' 
+            : permissions.canViewTeamEmployees 
+              ? 'grid-cols-1' // Managers only see Leave Applications
+              : 'grid-cols-4' // Regular employees see all except Holidays
+        }`}>
+          <TabsTrigger value="applications" className="cursor-pointer">Leave Applications</TabsTrigger>
+          {/* Hide Leave Balances, Adjustment History, and Withdrawal Logs for managers */}
           {permissions.canViewAllEmployees && (
-            <TabsTrigger value="holidays">Holidays</TabsTrigger>
+            <>
+              <TabsTrigger value="balances" className="cursor-pointer">Leave Balances</TabsTrigger>
+              <TabsTrigger value="history" className="cursor-pointer">Adjustment History</TabsTrigger>
+              <TabsTrigger value="withdrawals" className="cursor-pointer">Withdrawal Logs</TabsTrigger>
+              <TabsTrigger value="holidays" className="cursor-pointer">Holidays</TabsTrigger>
+            </>
+          )}
+          {/* Regular employees (not managers, not admins) can see balances, history, and withdrawals but not holidays */}
+          {!permissions.canViewAllEmployees && !permissions.canViewTeamEmployees && (
+            <>
+              <TabsTrigger value="balances" className="cursor-pointer">Leave Balances</TabsTrigger>
+              <TabsTrigger value="history" className="cursor-pointer">Adjustment History</TabsTrigger>
+              <TabsTrigger value="withdrawals" className="cursor-pointer">Withdrawal Logs</TabsTrigger>
+            </>
           )}
         </TabsList>
 

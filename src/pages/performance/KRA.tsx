@@ -124,12 +124,12 @@ export function KRA() {
           // if (permissions.canViewAssignments || permissions.canViewAllKRA) tabCount++; // Performance Overview
           return `grid-cols-${tabCount}`;
         })()}`}>
-          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-          {permissions.canCreateTemplates && <TabsTrigger value="templates">Templates</TabsTrigger>}
-          {permissions.canViewAssignments && <TabsTrigger value="assignments">Team KRAs</TabsTrigger>}
-          {permissions.canViewAllKRA && <TabsTrigger value="admin-overview">All KRAs</TabsTrigger>}
+          <TabsTrigger value="dashboard" className="cursor-pointer">Dashboard</TabsTrigger>
+          {permissions.canCreateTemplates && <TabsTrigger value="templates" className="cursor-pointer">Templates</TabsTrigger>}
+          {permissions.canViewAssignments && <TabsTrigger value="assignments" className="cursor-pointer">Team KRAs</TabsTrigger>}
+          {permissions.canViewAllKRA && <TabsTrigger value="admin-overview" className="cursor-pointer">All KRAs</TabsTrigger>}
           {/* {(permissions.canViewAssignments || permissions.canViewAllKRA) && (
-            <TabsTrigger value="performance-overview">Performance Overview</TabsTrigger>
+            <TabsTrigger value="performance-overview" className="cursor-pointer">Performance Overview</TabsTrigger>
           )} */}
         </TabsList>
 
