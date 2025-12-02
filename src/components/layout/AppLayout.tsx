@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 
 export function AppLayout() {
   const { loading } = useAuth();
-  const { getAccessibleDashboards } = usePermissions();
+  const { getAccessibleDashboards, rolePermissionsLoading } = usePermissions();
   const location = useLocation();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -33,7 +33,7 @@ export function AppLayout() {
   };
 
   const currentDashboard = getCurrentDashboard();
-  if (loading) {
+  if (loading || rolePermissionsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner size="lg" />

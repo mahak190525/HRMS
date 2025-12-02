@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/services/supabase';
 import { toast } from 'sonner';
 import type { User } from '@/types';
+import { getAllUserRoleNames } from '@/utils/multipleRoles';
 
 export interface PolicyDashboardPermissions {
   can_view_policies: boolean;
@@ -61,29 +62,49 @@ export function usePolicyDashboardPermissions() {
       setLoading(true);
       setError(null);
 
-      const roleName = user.role?.name || user.role_id || 'employee';
+      // Get all user roles for comprehensive permissions
+      const userRoles = getAllUserRoleNames(user);
+      const primaryRole = user.role?.name || user.role_id || 'employee';
       
-      const { data, error } = await supabase.rpc('get_user_policy_dashboard_permissions', {
-        p_user_id: user.id,
-        p_role: roleName
-      });
+      // Check permissions for all roles and aggregate them
+      let aggregatedPermissions = {
+        can_view_policies: true, // Default view access
+        can_create_policies: false,
+        can_edit_policies: false,
+        can_delete_policies: false,
+        can_manage_permissions: false,
+        can_view_analytics: false,
+        permission_source: 'default' as const
+      };
+
+      // Check permissions for each role and aggregate
+      for (const roleName of userRoles) {
+        const { data: roleData, error: roleError } = await supabase.rpc('get_user_policy_dashboard_permissions', {
+          p_user_id: user.id,
+          p_role: roleName
+        });
+
+        if (!roleError && roleData && roleData.length > 0) {
+          const rolePermissions = roleData[0];
+          // Aggregate permissions (OR operation - if any role has permission, user has it)
+          aggregatedPermissions.can_view_policies = aggregatedPermissions.can_view_policies || rolePermissions.can_view_policies;
+          aggregatedPermissions.can_create_policies = aggregatedPermissions.can_create_policies || rolePermissions.can_create_policies;
+          aggregatedPermissions.can_edit_policies = aggregatedPermissions.can_edit_policies || rolePermissions.can_edit_policies;
+          aggregatedPermissions.can_delete_policies = aggregatedPermissions.can_delete_policies || rolePermissions.can_delete_policies;
+          aggregatedPermissions.can_manage_permissions = aggregatedPermissions.can_manage_permissions || rolePermissions.can_manage_permissions;
+          aggregatedPermissions.can_view_analytics = aggregatedPermissions.can_view_analytics || rolePermissions.can_view_analytics;
+          
+          if (rolePermissions.permission_source !== 'default') {
+            aggregatedPermissions.permission_source = rolePermissions.permission_source;
+          }
+        }
+      }
+
+      setPermissions(aggregatedPermissions);
 
       if (error) throw error;
 
-      if (data && data.length > 0) {
-        setPermissions(data[0]);
-      } else {
-        // Fallback to default permissions
-        setPermissions({
-          can_view_policies: true,
-          can_create_policies: false,
-          can_edit_policies: false,
-          can_delete_policies: false,
-          can_manage_permissions: false,
-          can_view_analytics: false,
-          permission_source: 'default'
-        });
-      }
+      // The aggregated permissions are already set above
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch policy dashboard permissions';
       setError(errorMessage);
@@ -283,16 +304,44 @@ export function useUserPolicyDashboardPermissions(targetUser: User | null) {
       setLoading(true);
       setError(null);
 
-      const roleName = targetUser.role?.name || targetUser.role_id || 'employee';
+      // Get all user roles for comprehensive permissions
+      const userRoles = getAllUserRoleNames(targetUser);
       
-      const { data, error } = await supabase.rpc('get_user_policy_dashboard_permissions', {
-        p_user_id: targetUser.id,
-        p_role: roleName
-      });
+      // Check permissions for all roles and aggregate them
+      let aggregatedPermissions = {
+        can_view_policies: true, // Default view access
+        can_create_policies: false,
+        can_edit_policies: false,
+        can_delete_policies: false,
+        can_manage_permissions: false,
+        can_view_analytics: false,
+        permission_source: 'default' as const
+      };
 
-      if (error) throw error;
+      // Check permissions for each role and aggregate
+      for (const roleName of userRoles) {
+        const { data: roleData, error: roleError } = await supabase.rpc('get_user_policy_dashboard_permissions', {
+          p_user_id: targetUser.id,
+          p_role: roleName
+        });
 
-      setPermissions(data && data.length > 0 ? data[0] : null);
+        if (!roleError && roleData && roleData.length > 0) {
+          const rolePermissions = roleData[0];
+          // Aggregate permissions (OR operation - if any role has permission, user has it)
+          aggregatedPermissions.can_view_policies = aggregatedPermissions.can_view_policies || rolePermissions.can_view_policies;
+          aggregatedPermissions.can_create_policies = aggregatedPermissions.can_create_policies || rolePermissions.can_create_policies;
+          aggregatedPermissions.can_edit_policies = aggregatedPermissions.can_edit_policies || rolePermissions.can_edit_policies;
+          aggregatedPermissions.can_delete_policies = aggregatedPermissions.can_delete_policies || rolePermissions.can_delete_policies;
+          aggregatedPermissions.can_manage_permissions = aggregatedPermissions.can_manage_permissions || rolePermissions.can_manage_permissions;
+          aggregatedPermissions.can_view_analytics = aggregatedPermissions.can_view_analytics || rolePermissions.can_view_analytics;
+          
+          if (rolePermissions.permission_source !== 'default') {
+            aggregatedPermissions.permission_source = rolePermissions.permission_source;
+          }
+        }
+      }
+
+      setPermissions(aggregatedPermissions);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch user policy dashboard permissions';
       setError(errorMessage);

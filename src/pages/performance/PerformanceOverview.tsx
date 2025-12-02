@@ -90,9 +90,10 @@ export function PerformanceOverview() {
     queryFn: async () => {
       if (!user) return [];
 
-      const roleName = user.role?.name || user.role_id || '';
-      const isAdmin = user.isSA || roleName === 'admin' || roleName === 'super_admin';
-      const isHR = roleName === 'hr' || roleName === 'hrm';
+      // Use multiple role utility functions
+      const { isUserAdmin, isUserHR } = await import('@/utils/multipleRoles');
+      const isAdmin = isUserAdmin(user);
+      const isHR = isUserHR(user);
 
       let query = supabase
         .from('kra_assignments')

@@ -15,6 +15,7 @@ interface AuthContextType {
   loginWithProvider: (provider: 'microsoft' | 'google', userData: any) => Promise<void>;
   logout: (isAutoLogout?: boolean) => void;
   updateUser: (updates: Partial<User>) => Promise<void>;
+  refreshUserRoles: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -56,7 +57,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // For now, we'll simulate this
           const userData = JSON.parse(localStorage.getItem('hrms_user') || 'null');
           if (userData) {
-            setUser(userData);
+            // Check if user has additional_role_ids but missing additional_roles data
+            if (userData.additional_role_ids && userData.additional_role_ids.length > 0 && 
+                (!userData.additional_roles || userData.additional_roles.length === 0)) {
+              
+              console.log('🔄 Fetching missing additional roles data for session restoration...');
+              
+              try {
+                // Fetch additional roles data from database
+                const { data: additionalRoles, error } = await supabase
+                  .from('roles')
+                  .select('id, name, description')
+                  .in('id', userData.additional_role_ids);
+                
+                if (!error && additionalRoles) {
+                  const enhancedUserData = {
+                    ...userData,
+                    additional_roles: additionalRoles
+                  };
+                  
+                  console.log('✅ Additional roles fetched:', additionalRoles.map(r => r.name));
+                  
+                  // Update localStorage with complete data
+                  localStorage.setItem('hrms_user', JSON.stringify(enhancedUserData));
+                  setUser(enhancedUserData);
+                } else {
+                  console.error('Failed to fetch additional roles:', error);
+                  // Fallback to user data with empty additional_roles
+                  const fallbackUserData = {
+                    ...userData,
+                    additional_roles: []
+                  };
+                  setUser(fallbackUserData);
+                }
+              } catch (fetchError) {
+                console.error('Error fetching additional roles:', fetchError);
+                // Fallback to user data with empty additional_roles
+                const fallbackUserData = {
+                  ...userData,
+                  additional_roles: []
+                };
+                setUser(fallbackUserData);
+              }
+            } else {
+              // User data is complete or no additional roles
+              const enhancedUserData = {
+                ...userData,
+                additional_roles: userData.additional_roles || []
+              };
+              setUser(enhancedUserData);
+            }
           }
         }
       } catch (error) {
@@ -138,11 +188,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           throw new Error('Invalid credentials');
         }
         
+        // Enhance with additional roles data
+        let enhancedUser = userData;
+        if (userData.additional_role_ids && userData.additional_role_ids.length > 0) {
+          const { data: additionalRoles } = await supabase
+            .from('roles')
+            .select('id, name, description')
+            .in('id', userData.additional_role_ids);
+          
+          enhancedUser = {
+            ...userData,
+            additional_roles: additionalRoles || []
+          };
+        } else {
+          enhancedUser = {
+            ...userData,
+            additional_roles: []
+          };
+        }
+        
         const token = 'demo_jwt_token'; // In real app, this comes from backend
         localStorage.setItem('hrms_token', token);
-        localStorage.setItem('hrms_user', JSON.stringify(userData));
-        setUser(userData);
-        console.log('Manual login successful:', userData);
+        localStorage.setItem('hrms_user', JSON.stringify(enhancedUser));
+        setUser(enhancedUser);
+        console.log('Manual login successful with roles:', {
+          user: enhancedUser.full_name,
+          primary_role: enhancedUser.role?.name,
+          additional_roles: enhancedUser.additional_roles?.map(r => r.name)
+        });
       } else {
         throw new Error('Invalid credentials or inactive account');
       }
@@ -197,11 +270,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (createError) throw createError;
         
         if (createdUser.status === 'active') {
+          // Enhance new user with additional roles (will be empty initially)
+          const enhancedUser = {
+            ...createdUser,
+            additional_roles: []
+          };
+          
           const token = 'demo_jwt_token';
           localStorage.setItem('hrms_token', token);
-          localStorage.setItem('hrms_user', JSON.stringify(createdUser));
-          setUser(createdUser);
-          console.log('New user logged in successfully:', createdUser);
+          localStorage.setItem('hrms_user', JSON.stringify(enhancedUser));
+          setUser(enhancedUser);
+          console.log('New user logged in successfully:', enhancedUser);
         } else {
           throw new Error('Account pending approval or inactive');
         }
@@ -229,11 +308,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
           
+          // Enhance with additional roles data
+          let enhancedUser = userWithRole;
+          if (userWithRole.additional_role_ids && userWithRole.additional_role_ids.length > 0) {
+            const { data: additionalRoles } = await supabase
+              .from('roles')
+              .select('id, name, description')
+              .in('id', userWithRole.additional_role_ids);
+            
+            enhancedUser = {
+              ...userWithRole,
+              additional_roles: additionalRoles || []
+            };
+          } else {
+            enhancedUser = {
+              ...userWithRole,
+              additional_roles: []
+            };
+          }
+          
           const token = 'demo_jwt_token';
           localStorage.setItem('hrms_token', token);
-          localStorage.setItem('hrms_user', JSON.stringify(userWithRole));
-          setUser(userWithRole);
-          console.log('Existing user logged in successfully:', userWithRole);
+          localStorage.setItem('hrms_user', JSON.stringify(enhancedUser));
+          setUser(enhancedUser);
+          console.log('Existing user logged in successfully with roles:', {
+            user: enhancedUser.full_name,
+            primary_role: enhancedUser.role?.name,
+            additional_roles: enhancedUser.additional_roles?.map(r => r.name)
+          });
         } else {
           throw new Error('Account pending approval or inactive');
         }
@@ -296,17 +398,113 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       
-      // Update user object with new values while preserving existing structure
-      const updatedUser = {
-        ...user,
-        ...updates,
-        updated_at: new Date().toISOString()
-      };
-      
-      setUser(updatedUser);
-      localStorage.setItem('hrms_user', JSON.stringify(updatedUser));
+      // If additional_role_ids are being updated, fetch fresh user data from database
+      // to ensure we have the complete role information
+      if (updates.additional_role_ids !== undefined) {
+        console.log('🔄 Refreshing user data after role update...');
+        
+        // Fetch fresh user data with all roles
+        const { data: freshUserData, error } = await supabase
+          .from('users')
+          .select(`
+            *,
+            role:roles(name, description),
+            department:departments!users_department_id_fkey(name, description)
+          `)
+          .eq('id', user.id)
+          .single();
+
+        if (error) throw error;
+        
+        // Enhance with additional roles data
+        let enhancedUser = freshUserData;
+        if (freshUserData?.additional_role_ids && freshUserData.additional_role_ids.length > 0) {
+          const { data: additionalRoles } = await supabase
+            .from('roles')
+            .select('id, name, description')
+            .in('id', freshUserData.additional_role_ids);
+          
+          enhancedUser = {
+            ...freshUserData,
+            additional_roles: additionalRoles || []
+          };
+        } else {
+          enhancedUser = {
+            ...freshUserData,
+            additional_roles: []
+          };
+        }
+        
+        console.log('✅ User data refreshed with roles:', {
+          primary_role: enhancedUser.role?.name,
+          additional_roles: enhancedUser.additional_roles?.map(r => r.name)
+        });
+        
+        setUser(enhancedUser);
+        localStorage.setItem('hrms_user', JSON.stringify(enhancedUser));
+      } else {
+        // For other updates, just merge locally
+        const updatedUser = {
+          ...user,
+          ...updates,
+          updated_at: new Date().toISOString()
+        };
+        
+        setUser(updatedUser);
+        localStorage.setItem('hrms_user', JSON.stringify(updatedUser));
+      }
     } catch (error) {
       throw error;
+    }
+  };
+
+  const refreshUserRoles = async () => {
+    if (!user) return;
+    
+    try {
+      console.log('🔄 Refreshing user roles...');
+      
+      // Fetch fresh user data from database
+      const { data: freshUserData, error } = await supabase
+        .from('users')
+        .select(`
+          *,
+          role:roles(name, description),
+          department:departments!users_department_id_fkey(name, description)
+        `)
+        .eq('id', user.id)
+        .single();
+
+      if (error) throw error;
+      
+      // Enhance with additional roles data
+      let enhancedUser = freshUserData;
+      if (freshUserData?.additional_role_ids && freshUserData.additional_role_ids.length > 0) {
+        const { data: additionalRoles } = await supabase
+          .from('roles')
+          .select('id, name, description')
+          .in('id', freshUserData.additional_role_ids);
+        
+        enhancedUser = {
+          ...freshUserData,
+          additional_roles: additionalRoles || []
+        };
+      } else {
+        enhancedUser = {
+          ...freshUserData,
+          additional_roles: []
+        };
+      }
+      
+      console.log('✅ User roles refreshed:', {
+        primary_role: enhancedUser.role?.name,
+        additional_roles: enhancedUser.additional_roles?.map(r => r.name)
+      });
+      
+      setUser(enhancedUser);
+      localStorage.setItem('hrms_user', JSON.stringify(enhancedUser));
+    } catch (error) {
+      console.error('Failed to refresh user roles:', error);
     }
   };
 
@@ -317,7 +515,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signup,
     loginWithProvider,
     logout,
-    updateUser
+    updateUser,
+    refreshUserRoles
   };
 
   return (

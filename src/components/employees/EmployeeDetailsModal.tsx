@@ -47,6 +47,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
+import { Check, ChevronsUpDown } from 'lucide-react';
 import {
   Users,
   Phone,
@@ -60,7 +63,8 @@ import {
   Send,
   Plus,
   Eye,
-  AlertTriangle
+  AlertTriangle,
+  X
 } from 'lucide-react';
 
 const employeeSchema = z.object({
@@ -85,6 +89,7 @@ const employeeSchema = z.object({
       message: 'Invalid date format',
     }),
   role_id: z.string().optional(),
+  additional_role_ids: z.array(z.string()).optional(),
   department_id: z.string().optional(),
   manager_id: z.string().optional(),
   status: z.string().optional(),
@@ -167,7 +172,7 @@ export function EmployeeDetailsModal({
   mode, 
   onModeChange 
 }: EmployeeDetailsModalProps) {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const permissions = useEmployeePermissions();
   const updateEmployee = useUpdateEmployee();
   const [activeTab, setActiveTab] = useState('basic');
@@ -190,6 +195,76 @@ export function EmployeeDetailsModal({
   const deleteIncidentMutation = useDeleteIncident();
   const uploadIncidentAttachmentMutation = useUploadIncidentAttachment();
   const removeIncidentAttachmentMutation = useRemoveIncidentAttachment();
+
+  // Fetch employee's additional roles from database
+  const { data: additionalRolesData, isLoading: isLoadingAdditionalRoles } = useQuery({
+    queryKey: ['employee-additional-roles', employee?.id],
+    queryFn: async () => {
+      if (!employee?.id) {
+        return { additional_role_ids: [], additional_roles: [] };
+      }
+      
+      console.log('🔄 Fetching employee additional roles from database...', {
+        employee_id: employee.id
+      });
+      
+      // First, get the employee's additional_role_ids from the database
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('additional_role_ids')
+        .eq('id', employee.id)
+        .single();
+
+      if (userError) {
+        console.error('Failed to fetch user additional role IDs:', userError);
+        throw userError;
+      }
+
+      console.log('📋 User additional role IDs from DB:', userData?.additional_role_ids);
+
+      // If no additional role IDs, return empty
+      if (!userData?.additional_role_ids || userData.additional_role_ids.length === 0) {
+        return { additional_role_ids: [], additional_roles: [] };
+      }
+      
+      // Fetch the role details
+      const { data: rolesData, error: rolesError } = await supabase
+        .from('roles')
+        .select('id, name, description')
+        .in('id', userData.additional_role_ids);
+
+      if (rolesError) {
+        console.error('Failed to fetch additional roles:', rolesError);
+        throw rolesError;
+      }
+
+      console.log('✅ Additional roles fetched:', rolesData?.map(r => r.name));
+
+      return {
+        additional_role_ids: userData.additional_role_ids,
+        additional_roles: rolesData || []
+      };
+    },
+    enabled: !!employee?.id && isOpen && mode === 'edit',
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // Merge employee data with additional roles data
+  const employeeData = React.useMemo(() => {
+    if (!employee) return null;
+    
+    // If we have additional roles data, merge it with employee data
+    if (additionalRolesData) {
+      return {
+        ...employee,
+        additional_role_ids: additionalRolesData.additional_role_ids,
+        additional_roles: additionalRolesData.additional_roles
+      };
+    }
+    
+    return employee;
+  }, [employee, additionalRolesData]);
 
   // Get departments, roles, and users for dropdowns
   const { data: departmentOptions } = useQuery({
@@ -247,6 +322,7 @@ export function EmployeeDetailsModal({
       date_of_birth: '',
       date_of_joining: '',
       role_id: '',
+      additional_role_ids: [],
       department_id: '',
       manager_id: 'none',
       status: 'active',
@@ -274,78 +350,131 @@ export function EmployeeDetailsModal({
   // Track previous employee and mode to reset form when needed
   const prevModeRef = React.useRef(mode);
   const prevEmployeeRef = React.useRef(employee?.id);
+  const [originalFormValues, setOriginalFormValues] = React.useState<EmployeeFormData | null>(null);
   
   // Reset form when switching to edit mode OR when employee changes
   React.useEffect(() => {
-    if (employee && mode === 'edit' && (prevModeRef.current !== 'edit' || prevEmployeeRef.current !== employee.id)) {
-      form.reset({
-        id: employee.id,
-        full_name: employee.full_name,
-        employee_id: employee.employee_id || '',
-        email: employee.email,
-        company_email: employee.company_email || '',
-        personal_email: employee.personal_email || '',
-        phone: employee.phone || '',
-        alternate_contact_no: employee.alternate_contact_no || '',
-        position: employee.position || '',
-        designation_offer_letter: employee.designation_offer_letter || '',
-        salary: employee.salary || 0,
-        address: employee.address || '',
-        permanent_address: employee.permanent_address || '',
-        date_of_birth: employee.date_of_birth || '',
-        date_of_joining: employee.date_of_joining || '',
-        role_id: employee.role_id || '',
-        department_id: employee.department_id || '',
-        manager_id: employee.manager_id || 'none',
-        status: employee.status || 'active',
-        level_grade: employee.level_grade || '',
-        skill: employee.skill || [],
-        current_office_location: employee.current_office_location || '',
-        blood_group: employee.blood_group || '',
-        religion: employee.religion || '',
-        gender: employee.gender || undefined,
-        marital_status: employee.marital_status || undefined,
-        date_of_marriage_anniversary: employee.date_of_marriage_anniversary || '',
-        father_name: employee.father_name || '',
-        father_dob: employee.father_dob || '',
-        mother_name: employee.mother_name || '',
-        mother_dob: employee.mother_dob || '',
-        aadhar_card_no: employee.aadhar_card_no || '',
-        pan_no: employee.pan_no || '',
-        bank_account_no: employee.bank_account_no || '',
-        ifsc_code: employee.ifsc_code || '',
-        qualification: employee.qualification || '',
-        employment_terms: employee.employment_terms || 'full_time',
-        // New onboarding fields
-        appointment_formalities: employee.appointment_formalities || 'Not Done',
-        orientation: employee.orientation || 'Not Done',
-        order_id_card: employee.order_id_card || 'No',
-        email_account: employee.email_account || 'N/A',
-        skype_account: employee.skype_account || 'N/A',
-        system_account: employee.system_account || 'N/A',
-        added_to_mailing_list: employee.added_to_mailing_list || 'No',
-        added_to_attendance_sheet: employee.added_to_attendance_sheet || 'No',
-        confluence_info_provided: employee.confluence_info_provided || 'No',
-        id_card_provided: employee.id_card_provided || 'N/A',
-        remarks: employee.remarks || '',
-        uan_number: employee.uan_number || '',
-        is_experienced: employee.is_experienced || 'No',
+    const currentEmployeeData = employeeData || employee;
+    
+    if (currentEmployeeData && mode === 'edit' && (prevModeRef.current !== 'edit' || prevEmployeeRef.current !== currentEmployeeData.id)) {
+      console.log('🔄 Initializing form with employee data:', {
+        id: currentEmployeeData.id,
+        name: currentEmployeeData.full_name,
+        additional_role_ids: currentEmployeeData.additional_role_ids,
+        additional_roles: currentEmployeeData.additional_roles?.map((r: any) => r.name),
+        employee_prop_has_additional_role_ids: !!employee?.additional_role_ids,
+        employeeData_has_additional_role_ids: !!employeeData?.additional_role_ids
       });
+      
+      const formData = {
+        id: currentEmployeeData.id,
+        full_name: currentEmployeeData.full_name,
+        employee_id: currentEmployeeData.employee_id || '',
+        email: currentEmployeeData.email,
+        company_email: currentEmployeeData.company_email || '',
+        personal_email: currentEmployeeData.personal_email || '',
+        phone: currentEmployeeData.phone || '',
+        alternate_contact_no: currentEmployeeData.alternate_contact_no || '',
+        position: currentEmployeeData.position || '',
+        designation_offer_letter: currentEmployeeData.designation_offer_letter || '',
+        salary: currentEmployeeData.salary || 0,
+        address: currentEmployeeData.address || '',
+        permanent_address: currentEmployeeData.permanent_address || '',
+        date_of_birth: currentEmployeeData.date_of_birth || '',
+        date_of_joining: currentEmployeeData.date_of_joining || '',
+        role_id: currentEmployeeData.role_id || '',
+        additional_role_ids: currentEmployeeData.additional_role_ids || [],
+        department_id: currentEmployeeData.department_id || '',
+        manager_id: currentEmployeeData.manager_id || 'none',
+        status: currentEmployeeData.status || 'active',
+        level_grade: currentEmployeeData.level_grade || '',
+        skill: currentEmployeeData.skill || [],
+        current_office_location: currentEmployeeData.current_office_location || '',
+        blood_group: currentEmployeeData.blood_group || '',
+        religion: currentEmployeeData.religion || '',
+        gender: currentEmployeeData.gender || undefined,
+        marital_status: currentEmployeeData.marital_status || undefined,
+        date_of_marriage_anniversary: currentEmployeeData.date_of_marriage_anniversary || '',
+        father_name: currentEmployeeData.father_name || '',
+        father_dob: currentEmployeeData.father_dob || '',
+        mother_name: currentEmployeeData.mother_name || '',
+        mother_dob: currentEmployeeData.mother_dob || '',
+        aadhar_card_no: currentEmployeeData.aadhar_card_no || '',
+        pan_no: currentEmployeeData.pan_no || '',
+        bank_account_no: currentEmployeeData.bank_account_no || '',
+        ifsc_code: currentEmployeeData.ifsc_code || '',
+        qualification: currentEmployeeData.qualification || '',
+        employment_terms: currentEmployeeData.employment_terms || 'full_time',
+        // New onboarding fields
+        appointment_formalities: currentEmployeeData.appointment_formalities || 'Not Done',
+        orientation: currentEmployeeData.orientation || 'Not Done',
+        order_id_card: currentEmployeeData.order_id_card || 'No',
+        email_account: currentEmployeeData.email_account || 'N/A',
+        skype_account: currentEmployeeData.skype_account || 'N/A',
+        system_account: currentEmployeeData.system_account || 'N/A',
+        added_to_mailing_list: currentEmployeeData.added_to_mailing_list || 'No',
+        added_to_attendance_sheet: currentEmployeeData.added_to_attendance_sheet || 'No',
+        confluence_info_provided: currentEmployeeData.confluence_info_provided || 'No',
+        id_card_provided: currentEmployeeData.id_card_provided || 'N/A',
+        remarks: currentEmployeeData.remarks || '',
+        uan_number: currentEmployeeData.uan_number || '',
+        is_experienced: currentEmployeeData.is_experienced || 'No',
+      };
+      
+      // Store original values for comparison (deep clone)
+      setOriginalFormValues(JSON.parse(JSON.stringify(formData)));
+      
+      // Reset form - this will mark the form as not dirty
+      form.reset(formData, { keepDefaultValues: false });
     }
     
     // Update the previous references
     prevModeRef.current = mode;
-    prevEmployeeRef.current = employee?.id;
-  }, [employee, mode, form]);
+    prevEmployeeRef.current = currentEmployeeData?.id;
+  }, [employeeData, employee, mode, form]);
+
+  // Update form when additional roles data becomes available
+  React.useEffect(() => {
+    if (additionalRolesData && mode === 'edit') {
+      console.log('🔄 Updating form with fetched additional roles:', {
+        additional_role_ids: additionalRolesData.additional_role_ids,
+        additional_roles: additionalRolesData.additional_roles?.map((r: any) => r.name),
+        form_current_value: form.getValues('additional_role_ids')
+      });
+      
+      // Update the additional_role_ids field with fetched data
+      form.setValue('additional_role_ids', additionalRolesData.additional_role_ids || []);
+      
+      // Update original values to reflect the fetched additional roles
+      if (originalFormValues) {
+        setOriginalFormValues(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            additional_role_ids: additionalRolesData.additional_role_ids || []
+          };
+        });
+      }
+      
+      // Force form to re-render with new values
+      form.trigger('additional_role_ids');
+      
+      console.log('✅ Additional roles updated in form:', {
+        new_value: form.getValues('additional_role_ids')
+      });
+    }
+  }, [additionalRolesData, mode, form]);
 
 
   const onEmployeeSubmit = async (data: EmployeeFormData) => {
-    if (!employee) return;
+    const currentEmployee = employeeData || employee;
+    if (!currentEmployee) return;
 
     // Coerce empty selects to null to avoid uuid parsing errors
     const safeUpdates = {
       ...data,
       role_id: data.role_id || null,
+      additional_role_ids: data.additional_role_ids || [],
       department_id: data.department_id || null,
       manager_id: data.manager_id === 'none' ? null : data.manager_id || null,
       salary: data.salary || null,
@@ -390,14 +519,39 @@ export function EmployeeDetailsModal({
       is_experienced: data.is_experienced || 'No',
     };
 
+    // Debug: Log the data being sent to the API
+    console.log('🔍 Employee update data:', {
+      additional_role_ids: safeUpdates.additional_role_ids,
+      role_id: safeUpdates.role_id,
+      employee_id: currentEmployee.id
+    });
+
     updateEmployee.mutate({
-      id: employee.id,
+      id: currentEmployee.id,
       updates: safeUpdates
     }, {
-      onSuccess: () => {
+      onSuccess: async () => {
         // Don't change mode - keep in edit mode after saving
         // Don't reset form - keep user inputs intact
         // toast.success('Changes saved successfully!');
+        
+        // Update the original form values with the current form values (which were just saved)
+        // This will make the "Save Changes" button disabled again since values match
+        const currentFormValues = form.getValues();
+        setOriginalFormValues(JSON.parse(JSON.stringify(currentFormValues)));
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Original form values updated after save:', {
+            originalKeys: Object.keys(currentFormValues).length
+          });
+        }
+        
+        // If the current user is editing their own profile and roles were updated,
+        // refresh the auth context to get the new permissions
+        if (user?.id === currentEmployee.id && safeUpdates.additional_role_ids !== undefined) {
+          console.log('🔄 Refreshing current user permissions after role update...');
+          await updateUser({ additional_role_ids: safeUpdates.additional_role_ids });
+        }
       },
       onError: (error) => {
         console.error('Employee update failed:', error);
@@ -588,7 +742,7 @@ export function EmployeeDetailsModal({
       <DialogContent className="max-w-2xl w-[95vw] sm:w-[90vw] md:w-[85vw] lg:w-[80vw] xl:w-[75vw] max-h-[90vh] flex flex-col">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>
-            {mode === 'edit' ? 'Edit Employee' : 'Employee Details'}
+            {mode === 'edit' ? `Edit Employee - ${employee.full_name}` : 'Employee Details'}
           </DialogTitle>
           <DialogDescription>
             {mode === 'edit' 
@@ -600,7 +754,7 @@ export function EmployeeDetailsModal({
 
         {mode === 'view' ? (
           <ViewMode 
-            employee={employee}
+            employee={employeeData || employee}
             activeTab={activeTab}
             setActiveTab={setActiveTab}
             getStatusBadge={getStatusBadge}
@@ -633,7 +787,7 @@ export function EmployeeDetailsModal({
           />
         ) : (
           <EditMode
-            employee={employee}
+            employee={employeeData || employee}
             form={form}
             activeTab={activeTab}
             setActiveTab={setActiveTab}
@@ -643,6 +797,7 @@ export function EmployeeDetailsModal({
             roleOptions={roleOptions}
             userOptions={userOptions}
             onModeChange={onModeChange}
+            isLoadingAdditionalRoles={isLoadingAdditionalRoles}
             getDocumentStatusBadge={getDocumentStatusBadge}
             handleDownloadDocument={handleDownloadDocument}
             handleViewDocument={handleViewDocument}
@@ -668,6 +823,7 @@ export function EmployeeDetailsModal({
             deleteIncident={deleteIncidentMutation}
             uploadIncidentAttachment={uploadIncidentAttachmentMutation}
             removeIncidentAttachment={removeIncidentAttachmentMutation}
+            originalFormValues={originalFormValues}
           />
         )}
       </DialogContent>
@@ -739,37 +895,37 @@ function ViewMode({
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
         <TabsList className="grid w-full grid-cols-3 sm:grid-cols-7 gap-1 flex-shrink-0">
-          <TabsTrigger value="basic" className="flex items-center gap-2 text-xs sm:text-sm">
+          <TabsTrigger value="basic" className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
             <Users className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Basic Info</span>
             <span className="sm:hidden">Basic</span>
           </TabsTrigger>
-          <TabsTrigger value="contact" className="flex items-center gap-2 text-xs sm:text-sm">
+          <TabsTrigger value="contact" className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
             <Phone className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Contact</span>
             <span className="sm:hidden">Contact</span>
           </TabsTrigger>
-          <TabsTrigger value="personal" className="flex items-center gap-2 text-xs sm:text-sm">
+          <TabsTrigger value="personal" className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
             <UserCheck className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Personal</span>
             <span className="sm:hidden">Personal</span>
           </TabsTrigger>
-          <TabsTrigger value="work" className="flex items-center gap-2 text-xs sm:text-sm">
+          <TabsTrigger value="work" className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
             <Building className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Work Details</span>
             <span className="sm:hidden">Work</span>
           </TabsTrigger>
-          <TabsTrigger value="onboarding" className="flex items-center gap-2 text-xs sm:text-sm">
+          <TabsTrigger value="onboarding" className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
             <UserCheck className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Onboarding</span>
             <span className="sm:hidden">Onboard</span>
           </TabsTrigger>
-          <TabsTrigger value="incidents" className="flex items-center gap-2 text-xs sm:text-sm">
+          <TabsTrigger value="incidents" className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
             <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Incidents</span>
             <span className="sm:hidden">Incidents</span>
           </TabsTrigger>
-          <TabsTrigger value="documents" className="flex items-center gap-2 text-xs sm:text-sm">
+          <TabsTrigger value="documents" className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
             <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Documents</span>
             <span className="sm:hidden">Docs</span>
@@ -852,6 +1008,7 @@ function EditMode({
   roleOptions,
   userOptions,
   onModeChange,
+  isLoadingAdditionalRoles,
   getDocumentStatusBadge,
   handleDownloadDocument,
   handleViewDocument,
@@ -876,44 +1033,123 @@ function EditMode({
   updateIncident,
   deleteIncident,
   uploadIncidentAttachment,
-  removeIncidentAttachment
+  removeIncidentAttachment,
+  originalFormValues
 }: any) {
+  // Watch all form values to detect changes - this triggers re-renders on form changes
+  // Store watched values to trigger re-renders when form changes
+  const watchedValues = form.watch();
+  
+  // Get form state to track dirty fields
+  const formState = form.formState;
+  
+  // Helper function to normalize values for comparison (handle null, undefined, empty strings)
+  const normalizeValue = React.useCallback((val: any): any => {
+    if (val === null || val === undefined || val === '') return null;
+    if (Array.isArray(val)) return val.length === 0 ? null : [...val].sort();
+    return val;
+  }, []);
+  
+  // Helper function to deep compare two objects
+  const areValuesEqual = React.useCallback((original: any, current: any): boolean => {
+    if (!original || !current) return false;
+    
+    // Get all keys from original (source of truth)
+    const originalKeys = Object.keys(original);
+    
+    for (const key of originalKeys) {
+      const originalVal = normalizeValue(original[key]);
+      const currentVal = normalizeValue(current[key]);
+      
+      // Both are null/empty - equal
+      if (originalVal === null && currentVal === null) continue;
+      
+      // One is null/empty, other is not - not equal
+      if (originalVal === null || currentVal === null) return false;
+      
+      // Handle arrays
+      if (Array.isArray(originalVal) && Array.isArray(currentVal)) {
+        if (originalVal.length !== currentVal.length) return false;
+        if (!originalVal.every((val, idx) => val === currentVal[idx])) return false;
+        continue;
+      }
+      
+      // Handle objects recursively
+      if (typeof originalVal === 'object' && typeof currentVal === 'object' && 
+          !Array.isArray(originalVal) && !Array.isArray(currentVal)) {
+        if (!areValuesEqual(originalVal, currentVal)) return false;
+        continue;
+      }
+      
+      // Handle primitives
+      if (originalVal !== currentVal) return false;
+    }
+    
+    return true;
+  }, [normalizeValue]);
+  
+  // Check if form has changes - recalculate when form state changes
+  // Use formState.isDirty and dirtyFields to trigger re-renders
+  const hasChanges = React.useMemo(() => {
+    if (!originalFormValues) {
+      return false;
+    }
+    
+    // Get current form values (only actual form data, not internal state)
+    const currentValues = form.getValues();
+    
+    // Compare only the fields that exist in original
+    const isEqual = areValuesEqual(originalFormValues, currentValues);
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 Form change detection:', {
+        hasChanges: !isEqual,
+        isDirty: formState.isDirty,
+        dirtyFieldsCount: Object.keys(formState.dirtyFields || {}).length,
+        originalKeys: Object.keys(originalFormValues).length,
+        currentKeys: Object.keys(currentValues).length
+      });
+    }
+    
+    return !isEqual;
+  }, [originalFormValues, watchedValues, formState.isDirty, formState.dirtyFields, form, areValuesEqual]);
+  
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onEmployeeSubmit)} className="flex flex-col flex-1 min-h-0">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
           <TabsList className="grid w-full grid-cols-3 sm:grid-cols-7 gap-2 flex-shrink-0">
-            <TabsTrigger value="basic" className="flex items-center gap-2 text-xs sm:text-sm">
+            <TabsTrigger value="basic" className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
               <Users className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">Basic Info</span>
               <span className="sm:hidden">Basic</span>
             </TabsTrigger>
-            <TabsTrigger value="contact" className="flex items-center gap-2 text-xs sm:text-sm">
+            <TabsTrigger value="contact" className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
               <Phone className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">Contact</span>
               <span className="sm:hidden">Contact</span>
             </TabsTrigger>
-            <TabsTrigger value="personal" className="flex items-center gap-2 text-xs sm:text-sm">
+            <TabsTrigger value="personal" className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
               <UserCheck className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">Personal</span>
               <span className="sm:hidden">Personal</span>
             </TabsTrigger>
-            <TabsTrigger value="work" className="flex items-center gap-2 text-xs sm:text-sm">
+            <TabsTrigger value="work" className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
               <Building className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">Work Details</span>
               <span className="sm:hidden">Work</span>
             </TabsTrigger>
-            <TabsTrigger value="onboarding" className="flex items-center gap-2 text-xs sm:text-sm">
+            <TabsTrigger value="onboarding" className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
               <UserCheck className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">Onboarding</span>
               <span className="sm:hidden">Onboard</span>
             </TabsTrigger>
-            <TabsTrigger value="incidents" className="flex items-center gap-2 text-xs sm:text-sm">
+            <TabsTrigger value="incidents" className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
               <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">Incidents</span>
               <span className="sm:hidden">Incidents</span>
             </TabsTrigger>
-            <TabsTrigger value="documents" className="flex items-center gap-2 text-xs sm:text-sm">
+            <TabsTrigger value="documents" className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
               <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">Documents</span>
               <span className="sm:hidden">Docs</span>
@@ -941,6 +1177,7 @@ function EditMode({
                 userOptions={userOptions}
                 employee={employee}
                 permissions={permissions}
+                isLoadingAdditionalRoles={isLoadingAdditionalRoles}
               />
             </TabsContent>
 
@@ -1007,7 +1244,7 @@ function EditMode({
           </Button>
           <Button 
             onClick={form.handleSubmit(onEmployeeSubmit)} 
-            disabled={updateEmployee.isPending}
+            disabled={updateEmployee.isPending || !hasChanges}
           >
             {updateEmployee.isPending ? 'Saving...' : 'Save Changes'}
           </Button>
@@ -1265,8 +1502,26 @@ function WorkInfoView({ employee, getStatusBadge }: { employee: Employee; getSta
           <p className="text-muted-foreground">{employee.department?.name || 'Not assigned'}</p>
         </div>
         <div>
-          <p className="font-medium">Role:</p>
-          <p className="text-muted-foreground capitalize">{getRoleDisplayName(employee.role?.name || '') || 'Not assigned'}</p>
+          <p className="font-medium">Primary Role:</p>
+          <Badge variant="default" className="capitalize mt-1">
+            {getRoleDisplayName(employee.role?.name || '') || 'Not assigned'}
+          </Badge>
+        </div>
+        <div>
+          <p className="font-medium">Additional Roles:</p>
+          <div className="mt-1">
+            {employee.additional_roles && employee.additional_roles.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {employee.additional_roles.map((role: any) => (
+                  <Badge key={role.id} variant="secondary" className="text-xs">
+                    {getRoleDisplayName(role.name)}
+                  </Badge>
+                ))}
+              </div>
+            ) : (
+              <span className="text-muted-foreground text-sm">No additional roles assigned</span>
+            )}
+          </div>
         </div>
         <div>
           <p className="font-medium">Manager:</p>
@@ -1437,7 +1692,7 @@ function DocumentsView({
                         </Badge>
                         {docType.created_for_employee_id && (
                           <Badge variant="secondary" className="text-xs">
-                            Custom
+                            Optional
                           </Badge>
                         )}
                       </div>
@@ -1956,7 +2211,7 @@ function PersonalInfoEdit({ form }: any) {
   );
 }
 
-function WorkInfoEdit({ form, departmentOptions, roleOptions, userOptions, employee, permissions }: any) {
+function WorkInfoEdit({ form, departmentOptions, roleOptions, userOptions, employee, permissions, isLoadingAdditionalRoles }: any) {
   // Filter out admin role for non-admin users
   const filteredRoleOptions = roleOptions?.filter((role: any) => {
     // If user can't manage roles (i.e., not admin), hide admin role
@@ -2063,6 +2318,120 @@ function WorkInfoEdit({ form, departmentOptions, roleOptions, userOptions, emplo
           )}
         />
       </div>
+
+      {/* Additional Roles Field */}
+      <FormField
+        control={form.control}
+        name="additional_role_ids"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel className="text-sm font-medium text-gray-700">
+              Additional Roles
+              <span className="text-xs text-muted-foreground ml-2">
+                (Optional - assign multiple roles for enhanced permissions)
+              </span>
+            </FormLabel>
+            <div className="space-y-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between mt-1"
+                      disabled={isRoleDisabled || isLoadingAdditionalRoles}
+                    >
+                      {isLoadingAdditionalRoles ? (
+                        <div className="flex items-center gap-2">
+                          <div className="animate-spin rounded-full h-3 w-3 border-b border-current"></div>
+                          <span>Loading roles...</span>
+                        </div>
+                      ) : field.value && field.value.length > 0 ? (
+                        `${field.value.length} additional role${field.value.length > 1 ? 's' : ''} selected`
+                      ) : (
+                        "Select additional roles"
+                      )}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0">
+                  <Command>
+                    <CommandInput placeholder="Search roles..." />
+                    <CommandEmpty>No roles found.</CommandEmpty>
+                    <CommandGroup>
+                      {filteredRoleOptions?.map((role: any) => {
+                        const isSelected = field.value?.includes(role.id);
+                        const isPrimaryRole = form.getValues('role_id') === role.id;
+                        
+                        return (
+                          <CommandItem
+                            key={role.id}
+                            onSelect={() => {
+                              if (isPrimaryRole) return; // Don't allow selecting primary role as additional
+                              
+                              const currentValues = field.value || [];
+                              const newValues = isSelected
+                                ? currentValues.filter((id: string) => id !== role.id)
+                                : [...currentValues, role.id];
+                              field.onChange(newValues);
+                            }}
+                            disabled={isPrimaryRole}
+                          >
+                            <Check
+                              className={`mr-2 h-4 w-4 ${
+                                isSelected ? "opacity-100" : "opacity-0"
+                              }`}
+                            />
+                            <div className="flex-1">
+                              <span className={isPrimaryRole ? "text-muted-foreground" : ""}>
+                                {getRoleDisplayName(role.name)}
+                              </span>
+                              {isPrimaryRole && (
+                                <span className="text-xs text-muted-foreground ml-2">
+                                  (Primary Role)
+                                </span>
+                              )}
+                            </div>
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              
+              {/* Display selected additional roles */}
+              {field.value && field.value.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {field.value.map((roleId: string) => {
+                    const role = filteredRoleOptions?.find((r: any) => r.id === roleId);
+                    if (!role) return null;
+                    
+                    return (
+                      <Badge key={roleId} variant="secondary" className="flex items-center gap-1">
+                        {getRoleDisplayName(role.name)}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newValues = field.value.filter((id: string) => id !== roleId);
+                            field.onChange(newValues);
+                          }}
+                          className="ml-1 hover:bg-destructive hover:text-destructive-foreground rounded-full p-0.5"
+                          disabled={isRoleDisabled}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
 
       <FormField
         control={form.control}

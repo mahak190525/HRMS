@@ -196,15 +196,15 @@ export function DashboardAccessManager({ employee, onClose }: DashboardAccessMan
       {/* Access Management Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="dashboards" className="flex items-center gap-2">
+          <TabsTrigger value="dashboards" className="flex items-center gap-2 cursor-pointer">
             <Globe className="h-4 w-4" />
             Dashboard Access
           </TabsTrigger>
-          <TabsTrigger value="features" className="flex items-center gap-2">
+          <TabsTrigger value="features" className="flex items-center gap-2 cursor-pointer">
             <Lock className="h-4 w-4" />
             Feature Access
           </TabsTrigger>
-          <TabsTrigger value="policy-dashboard" className="flex items-center gap-2">
+          <TabsTrigger value="policy-dashboard" className="flex items-center gap-2 cursor-pointer">
             <Settings className="h-4 w-4" />
             Policy Dashboard
           </TabsTrigger>

@@ -588,7 +588,7 @@ export function ManagerKRAPage() {
                     key={quarter} 
                     value={quarter}
                     disabled={!isEnabled}
-                    className="flex flex-col gap-1 data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed"
+                    className="flex flex-col gap-1 cursor-pointer data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed"
                   >
                     <span>{quarter}</span>
                     <span className="text-xs text-muted-foreground mt-1">

@@ -37,8 +37,8 @@ export function NotificationsPage() {
         <CardContent>
           <Tabs defaultValue="unread">
             <TabsList className="grid grid-cols-2 w-full">
-              <TabsTrigger value="unread">Unread ({unreadCount})</TabsTrigger>
-              <TabsTrigger value="all">All ({notifications.length})</TabsTrigger>
+              <TabsTrigger value="unread" className="cursor-pointer">Unread ({unreadCount})</TabsTrigger>
+              <TabsTrigger value="all" className="cursor-pointer">All ({notifications.length})</TabsTrigger>
             </TabsList>
 
             <TabsContent value="unread" className="mt-4">

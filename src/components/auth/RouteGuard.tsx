@@ -2,10 +2,13 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { isPathAccessible } from '@/utils/featureAccess';
+import { getAllUserRoleNames } from '@/utils/multipleRoles';
+import { useRolePermissions } from '@/hooks/useRolePermissions';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Shield, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 interface RouteGuardProps {
   children: React.ReactNode;
@@ -20,12 +23,13 @@ export function RouteGuard({
 }: RouteGuardProps) {
   const { user, loading } = useAuth();
   const location = useLocation();
+  const { permissions: rolePermissions, isLoading: rolePermissionsLoading } = useRolePermissions();
 
-  // Show loading spinner while auth is loading
-  if (loading) {
+  // Show loading spinner while auth or role permissions are loading
+  if (loading || rolePermissionsLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
@@ -35,8 +39,26 @@ export function RouteGuard({
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Check if user has access to the current path
-  const hasAccess = isPathAccessible(user, location.pathname);
+  // Check if user has access to the current path using role permissions
+  const hasAccess = isPathAccessible(user, location.pathname, rolePermissions);
+
+  // Debug logging (remove in production)
+  if (process.env.NODE_ENV === 'development') {
+    if (!hasAccess) {
+      console.log('🔒 Access Denied Debug:', {
+        path: location.pathname,
+        userId: user.id,
+        userRoles: getAllUserRoleNames(user),
+        rolePermissions: rolePermissions,
+        dashboardPerms: rolePermissions?.dashboard_permissions,
+        pagePerms: rolePermissions?.page_permissions,
+        userExtraPerms: {
+          dashboards: user.extra_permissions?.dashboards,
+          pages: user.extra_permissions?.pages
+        }
+      });
+    }
+  }
 
   if (!hasAccess) {
     return (
@@ -63,7 +85,7 @@ export function RouteGuard({
               
               <div className="text-sm text-muted-foreground space-y-2">
                 <p><strong>Current Path:</strong> {location.pathname}</p>
-                <p><strong>Your Role:</strong> {user.role?.name || user.role_id || 'Employee'}</p>
+                <p><strong>Your Roles:</strong> {getAllUserRoleNames(user).join(', ') || 'Employee'}</p>
                 <p><strong>Employee ID:</strong> {user.employee_id || 'Not assigned'}</p>
               </div>
 

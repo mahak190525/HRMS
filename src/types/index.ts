@@ -7,6 +7,7 @@ export interface User {
   full_name: string;
   employee_id?: string;
   role_id: string;
+  additional_role_ids?: string[]; // New field for multiple roles
   department_id?: string;
   position?: string;
   phone?: string;
@@ -32,6 +33,10 @@ export interface User {
   avatar_url?: string;
   signup_data?: Record<string, any>;
   role?: { name: string; description: string; };
+  additional_roles?: { id: string; name: string; description: string; }[]; // Additional roles data
+  all_role_names?: string[]; // Aggregated role names for easy access
+  aggregated_permissions?: Record<string, any>; // Aggregated permissions from all roles
+  aggregated_dashboards?: string[]; // Aggregated dashboards from all roles
   department?: { name: string; description: string; };
   
   // New profile fields from migration
@@ -61,12 +66,28 @@ export interface User {
   isSA?: boolean;
 }
 
+export interface DashboardPermissions {
+  read: boolean;
+  write: boolean;
+  view: boolean;
+  delete: boolean;
+}
+
+export interface PagePermissions {
+  read: boolean;
+  write: boolean;
+  view: boolean;
+  delete: boolean;
+}
+
 export interface Role {
   id: string;
   name: string;
   description: string;
   default_dashboards: string[];
   permissions: Record<string, boolean>;
+  dashboard_permissions?: Record<string, DashboardPermissions>;
+  page_permissions?: Record<string, Record<string, PagePermissions>>;
 }
 
 export interface Dashboard {

@@ -4,6 +4,7 @@ import { authApi } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { supabase } from '@/services/supabase';
+import { isUserAdmin, isUserHR, isUserManager, isUserFinance, getAllUserRoleNames } from '@/utils/multipleRoles';
 
 export function useAllEmployees() {
   return useQuery({
@@ -17,50 +18,119 @@ export function useFilteredEmployees() {
   const { user } = useAuth();
   
   return useQuery({
-    queryKey: ['filtered-employees', user?.id],
+    queryKey: ['filtered-employees', user?.id, user?.additional_role_ids],
     queryFn: async () => {
       if (!user) return [];
 
-      const roleName = user.role?.name || user.role_id || '';
-      const isAdmin = user.isSA || roleName === 'admin' || roleName === 'super_admin';
-      const isHR = roleName === 'hr' || roleName === 'hrm';
-      const isManager = ['sdm', 'bdm', 'qam', 'hrm', 'manager'].includes(roleName);
+      // Use multiple role utility functions to check permissions
+      const userIsAdmin = isUserAdmin(user);
+      const userIsHR = isUserHR(user);
+      const userIsManager = isUserManager(user);
+      const userIsFinance = isUserFinance(user);
+      
+      // Get all user roles to check for manager roles
+      const userRoles = getAllUserRoleNames(user);
+      const isManagerRole = ['sdm', 'bdm', 'qam', 'manager'].some(role => userRoles.includes(role));
+      const isFinanceManager = ['finance', 'finance_manager'].some(role => userRoles.includes(role));
+      
+      // Managers (including Finance Manager) should only see their team members
+      // Even if Finance Manager has canViewAllEmployees, they should only see their team in Employee Management
+      const shouldSeeOnlyTeam = userIsManager || isManagerRole || isFinanceManager;
 
-      // Admin and HR can see all employees
-      if (isAdmin || isHR) {
+      console.log('🔍 Employee filtering - User roles:', {
+        isAdmin: userIsAdmin,
+        isHR: userIsHR,
+        isManager: userIsManager,
+        isFinance: userIsFinance,
+        isManagerRole,
+        isFinanceManager,
+        shouldSeeOnlyTeam,
+        primaryRole: user.role?.name,
+        additionalRoles: user.additional_roles?.map(r => r.name)
+      });
+
+      // Admin and HR can see all employees (but not Finance Manager even if they have admin-like permissions)
+      if ((userIsAdmin || userIsHR) && !shouldSeeOnlyTeam) {
+        console.log('✅ User has admin/HR access - fetching all employees');
         return employeeApi.getAllEmployees();
       }
 
-      // Managers can only see their team members
-      if (isManager) {
+      // Managers (including Finance Manager) can only see their team members
+      if (shouldSeeOnlyTeam) {
+        console.log('📋 User has manager access - fetching team members only');
         const { data, error } = await supabase
           .from('users')
           .select(`
             *,
             department:departments!users_department_id_fkey(id, name),
-            role:roles(id, name)
+            role:roles!users_role_id_fkey(id, name)
           `)
           .eq('manager_id', user.id)
           .eq('status', 'active')
           .order('full_name');
 
         if (error) throw error;
-        return data || [];
+        
+        // Enhance with additional roles data
+        const enhancedUsers = await Promise.all(
+          (data || []).map(async (user) => {
+            if (user.additional_role_ids && user.additional_role_ids.length > 0) {
+              const { data: additionalRoles } = await supabase
+                .from('roles')
+                .select('id, name')
+                .in('id', user.additional_role_ids);
+              
+              return {
+                ...user,
+                additional_roles: additionalRoles || []
+              };
+            }
+            return {
+              ...user,
+              additional_roles: []
+            };
+          })
+        );
+        
+        return enhancedUsers;
       }
 
       // Regular employees can only see themselves
+      console.log('👤 User is regular employee - fetching only own data');
       const { data, error } = await supabase
         .from('users')
         .select(`
           *,
           department:departments!users_department_id_fkey(id, name),
-          role:roles(id, name)
+          role:roles!users_role_id_fkey(id, name)
         `)
         .eq('id', user.id)
         .single();
 
       if (error) throw error;
-      return data ? [data] : [];
+      
+      if (!data) return [];
+      
+      // Enhance with additional roles data
+      let enhancedUser = data;
+      if (data.additional_role_ids && data.additional_role_ids.length > 0) {
+        const { data: additionalRoles } = await supabase
+          .from('roles')
+          .select('id, name')
+          .in('id', data.additional_role_ids);
+        
+        enhancedUser = {
+          ...data,
+          additional_roles: additionalRoles || []
+        };
+      } else {
+        enhancedUser = {
+          ...data,
+          additional_roles: []
+        };
+      }
+      
+      return [enhancedUser];
     },
     enabled: !!user?.id,
   });
