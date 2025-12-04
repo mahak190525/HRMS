@@ -132,12 +132,39 @@ export function usePermissions() {
   const getAccessibleDashboards = () => {
     if (!user) return [];
     
+    // Debug logging
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 getAccessibleDashboards - Debug Info:', {
+        userId: user.id,
+        userRole: user.role?.name || user.role_id,
+        rolePermissions: rolePermissions,
+        rolePermissionsLoading,
+        hasEmployeeManagementDashboard: rolePermissions?.dashboard_permissions?.employee_management,
+        employeeManagementPerms: rolePermissions?.dashboard_permissions?.employee_management
+      });
+    }
+    
     // Use the new feature access utility to get accessible dashboards with role permissions
-    const accessibleDashboards = DASHBOARD_CONFIG.filter(dashboard => 
-      hasUserDashboardAccess(user, dashboard.id, rolePermissions)
-    ).map(dashboard => {
+    const accessibleDashboards = DASHBOARD_CONFIG.filter(dashboard => {
+      const hasAccess = hasUserDashboardAccess(user, dashboard.id, rolePermissions);
+      if (process.env.NODE_ENV === 'development' && dashboard.id === 'employee_management') {
+        console.log('🔍 Employee Management Dashboard Access Check:', {
+          hasAccess,
+          rolePermissions: rolePermissions?.dashboard_permissions?.employee_management,
+          userRoles: getAllUserRoleNames(user)
+        });
+      }
+      return hasAccess;
+    }).map(dashboard => {
       // Filter pages based on user permissions
       const accessiblePageIds = getUserAccessiblePages(user, dashboard.id, rolePermissions);
+      if (process.env.NODE_ENV === 'development' && dashboard.id === 'employee_management') {
+        console.log('🔍 Employee Management Pages:', {
+          accessiblePageIds,
+          allPages: dashboard.pages.map(p => p.id),
+          pagePermissions: rolePermissions?.page_permissions?.employee_management
+        });
+      }
       const accessiblePages = dashboard.pages.filter(page => 
         accessiblePageIds.includes(page.id)
       );
@@ -147,6 +174,10 @@ export function usePermissions() {
         pages: accessiblePages
       };
     }).filter(dashboard => dashboard.pages.length > 0); // Only return dashboards with accessible pages
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 Final Accessible Dashboards:', accessibleDashboards.map(d => ({ id: d.id, name: d.name, pageCount: d.pages.length })));
+    }
     
     return accessibleDashboards;
   };

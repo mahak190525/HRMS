@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/services/supabase';
 import type { DashboardPermissions, PagePermissions } from '@/types';
@@ -13,8 +13,9 @@ interface RolePermissions {
  */
 export function useRolePermissions() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
-  const { data: permissions, isLoading } = useQuery({
+  const { data: permissions, isLoading, refetch } = useQuery({
     queryKey: ['user-role-permissions', user?.id],
     queryFn: async (): Promise<RolePermissions> => {
       if (!user) {
@@ -122,14 +123,19 @@ export function useRolePermissions() {
       };
     },
     enabled: !!user,
-    staleTime: 1 * 60 * 1000, // Cache for 1 minute (reduced for faster updates)
+    staleTime: 0, // No cache - always fetch fresh data when needed
     refetchOnWindowFocus: true, // Refetch when window regains focus
     refetchOnMount: true // Always refetch on mount to get latest permissions
   });
 
   return {
     permissions: permissions || { dashboard_permissions: {}, page_permissions: {} },
-    isLoading
+    isLoading,
+    refetch: () => {
+      // Invalidate and refetch permissions
+      queryClient.invalidateQueries({ queryKey: ['user-role-permissions', user?.id] });
+      return refetch();
+    }
   };
 }
 

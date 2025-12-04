@@ -247,7 +247,7 @@ function AppRoutes() {
             <ProjectManagement />
           </GuardedRoute>
         } />
-        <Route path="admin/role-permissions" element={
+        <Route path="employees/role-permissions" element={
           <GuardedRoute>
             <RolePermissionsPage />
           </GuardedRoute>

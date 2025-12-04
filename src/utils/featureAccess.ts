@@ -36,17 +36,37 @@ export function hasUserDashboardAccess(
   }
 
   // Check 2: Role-level dashboard permissions (OR with user permissions)
-  if (rolePermissions?.dashboard_permissions && rolePermissions.dashboard_permissions[dashboardId]) {
+  if (rolePermissions?.dashboard_permissions) {
     const perms = rolePermissions.dashboard_permissions[dashboardId];
-    if (perms && (perms.view === true || perms.read === true)) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('✅ Dashboard access granted via role-level permissions:', {
-          dashboardId,
-          perms,
-          userId: user.id
-        });
+    if (perms) {
+      // Normalize boolean values (handle string "true"/"false" from JSON)
+      const normalizeBool = (val: any): boolean => {
+        if (typeof val === 'boolean') return val;
+        if (val === 'true' || val === true || val === 1) return true;
+        return false;
+      };
+      
+      const hasView = normalizeBool(perms.view);
+      const hasRead = normalizeBool(perms.read);
+      
+      if (hasView || hasRead) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Dashboard access granted via role-level permissions:', {
+            dashboardId,
+            perms: { view: hasView, read: hasRead, write: normalizeBool(perms.write), delete: normalizeBool(perms.delete) },
+            userId: user.id
+          });
+        }
+        return true;
+      } else {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('❌ Dashboard access denied - role-level permissions explicitly false:', {
+            dashboardId,
+            perms,
+            userId: user.id
+          });
+        }
       }
-      return true;
     }
   }
 
@@ -105,52 +125,51 @@ export function hasUserPageAccess(
   // 4. ROLE_DASHBOARD_MAPPING fallback (ONLY if page has no explicit permissions)
 
   // Check 1: User-level page permissions (explicit override)
+  // If user-level is explicitly true, grant access immediately
+  // If user-level is explicitly false, still check role-level permissions
+  // (role-level permissions can override explicit false if they grant access)
   const explicitUserPageAccess = user.extra_permissions?.pages?.[dashboardId]?.[pageId];
-  if (explicitUserPageAccess !== undefined) {
-    // Explicit user permission takes precedence
-    if (explicitUserPageAccess === true) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('✅ Page access granted via user-level permissions:', {
-          dashboardId,
-          pageId,
-          userId: user.id
-        });
-      }
-      return true;
-    } else {
-      // Explicit false means deny, even if dashboard has access
-      if (process.env.NODE_ENV === 'development') {
-        console.log('❌ Page access denied - user-level permission explicitly false:', {
-          dashboardId,
-          pageId,
-          userId: user.id
-        });
-      }
-      return false;
+  if (explicitUserPageAccess === true) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('✅ Page access granted via user-level permissions:', {
+        dashboardId,
+        pageId,
+        userId: user.id
+      });
     }
+    return true;
   }
+  // Note: If explicitUserPageAccess === false, we continue to check role-level permissions
+  // This allows role-level permissions to override explicit false values
 
   // Check 2: Role-level page permissions (explicit - true or false)
-  const hasRolePagePermissions = rolePermissions?.page_permissions && 
+  if (rolePermissions?.page_permissions && 
       rolePermissions.page_permissions[dashboardId] && 
-      rolePermissions.page_permissions[dashboardId][pageId];
-  
-  if (hasRolePagePermissions) {
+      rolePermissions.page_permissions[dashboardId][pageId]) {
     const perms = rolePermissions.page_permissions[dashboardId][pageId];
+    
+    // Normalize boolean values (handle string "true"/"false" from JSON)
+    const normalizeBool = (val: any): boolean => {
+      if (typeof val === 'boolean') return val;
+      if (val === 'true' || val === true || val === 1) return true;
+      return false;
+    };
+    
     // Check if any permission is explicitly set (not just undefined)
+    const hasView = normalizeBool(perms.view);
+    const hasRead = normalizeBool(perms.read);
     const hasExplicitPermission = perms && (
-      perms.view === true || perms.view === false ||
-      perms.read === true || perms.read === false
+      perms.view !== undefined || perms.read !== undefined
     );
     
     if (hasExplicitPermission) {
       // Role has explicit page permissions
-      if (perms && (perms.view === true || perms.read === true)) {
+      if (hasView || hasRead) {
         if (process.env.NODE_ENV === 'development') {
           console.log('✅ Page access granted via role-level page permissions:', {
             dashboardId,
             pageId,
-            perms,
+            perms: { view: hasView, read: hasRead, write: normalizeBool(perms.write), delete: normalizeBool(perms.delete) },
             userId: user.id
           });
         }
@@ -161,7 +180,7 @@ export function hasUserPageAccess(
           console.log('❌ Page access denied - role-level page permissions explicitly false:', {
             dashboardId,
             pageId,
-            perms,
+            perms: { view: hasView, read: hasRead },
             userId: user.id
           });
         }

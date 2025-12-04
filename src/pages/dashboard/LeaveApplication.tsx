@@ -30,7 +30,7 @@ import {
   Calculator,
   RotateCcw
 } from 'lucide-react';
-import { differenceInDays } from 'date-fns';
+import { differenceInDays, addYears, differenceInCalendarDays } from 'date-fns';
 import { formatDateForDisplay, getCurrentISTDate } from '@/utils/dateUtils';
 import { cn } from '@/lib/utils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -38,6 +38,7 @@ import { toast } from 'sonner';
 import { useUpcomingHolidays } from '@/hooks/useDashboard';
 import { useLocation } from 'react-router-dom';
 import { formatDateForDatabase, isPastDate } from '@/utils/dateUtils';
+import { Gift } from 'lucide-react';
 
 const leaveTypeColors = {
   annual: 'bg-blue-500',
@@ -46,10 +47,12 @@ const leaveTypeColors = {
   maternity: 'bg-purple-500',
   paternity: 'bg-orange-500',
   emergency: 'bg-yellow-500',
+  birthday: 'bg-pink-500',
+  'birthday_leave': 'bg-pink-500',
 };
 
 export function LeaveApplication() {
-  const { user } = useAuth();
+  const { user, refreshUserRoles } = useAuth();
   const location = useLocation();
   const { data: leaveTypes, isLoading: typesLoading } = useLeaveTypes();
   const { data: leaveBalance, isLoading: balanceLoading } = useLeaveBalance();
@@ -63,6 +66,13 @@ export function LeaveApplication() {
   const sandwichLeavePreview = useSandwichLeavePreview();
   const relatedApplications = useRelatedFridayMondayApplications();
   
+  // Refresh user data when component mounts to ensure comp_off_balance is up to date
+  useEffect(() => {
+    if (user?.id) {
+      refreshUserRoles().catch(console.error);
+    }
+  }, []); // Only run once on mount
+  
   const [selectedType, setSelectedType] = useState('');
   const [startDate, setStartDate] = useState<Date>();
   const [endDate, setEndDate] = useState<Date>();
@@ -70,6 +80,21 @@ export function LeaveApplication() {
   const [defaultTab, setDefaultTab] = useState('apply');
   const [isHalfDay, setIsHalfDay] = useState(false);
   const [halfDayPeriod, setHalfDayPeriod] = useState<'1st_half' | '2nd_half'>('1st_half');
+  
+  // Check if selected leave type is birthday leave
+  const isBirthdayLeaveSelected = Boolean(selectedType && leaveTypes?.some(
+    lt => lt.name.toLowerCase().replace(' ', '_') === selectedType && lt.name.toLowerCase().includes('birthday')
+  ));
+  
+  // Auto-disable half day and set end date to start date when birthday leave is selected
+  useEffect(() => {
+    if (isBirthdayLeaveSelected) {
+      setIsHalfDay(false);
+      if (startDate) {
+        setEndDate(startDate);
+      }
+    }
+  }, [isBirthdayLeaveSelected, startDate]);
   
   // Withdraw dialog state
   const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
@@ -184,6 +209,72 @@ export function LeaveApplication() {
     return !isPastDate(leave.start_date);
   };
 
+  // Check for duplicate/overlapping leave applications
+  // Note: halfDayPeriodCheck is reserved for future use if we need to allow different half-day periods on the same day
+  const checkForDuplicateLeave = (newStartDate: Date, newEndDate: Date, isHalfDayCheck: boolean, _halfDayPeriodCheck?: '1st_half' | '2nd_half') => {
+    if (!leaveHistory || !user || leaveHistory.length === 0) return null;
+
+    // Filter to only pending or approved leaves (exclude rejected, cancelled, withdrawn)
+    const activeLeaves = leaveHistory.filter(
+      (leave: any) => leave.status === 'pending' || leave.status === 'approved'
+    );
+
+    if (activeLeaves.length === 0) return null;
+
+    // Convert dates to Date objects for comparison
+    const newStart = new Date(newStartDate);
+    const newEnd = new Date(newEndDate);
+    newStart.setHours(0, 0, 0, 0);
+    newEnd.setHours(0, 0, 0, 0);
+
+    for (const existingLeave of activeLeaves) {
+      const existingStart = new Date(existingLeave.start_date);
+      const existingEnd = new Date(existingLeave.end_date);
+      existingStart.setHours(0, 0, 0, 0);
+      existingEnd.setHours(0, 0, 0, 0);
+
+      // Check for date range overlap: two ranges overlap if start1 <= end2 AND start2 <= end1
+      const hasDateOverlap = newStart <= existingEnd && existingStart <= newEnd;
+
+      if (hasDateOverlap) {
+        // Case 1: New leave is half day
+        if (isHalfDayCheck) {
+          // For half day, start and end dates should be the same
+          const newDate = newStart.getTime();
+          
+          // Check if the new half day date falls within the existing leave range
+          if (newDate >= existingStart.getTime() && newDate <= existingEnd.getTime()) {
+            // If existing is also half day on the same date, it's a conflict regardless of period
+            // (user can't apply for the same day more than once)
+            if (existingLeave.is_half_day && existingStart.getTime() === existingEnd.getTime() && existingStart.getTime() === newDate) {
+              return existingLeave;
+            } else if (!existingLeave.is_half_day) {
+              // Existing is full day - conflict
+              return existingLeave;
+            }
+          }
+        } 
+        // Case 2: New leave is full day
+        else {
+          // If existing is half day, check if it falls within the new range
+          if (existingLeave.is_half_day) {
+            // For half day, start and end dates should be the same
+            const existingDate = existingStart.getTime();
+            if (existingDate >= newStart.getTime() && existingDate <= newEnd.getTime()) {
+              // Half day falls within full day range - conflict
+              return existingLeave;
+            }
+          } else {
+            // Both are full day leaves and dates overlap - conflict
+            return existingLeave;
+          }
+        }
+      }
+    }
+
+    return null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedType || !startDate || !endDate || !reason.trim() || !user) return;
@@ -195,14 +286,89 @@ export function LeaveApplication() {
     }
 
     const daysRequested = calculateDays();
+
+    // Check for duplicate/overlapping leave applications
+    const duplicateLeave = checkForDuplicateLeave(startDate, endDate, isHalfDay, halfDayPeriod);
+    if (duplicateLeave) {
+      const duplicateDateStr = formatDateForDisplay(duplicateLeave.start_date, 'MMM dd, yyyy');
+      if (duplicateLeave.start_date !== duplicateLeave.end_date) {
+        const duplicateEndDateStr = formatDateForDisplay(duplicateLeave.end_date, 'MMM dd, yyyy');
+        toast.error(
+          `You already have a ${duplicateLeave.status} leave application for ${duplicateDateStr} - ${duplicateEndDateStr}. ` +
+          `Please withdraw the existing application first if you need to make changes.`
+        );
+      } else {
+        const halfDayInfo = duplicateLeave.is_half_day 
+          ? ` (${duplicateLeave.half_day_period === '1st_half' ? '1st half' : '2nd half'})`
+          : '';
+        toast.error(
+          `You already have a ${duplicateLeave.status} leave application for ${duplicateDateStr}${halfDayInfo}. ` +
+          `Please withdraw the existing application first if you need to make changes.`
+        );
+      }
+      return;
+    }
     
-    // Use enhanced balance information if available
-    const remainingDays = leaveSummary?.success 
-      ? leaveSummary.balance?.remaining_days || 0
-      : totalLeaveBalance - usedLeave;
+    // Check if this is birthday leave and validate
+    const isBirthdayLeave = leaveType.name.toLowerCase().includes('birthday');
+    const isCompensatoryOff = leaveType.name.toLowerCase().includes('compensatory') || leaveType.name.toLowerCase().includes('comp off');
     
-    // Check tenure and provide appropriate warnings only if leaveSummary is loaded
-    if (leaveSummary?.success && leaveSummary?.user) {
+    if (isBirthdayLeave) {
+      // Validate that user has a birthday set
+      if (!user.date_of_birth) {
+        toast.error('Cannot apply for birthday leave: Your date of birth is not set in the system. Please contact HR.');
+        return;
+      }
+      
+      // Validate that the leave date matches the birthday
+      const userBirthday = new Date(user.date_of_birth);
+      const leaveDate = new Date(startDate!);
+      
+      // Compare month and day (ignore year)
+      if (userBirthday.getMonth() !== leaveDate.getMonth() || userBirthday.getDate() !== leaveDate.getDate()) {
+        const birthdayMonth = userBirthday.toLocaleDateString('en-US', { month: 'long' });
+        const birthdayDay = userBirthday.getDate();
+        toast.error(`Birthday leave can only be availed on your birthday (${birthdayMonth} ${birthdayDay}). Please select your birthday date.`);
+        return;
+      }
+      
+      // Validate that start_date and end_date are the same
+      if (startDate && endDate && startDate.getTime() !== endDate.getTime()) {
+        toast.error('Birthday leave can only be applied for a single day. Start date and end date must be the same.');
+        return;
+      }
+      
+      // Validate that it's not a half day
+      if (isHalfDay) {
+        toast.error('Birthday leave must be a full day leave. Half day is not allowed.');
+        return;
+      }
+      
+      // For birthday leave, skip balance checks (paid leave, no deduction)
+      // Proceed directly to submission
+    }
+    // Check if this is compensatory off and validate balance
+    else if (isCompensatoryOff) {
+      const compOffBalance = user.comp_off_balance || 0;
+      if (compOffBalance <= 0) {
+        toast.error('You do not have any compensatory off balance available');
+        return;
+      }
+      if (daysRequested > compOffBalance) {
+        toast.error(`You only have ${compOffBalance} day(s) of compensatory off balance available`);
+        return;
+      }
+      // For compensatory off, skip regular leave balance checks and proceed directly
+    } 
+    // Skip balance checks for birthday leave (already handled above)
+    else if (!isBirthdayLeave) {
+      // Use enhanced balance information if available (only for non-compensatory leaves)
+      const remainingDays = leaveSummary?.success 
+        ? (leaveSummary.balance?.remaining_days != null ? Number(leaveSummary.balance.remaining_days) : totalRemainingDays)
+        : totalRemainingDays;
+      
+      // Check tenure and provide appropriate warnings only if leaveSummary is loaded
+      if (leaveSummary?.success && leaveSummary?.user) {
       const tenureMonths = leaveSummary.user.tenure_months || 0;
       const isEligibleForPaidLeaves = leaveSummary.rules?.eligible_for_paid_leaves;
       
@@ -232,6 +398,52 @@ export function LeaveApplication() {
         );
         if (!shouldProceed) return;
       }
+      }
+    }
+
+    // Calculate LOP days based on leave rate and balance
+    let lopDays = 0;
+    if (!isBirthdayLeave && !isCompensatoryOff) {
+      const remainingDays = leaveSummary?.success 
+        ? (leaveSummary.balance?.remaining_days != null ? Number(leaveSummary.balance.remaining_days) : totalRemainingDays)
+        : totalRemainingDays;
+      
+      // Get leave rate from leaveBalance (rate_of_leave field)
+      const mainLeaveBalance = leaveBalance?.find(lb => 
+        lb.leave_type?.name?.toLowerCase().includes('annual') || 
+        lb.leave_type?.name?.toLowerCase().includes('total')
+      ) || leaveBalance?.[0];
+      
+      // Access rate_of_leave from the balance record
+      const leaveRate = (mainLeaveBalance as any)?.rate_of_leave || 0;
+      
+      // If balance is insufficient or zero
+      if (remainingDays < daysRequested) {
+        const shortfall = daysRequested - remainingDays;
+        
+        // If leave rate can cover the shortfall, allow negative balance (no LOP)
+        // The balance will be neutralized in next month's allocation
+        if (leaveRate > 0 && leaveRate >= shortfall) {
+          // No LOP needed - balance will go negative and be covered by rate
+          lopDays = 0;
+          toast.info(
+            `Your leave balance will go negative by ${shortfall} day(s), but this will be covered by your monthly leave rate (${leaveRate} days/month) in the next allocation.`
+          );
+        } else if (leaveRate > 0 && leaveRate < shortfall) {
+          // Leave rate is less than shortfall - mark excess as LOP
+          lopDays = shortfall - leaveRate;
+          const coveredByRate = shortfall - lopDays;
+          toast.warning(
+            `Your leave balance is insufficient. ${coveredByRate} day(s) will be covered by your monthly leave rate, and ${lopDays} day(s) will be marked as Loss of Pay (LOP).`
+          );
+        } else {
+          // No leave rate set - all excess is LOP
+          lopDays = shortfall;
+          toast.warning(
+            `Your leave balance is insufficient. ${lopDays} day(s) will be marked as Loss of Pay (LOP).`
+          );
+        }
+      }
     }
 
     createLeaveApplication.mutate({
@@ -244,7 +456,8 @@ export function LeaveApplication() {
       half_day_period: isHalfDay ? halfDayPeriod : undefined,
       reason: reason.trim(),
       status: 'pending',
-      applied_at: getCurrentISTDate().toISOString()
+      applied_at: getCurrentISTDate().toISOString(),
+      lop_days: lopDays > 0 ? lopDays : undefined
     }, {
       onSuccess: () => {
         // Reset form
@@ -258,8 +471,46 @@ export function LeaveApplication() {
     });
   };
 
-  const totalLeaveBalance = leaveBalance?.reduce((sum, lb) => sum + lb.allocated_days, 0) || 0;
-  const usedLeave = leaveBalance?.reduce((sum, lb) => sum + lb.used_days, 0) || 0;
+  const totalLeaveBalance = leaveBalance?.reduce((sum, lb) => sum + (Number(lb.allocated_days) || 0), 0) || 0;
+  const usedLeave = leaveBalance?.reduce((sum, lb) => sum + (Number(lb.used_days) || 0), 0) || 0;
+  const totalRemainingDays = leaveBalance?.reduce((sum, lb) => {
+    const remaining = lb.remaining_days != null ? Number(lb.remaining_days) : 0;
+    return sum + remaining;
+  }, 0) || 0;
+
+  // Calculate next birthday and check if it's within 15 days
+  const getBirthdayReminderInfo = () => {
+    if (!user?.date_of_birth) return null;
+
+    const today = getCurrentISTDate();
+    const birthDate = new Date(user.date_of_birth);
+    
+    // Get this year's birthday
+    const currentYear = today.getFullYear();
+    let nextBirthday = new Date(currentYear, birthDate.getMonth(), birthDate.getDate());
+    
+    // If birthday has already passed this year, use next year's birthday
+    if (nextBirthday < today) {
+      nextBirthday = addYears(nextBirthday, 1);
+    }
+    
+    // Calculate days until birthday
+    const daysUntilBirthday = differenceInCalendarDays(nextBirthday, today);
+    
+    // Show banner if birthday is within 15 days (0 to 15 days)
+    if (daysUntilBirthday >= 0 && daysUntilBirthday <= 15) {
+      return {
+        daysUntil: daysUntilBirthday,
+        birthdayDate: nextBirthday,
+        isToday: daysUntilBirthday === 0,
+        isTomorrow: daysUntilBirthday === 1
+      };
+    }
+    
+    return null;
+  };
+
+  const birthdayReminder = getBirthdayReminderInfo();
 
   if (typesLoading || balanceLoading) {
     return (
@@ -277,6 +528,57 @@ export function LeaveApplication() {
           Manage your leave requests and view your leave balance
         </p>
       </div>
+
+      {/* Birthday Leave Reminder Banner */}
+      {birthdayReminder && (
+        <Alert className="bg-gradient-to-r from-pink-50 to-purple-50 border-2 border-pink-300 shadow-lg max-w-2/3">
+          <Gift className="h-5 w-5 text-pink-600 flex-shrink-0" />
+          <AlertDescription className="text-pink-900 min-w-0 max-w-full overflow-visible">
+            <div className="flex flex-col items-left w-full min-w-0">
+              <div className="flex-1 min-w-0 pr-0 sm:pr-2">
+                <strong className="text-base sm:text-lg block break-words">
+                  {birthdayReminder.isToday 
+                    ? "🎉 Happy Birthday! 🎉" 
+                    : birthdayReminder.isTomorrow
+                    ? "Your birthday is tomorrow!"
+                    : `Your birthday is in ${birthdayReminder.daysUntil} day${birthdayReminder.daysUntil !== 1 ? 's' : ''}!`}
+                </strong>
+                <p className="mt-1 text-xs sm:text-sm break-words leading-relaxed">
+                  You can apply for a <strong>paid Birthday Leave</strong> on{' '}
+                  <strong>{formatDateForDisplay(birthdayReminder.birthdayDate, 'MMMM do, yyyy')}</strong>. 
+                  This is a paid leave that does not deduct from your leave balance!
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                className="bg-pink-100 hover:bg-pink-200 border-pink-300 text-pink-900 font-semibold mt-2 w-1/4 sm:flex-shrink-0 text-sm sm:text-base px-3 sm:px-4"
+                onClick={() => {
+                  // Auto-select birthday leave and set the date
+                  const birthdayLeaveType = leaveTypes?.find(
+                    lt => lt.name.toLowerCase().includes('birthday')
+                  );
+                  if (birthdayLeaveType) {
+                    const typeKey = birthdayLeaveType.name.toLowerCase().replace(' ', '_');
+                    setSelectedType(typeKey);
+                    setStartDate(birthdayReminder.birthdayDate);
+                    setEndDate(birthdayReminder.birthdayDate);
+                    setIsHalfDay(false);
+                    // Scroll to form
+                    setTimeout(() => {
+                      document.getElementById('leave-application-form')?.scrollIntoView({ 
+                        behavior: 'smooth', 
+                        block: 'start' 
+                      });
+                    }, 100);
+                  }
+                }}
+              >
+                Apply for Birthday Leave
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Tabs value={defaultTab} onValueChange={setDefaultTab} className="space-y-6">
         <TabsList className="grid w-full grid-cols-3">
@@ -299,7 +601,7 @@ export function LeaveApplication() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <form onSubmit={handleSubmit} className="space-y-6">
+                  <form id="leave-application-form" onSubmit={handleSubmit} className="space-y-6">
                     <div>
                       <Label htmlFor="leaveType">Leave Type</Label>
                       <Select value={selectedType} onValueChange={setSelectedType}>
@@ -309,17 +611,46 @@ export function LeaveApplication() {
                         <SelectContent>
                           {leaveTypes?.map((type) => {
                             const typeKey = type.name.toLowerCase().replace(' ', '_');
+                            const isCompensatoryOff = type.name.toLowerCase().includes('compensatory') || type.name.toLowerCase().includes('comp off');
+                            const isBirthdayLeave = type.name.toLowerCase().includes('birthday');
+                            const compOffBalance = user?.comp_off_balance || 0;
+                            
+                            // Only show compensatory off if user has balance
+                            if (isCompensatoryOff && compOffBalance <= 0) {
+                              return null;
+                            }
+                            
                             return (
                             <SelectItem key={type.id} value={typeKey}>
                               <div className="flex items-center gap-2">
                                 <div className={`w-3 h-3 rounded-full ${leaveTypeColors[typeKey as keyof typeof leaveTypeColors] || 'bg-gray-500'}`} />
                                 {type.name}
+                                {isCompensatoryOff && compOffBalance > 0 && (
+                                  <span className="text-xs text-muted-foreground ml-1">
+                                    ({compOffBalance} available)
+                                  </span>
+                                )}
+                                {isBirthdayLeave && (
+                                  <span className="text-xs text-muted-foreground ml-1">
+                                    (Paid leave, no balance deduction)
+                                  </span>
+                                )}
                               </div>
                             </SelectItem>
                             );
                           })}
                         </SelectContent>
                       </Select>
+                      {isBirthdayLeaveSelected && user?.date_of_birth && (
+                        <Alert className="mt-2 bg-pink-50 border-pink-200">
+                          <Info className="h-4 w-4 text-pink-600" />
+                          <AlertDescription className="text-pink-800">
+                            <strong>Birthday Leave:</strong> This leave can only be availed on your birthday (
+                            {new Date(user.date_of_birth).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}). 
+                            It is a paid leave and does not deduct from your leave balance.
+                          </AlertDescription>
+                        </Alert>
+                      )}
                     </div>
 
                     <div className="space-y-3">
@@ -327,6 +658,7 @@ export function LeaveApplication() {
                         <Checkbox 
                           id="halfDay" 
                           checked={isHalfDay}
+                          disabled={isBirthdayLeaveSelected}
                           onCheckedChange={(checked) => {
                             setIsHalfDay(checked as boolean);
                             // Reset end date when switching to half day
@@ -337,9 +669,15 @@ export function LeaveApplication() {
                         />
                         <Label 
                           htmlFor="halfDay" 
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                          className={cn(
+                            "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
+                            isBirthdayLeaveSelected && "opacity-50"
+                          )}
                         >
                           Half Day Leave (0.5 days)
+                          {isBirthdayLeaveSelected && (
+                            <span className="text-xs text-muted-foreground ml-1">(Not available for birthday leave)</span>
+                          )}
                         </Label>
                       </div>
 
@@ -389,15 +727,10 @@ export function LeaveApplication() {
                               selected={startDate}
                               onSelect={(date) => {
                                 setStartDate(date);
-                                // For half day, automatically set end date to same as start date
-                                if (isHalfDay && date) {
+                                // For half day or birthday leave, automatically set end date to same as start date
+                                if ((isHalfDay || isBirthdayLeaveSelected) && date) {
                                   setEndDate(date);
                                 }
-                              }}
-                              disabled={(date) => {
-                                const today = getCurrentISTDate();
-                                today.setHours(0, 0, 0, 0);
-                                return date < today;
                               }}
                               initialFocus
                             />
@@ -414,39 +747,56 @@ export function LeaveApplication() {
                                 variant="outline"
                                 className={cn(
                                   "w-full justify-start text-left font-normal mt-1",
-                                  !endDate && "text-muted-foreground"
+                                  !endDate && "text-muted-foreground",
+                                  isBirthdayLeaveSelected && "opacity-50 cursor-not-allowed"
                                 )}
+                                disabled={isBirthdayLeaveSelected}
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
                                 {endDate ? formatDateForDisplay(endDate, "PPP") : "Pick end date"}
+                                {isBirthdayLeaveSelected && " (Same as start date)"}
                               </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                              <Calendar
-                                mode="single"
-                                selected={endDate}
-                                onSelect={setEndDate}
-                                disabled={(date) => date < (startDate || getCurrentISTDate())}
-                                initialFocus
-                              />
-                            </PopoverContent>
+                              {!isBirthdayLeaveSelected && (
+                              <PopoverContent className="w-auto p-0">
+                                <Calendar
+                                  mode="single"
+                                  selected={endDate}
+                                  onSelect={setEndDate}
+                                  disabled={(date) => startDate ? date < startDate : false}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            )}
                           </Popover>
                         </div>
                       )}
                     </div>
 
                     {startDate && (isHalfDay || endDate) && (
-                      <Alert>
-                        <Info className="h-4 w-4" />
-                        <AlertDescription>
-                          Total days requested: <strong>{calculateDays()} {calculateDays() === 1 ? 'day' : 'days'}</strong>
-                          {isHalfDay && (
-                            <span className="text-muted-foreground ml-2">
-                              ({halfDayPeriod === '1st_half' ? '1st Half' : '2nd Half'} on {formatDateForDisplay(startDate, "PPP")})
-                            </span>
-                          )}
-                        </AlertDescription>
-                      </Alert>
+                      <>
+                        {/* Backdated Leave Warning */}
+                        {isPastDate(startDate) && (
+                          <Alert className="bg-amber-50 border-amber-200">
+                            <AlertCircle className="h-4 w-4 text-amber-600" />
+                            <AlertDescription className="text-amber-800">
+                              <strong>Backdated Leave:</strong> You are applying for a leave that has already passed. 
+                              This is allowed for cases where you were unable to apply in advance. Your leave balance will be deducted accordingly.
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                        <Alert>
+                          <Info className="h-4 w-4" />
+                          <AlertDescription>
+                            Total days requested: <strong>{calculateDays()} {calculateDays() === 1 ? 'day' : 'days'}</strong>
+                            {isHalfDay && (
+                              <span className="text-muted-foreground ml-2">
+                                ({halfDayPeriod === '1st_half' ? '1st Half' : '2nd Half'} on {formatDateForDisplay(startDate, "PPP")})
+                              </span>
+                            )}
+                          </AlertDescription>
+                        </Alert>
+                      </>
                     )}
 
                     <div>
@@ -596,7 +946,11 @@ export function LeaveApplication() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => recalculateBalance.mutate(user?.id || '')}
+                    onClick={() => {
+                      recalculateBalance.mutate(user?.id || '');
+                      // Also refresh user data to get updated comp_off_balance
+                      refreshUserRoles().catch(console.error);
+                    }}
                     disabled={recalculateBalance.isPending}
                     className="h-8 w-8 p-0"
                   >
@@ -630,11 +984,42 @@ export function LeaveApplication() {
                       <div>
                         <div className="flex justify-between text-sm mb-1">
                           <span>Remaining</span>
+                          {(() => {
+                            // Use leaveBalance data directly if available, as it comes from the database
+                            // and will have the correct negative values
+                            let remaining: number;
+                            if (leaveBalance && leaveBalance.length > 0) {
+                              // Sum remaining_days from all leave types (this will correctly show negative values)
+                              remaining = totalRemainingDays;
+                            } else if (leaveSummary?.balance?.remaining_days != null) {
+                              remaining = Number(leaveSummary.balance.remaining_days);
+                            } else {
+                              remaining = totalLeaveBalance - usedLeave;
+                            }
+                            return (
+                              <span className={cn(
+                                "font-medium",
+                                remaining < 0 ? "text-red-600" : "text-green-600"
+                              )}>
+                                {remaining} days
+                                {remaining < 0 && (
+                                  <span className="text-xs text-red-500 ml-1">(over limit)</span>
+                                )}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                      
+                      {/* Compensatory Off Balance */}
+                      <div className="border-t pt-3">
+                        <div className="flex justify-between text-sm mb-1">
+                          <span>Compensatory Off Balance</span>
                           <span className={cn(
                             "font-medium",
-                            (leaveSummary.balance?.remaining_days || 0) < 0 ? "text-red-600" : "text-green-600"
+                            (user?.comp_off_balance || 0) > 0 ? "text-blue-600" : "text-gray-600"
                           )}>
-                            {leaveSummary.balance?.remaining_days || (totalLeaveBalance - usedLeave)} days
+                            {user?.comp_off_balance || 0} days
                           </span>
                         </div>
                       </div>
@@ -660,7 +1045,7 @@ export function LeaveApplication() {
                           <span>Total Leave Balance</span>
                           <span>{totalLeaveBalance} days</span>
                         </div>
-                        <Progress value={((totalLeaveBalance - usedLeave) / totalLeaveBalance) * 100} />
+                        <Progress value={totalLeaveBalance > 0 ? Math.max(0, Math.min(100, (totalRemainingDays / totalLeaveBalance) * 100)) : 0} />
                       </div>
                       <div>
                         <div className="flex justify-between text-sm mb-1">
@@ -672,7 +1057,28 @@ export function LeaveApplication() {
                       <div>
                         <div className="flex justify-between text-sm mb-1">
                           <span>Remaining</span>
-                          <span>{totalLeaveBalance - usedLeave} days</span>
+                          <span className={cn(
+                            "font-medium",
+                            totalRemainingDays < 0 ? "text-red-600" : "text-green-600"
+                          )}>
+                            {totalRemainingDays} days
+                            {totalRemainingDays < 0 && (
+                              <span className="text-xs text-red-500 ml-1">(over limit)</span>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {/* Compensatory Off Balance */}
+                      <div className="border-t pt-3">
+                        <div className="flex justify-between text-sm mb-1">
+                          <span>Compensatory Off Balance</span>
+                          <span className={cn(
+                            "font-medium",
+                            (user?.comp_off_balance || 0) > 0 ? "text-blue-600" : "text-gray-600"
+                          )}>
+                            {user?.comp_off_balance || 0} days
+                          </span>
                         </div>
                       </div>
                     </>
@@ -752,13 +1158,20 @@ export function LeaveApplication() {
                             </div>
                           </div>
                           <div className="text-right">
-                            <Badge variant="secondary" className="text-xs">
-                              {leave.days_count} day{leave.days_count !== 1 ? 's' : ''}
-                              {leave.is_half_day && (
-                                leave.half_day_period === '1st_half' ? ' (1st half)' : 
-                                leave.half_day_period === '2nd_half' ? ' (2nd half)' : ' (Half Day)'
+                            <div className="flex flex-col items-end gap-1">
+                              <Badge variant="secondary" className="text-xs">
+                                {leave.days_count} day{leave.days_count !== 1 ? 's' : ''}
+                                {leave.is_half_day && (
+                                  leave.half_day_period === '1st_half' ? ' (1st half)' : 
+                                  leave.half_day_period === '2nd_half' ? ' (2nd half)' : ' (Half Day)'
+                                )}
+                              </Badge>
+                              {leave.lop_days && leave.lop_days > 0 && (
+                                <Badge variant="destructive" className="text-xs">
+                                  {leave.lop_days} LOP
+                                </Badge>
                               )}
-                            </Badge>
+                            </div>
                           </div>
                         </div>
                         );
@@ -827,30 +1240,77 @@ export function LeaveApplication() {
                 </Card>
               ))
             ) : (
-              leaveBalance?.map((balance) => {
-                const typeKey = balance.leave_type?.name?.toLowerCase().replace(' ', '_') || 'other';
-                return (
-              <Card key={balance.id}>
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <div className={`w-4 h-4 rounded-full ${leaveTypeColors[typeKey as keyof typeof leaveTypeColors] || 'bg-gray-500'}`} />
-                    {balance.leave_type?.name}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold mb-2">{balance.remaining_days}</div>
-                  <p className="text-sm text-muted-foreground">days available</p>
-                  <Progress 
-                    value={balance.allocated_days > 0 ? (balance.remaining_days / balance.allocated_days) * 100 : 0} 
-                    className="mt-3" 
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {balance.used_days} days used this year
-                  </p>
-                </CardContent>
-              </Card>
-                );
-              })
+              <>
+                {leaveBalance?.map((balance) => {
+                  const typeKey = balance.leave_type?.name?.toLowerCase().replace(' ', '_') || 'other';
+                  return (
+                    <Card key={balance.id}>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-lg">
+                          <div className={`w-4 h-4 rounded-full ${leaveTypeColors[typeKey as keyof typeof leaveTypeColors] || 'bg-gray-500'}`} />
+                          {balance.leave_type?.name}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {(() => {
+                          const remainingDays = balance.remaining_days != null ? Number(balance.remaining_days) : 0;
+                          const allocatedDays = balance.allocated_days != null ? Number(balance.allocated_days) : 0;
+                          return (
+                            <>
+                              <div className={cn(
+                                "text-3xl font-bold mb-2",
+                                remainingDays < 0 ? "text-red-600" : ""
+                              )}>
+                                {remainingDays}
+                              </div>
+                              <p className="text-sm text-muted-foreground">
+                                {remainingDays < 0 ? "days over limit" : "days available"}
+                              </p>
+                              <Progress 
+                                value={allocatedDays > 0 
+                                  ? Math.max(0, Math.min(100, (remainingDays / allocatedDays) * 100))
+                                  : 0} 
+                                className="mt-3" 
+                              />
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {balance.used_days} days used this year
+                              </p>
+                            </>
+                          );
+                        })()}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+                
+                {/* Comp Off Balance Card */}
+                {user?.comp_off_balance !== undefined && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <div className="w-4 h-4 rounded-full bg-blue-500" />
+                        Compensatory Off
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className={cn(
+                        "text-3xl font-bold mb-2",
+                        (user.comp_off_balance || 0) > 0 ? "text-blue-600" : "text-gray-600"
+                      )}>
+                        {user.comp_off_balance || 0}
+                      </div>
+                      <p className="text-sm text-muted-foreground">days available</p>
+                      <Progress 
+                        value={100} 
+                        className="mt-3 bg-blue-100" 
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Compensatory off balance
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
             )}
           </div>
         </TabsContent>
@@ -888,13 +1348,20 @@ export function LeaveApplication() {
                           {formatDateForDisplay(leave.start_date, 'MMM dd')} - {formatDateForDisplay(leave.end_date, 'MMM dd, yyyy')}
                         </TableCell>
                         <TableCell>
-                          {leave.days_count}
-                          {leave.is_half_day && (
-                            <Badge variant="outline" className="ml-2 text-xs">
-                              {leave.half_day_period === '1st_half' ? '1st half' : 
-                               leave.half_day_period === '2nd_half' ? '2nd half' : 'Half Day'}
-                            </Badge>
-                          )}
+                          <div className="flex items-center gap-2">
+                            <span>{leave.days_count}</span>
+                            {leave.is_half_day && (
+                              <Badge variant="outline" className="text-xs">
+                                {leave.half_day_period === '1st_half' ? '1st half' : 
+                                 leave.half_day_period === '2nd_half' ? '2nd half' : 'Half Day'}
+                              </Badge>
+                            )}
+                            {leave.lop_days && leave.lop_days > 0 && (
+                              <Badge variant="destructive" className="text-xs">
+                                {leave.lop_days} LOP
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="max-w-xs truncate">{leave.reason}</TableCell>
                         <TableCell>
