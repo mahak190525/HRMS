@@ -229,10 +229,10 @@ export const leaveApi = {
 
     if (balanceError) throw balanceError;
 
-    // Then get user manager information
+    // Then get user manager information and comp_off_balance
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('id, manager_id')
+      .select('id, manager_id, comp_off_balance')
       .in('id', balanceData?.map((b: any) => b.user_id) || []);
 
     if (userError) throw userError;
@@ -242,6 +242,7 @@ export const leaveApi = {
       const userInfo = userData?.find(u => u.id === balance.user_id);
       return {
         ...balance,
+        comp_off_balance: userInfo?.comp_off_balance || 0,
         user: {
           id: balance.user_id,
           full_name: balance.full_name,
@@ -256,6 +257,7 @@ export const leaveApi = {
   async updateLeaveBalance(balanceId: string, updates: {
     allocated_days?: number | string;
     used_days?: number | string;
+    rate_of_leave?: number | string;
     comments?: string;
   }) {
     const { data, error } = await supabase
@@ -274,6 +276,59 @@ export const leaveApi = {
 
     if (error) throw error;
     return data;
+  },
+
+  async updateLeaveBalanceRateByUserId(userId: string, rateOfLeave: number, year?: number) {
+    const balanceYear = year || new Date().getFullYear();
+    
+    // First, try to find the balance
+    const { data: existingBalance, error: findError } = await supabase
+      .from('leave_balances')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('year', balanceYear)
+      .single();
+
+    let balanceId: string;
+
+    if (existingBalance) {
+      // Balance exists, use its ID
+      balanceId = existingBalance.id;
+    } else {
+      // Balance doesn't exist, we need to create it
+      // Get the default leave type
+      const { data: leaveType, error: leaveTypeError } = await supabase
+        .from('leave_types')
+        .select('id')
+        .or('name.ilike.Annual Leave,name.ilike.Total Leave,name.ilike.Total')
+        .order('created_at')
+        .limit(1)
+        .single();
+
+      if (leaveTypeError || !leaveType) {
+        throw new Error('Default leave type not found. Please create Annual Leave or Total Leave type.');
+      }
+
+      // Create the balance
+      const { data: newBalance, error: createError } = await supabase
+        .from('leave_balances')
+        .insert({
+          user_id: userId,
+          leave_type_id: leaveType.id,
+          year: balanceYear,
+          allocated_days: 0,
+          used_days: 0,
+          rate_of_leave: rateOfLeave
+        })
+        .select('id')
+        .single();
+
+      if (createError) throw createError;
+      balanceId = newBalance.id;
+    }
+
+    // Now update the rate
+    return this.updateLeaveBalance(balanceId, { rate_of_leave: rateOfLeave });
   },
 
   async adjustLeaveBalance(userId: string, adjustment: {
@@ -327,6 +382,51 @@ export const leaveApi = {
     }
 
     return balanceData;
+  },
+
+  async adjustCompOffBalance(userId: string, adjustment: {
+    type: 'add' | 'subtract';
+    amount: number | string;
+    reason: string;
+  }, currentUserId?: string) {
+    // Use RPC function to handle the comp off balance adjustment server-side
+    const { data: rpcResult, error: rpcError } = await supabase
+      .rpc('adjust_comp_off_balance', {
+        p_user_id: userId,
+        p_adjustment_type: adjustment.type,
+        p_amount: adjustment.amount,
+        p_reason: adjustment.reason,
+        p_adjusted_by: currentUserId || null
+      });
+
+    if (rpcError) {
+      console.error('RPC error:', rpcError);
+      throw rpcError;
+    }
+
+    if (!rpcResult || rpcResult.length === 0) {
+      throw new Error('No result returned from comp off balance adjustment');
+    }
+
+    const result = rpcResult[0];
+
+    if (!result.success) {
+      throw new Error(result.message || 'Failed to adjust comp off balance');
+    }
+
+    // Get the updated user record with full details
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id, full_name, employee_id, email, comp_off_balance')
+      .eq('id', userId)
+      .single();
+
+    if (userError) {
+      console.error('Failed to fetch updated user:', userError);
+      throw userError;
+    }
+
+    return userData;
   },
 
   async getLeaveBalanceAdjustments(userId?: string, limit: number = 50) {
@@ -508,6 +608,81 @@ export const leaveApi = {
       .eq('id', holidayId);
 
     if (error) throw error;
+  },
+
+  // Cron Settings API
+  async getCronSettings() {
+    const { data, error } = await supabase
+      .rpc('get_active_cron_settings');
+
+    if (error) throw error;
+    return data && data.length > 0 ? data[0] : null;
+  },
+
+  async createOrUpdateCronSettings(settings: {
+    cron_schedule: string;
+    end_date: string;
+    is_active?: boolean;
+  }, currentUserId?: string) {
+    // First, deactivate all existing settings
+    await supabase
+      .from('leave_cron_settings')
+      .update({ is_active: false })
+      .eq('is_active', true);
+
+    // Create new active setting
+    const { data, error } = await supabase
+      .from('leave_cron_settings')
+      .insert({
+        cron_schedule: settings.cron_schedule,
+        end_date: settings.end_date,
+        is_active: settings.is_active ?? true,
+        created_by: currentUserId || null
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async updateCronSettings(settingsId: string, updates: {
+    cron_schedule?: string;
+    end_date?: string;
+    is_active?: boolean;
+  }, currentUserId?: string) {
+    const { data, error } = await supabase
+      .from('leave_cron_settings')
+      .update({
+        ...updates,
+        updated_by: currentUserId || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', settingsId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async triggerMonthlyAllocation() {
+    // Use RPC function to trigger monthly allocation
+    // Pass p_skip_cron_check = true to allow manual triggers without cron settings
+    const { data, error } = await supabase
+      .rpc('allocate_monthly_leave', { p_skip_cron_check: true });
+
+    if (error) throw error;
+    return data;
+  },
+
+  async manageCronJob() {
+    // Manage the pg_cron job based on current settings
+    const { data, error } = await supabase
+      .rpc('manage_leave_allocation_cron_job');
+
+    if (error) throw error;
+    return data;
   }
 };
 

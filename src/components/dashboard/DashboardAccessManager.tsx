@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import * as React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUpdateUserPermissions } from '@/hooks/useEmployees';
 import { Button } from '@/components/ui/button';
@@ -51,12 +52,15 @@ export function DashboardAccessManager({ employee, onClose }: DashboardAccessMan
   const { user } = useAuth();
   const updateUserPermissions = useUpdateUserPermissions();
   
-  // Get role-based default dashboards
+  // Get role-based default dashboards - memoize to avoid recalculation
   const roleName = (employee.role?.name || employee.role_id || 'employee') as keyof typeof ROLE_DASHBOARD_MAPPING;
   const roleBasedDashboards = ROLE_DASHBOARD_MAPPING[roleName] || [];
   
-  // Initialize dashboard permissions state
+  // Initialize dashboard permissions state - use lazy initialization
   const [dashboardPermissions, setDashboardPermissions] = useState<Record<string, boolean>>(() => {
+    // Only compute if employee data is available
+    if (!employee) return {};
+    
     const permissions: Record<string, boolean> = {};
     
     // Set role-based defaults
@@ -72,11 +76,35 @@ export function DashboardAccessManager({ employee, onClose }: DashboardAccessMan
     
     return permissions;
   });
-
+  
   const [hasChanges, setHasChanges] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('dashboards');
   const [pagePermissions, setPagePermissions] = useState<Record<string, Record<string, boolean>>>({});
+
+  // Reset state when employee changes to prevent stale data
+  useEffect(() => {
+    if (!employee) return;
+    
+    const permissions: Record<string, boolean> = {};
+    
+    // Set role-based defaults
+    DASHBOARD_CONFIG.forEach(dashboard => {
+      permissions[dashboard.id] = roleBasedDashboards.includes(dashboard.id as any);
+    });
+    
+    // Override with explicit permissions
+    const explicitPermissions = employee.extra_permissions?.dashboards || {};
+    Object.keys(explicitPermissions).forEach(dashboardId => {
+      permissions[dashboardId] = explicitPermissions[dashboardId];
+    });
+    
+    setDashboardPermissions(permissions);
+    setHasChanges(false);
+    setSearchTerm('');
+    setActiveTab('dashboards');
+    setPagePermissions({});
+  }, [employee?.id, employee?.extra_permissions?.dashboards, roleBasedDashboards]);
 
   const handleDashboardToggle = (dashboardId: string, enabled: boolean) => {
     setDashboardPermissions(prev => ({

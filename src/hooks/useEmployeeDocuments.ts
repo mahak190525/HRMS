@@ -158,6 +158,40 @@ export function useCreateDocumentType() {
   });
 }
 
+// Hook to update a custom document type
+export function useUpdateDocumentType() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ 
+      documentTypeId, 
+      updates,
+      employeeId 
+    }: { 
+      documentTypeId: string; 
+      updates: { name?: string };
+      employeeId?: string;
+    }) => EmployeeDocumentService.updateDocumentType(documentTypeId, updates),
+    onSuccess: (_, variables) => {
+      // Invalidate and refetch document types for the specific employee
+      if (variables.employeeId) {
+        queryClient.invalidateQueries({ 
+          queryKey: ['document-types', variables.employeeId] 
+        });
+      }
+      // Also invalidate general document types
+      queryClient.invalidateQueries({ 
+        queryKey: ['document-types'] 
+      });
+      toast.success('Document type updated successfully!');
+    },
+    onError: (error: any) => {
+      console.error('Update document type error:', error);
+      toast.error(`Failed to update document type: ${error.message || 'Unknown error'}`);
+    },
+  });
+}
+
 // Hook to initialize document types (for admin use)
 export function useInitializeDocumentTypes() {
   const queryClient = useQueryClient();

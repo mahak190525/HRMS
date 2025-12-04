@@ -4,6 +4,7 @@ import {
   useAssetMetrics 
 } from '@/hooks/useEmployees';
 import { useEmployeePermissions } from '@/hooks/useEmployeePermissions';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/services/supabase';
@@ -67,6 +68,7 @@ interface Employee {
 export function EmployeeManagement() {
   const { user } = useAuth();
   const permissions = useEmployeePermissions();
+  const { hasAccess } = usePermissions();
   const { data: employees, isLoading: employeesLoading } = useFilteredEmployees();
   const { data: assetMetrics } = useAssetMetrics();
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
@@ -77,6 +79,9 @@ export function EmployeeManagement() {
   const [isAccessDialogOpen, setIsAccessDialogOpen] = useState(false);
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
   const [employeeModalMode, setEmployeeModalMode] = useState<'view' | 'edit'>('view');
+
+  // Check if user can access Asset Management page using the permission system
+  const canAccessAssetManagement = hasAccess('employee_management', 'assets');
 
   // Check if user can access security logs (super admin or HR)
   const canAccessSecurityLogs = user?.role?.name === 'super_admin' || 
@@ -191,15 +196,15 @@ export function EmployeeManagement() {
 
       <Tabs defaultValue="employees" className="space-y-6">
         <TabsList className={`grid w-full ${
-          // permissions.canAccessAssetManagement && canAccessSecurityLogs ? 'grid-cols-3' : 
-          permissions.canAccessAssetManagement && canAccessSecurityLogs ? 'grid-cols-2' : 
-          permissions.canAccessAssetManagement || canAccessSecurityLogs ? 'grid-cols-2' : 
+          // canAccessAssetManagement && canAccessSecurityLogs ? 'grid-cols-3' : 
+          canAccessAssetManagement && canAccessSecurityLogs ? 'grid-cols-2' : 
+          canAccessAssetManagement || canAccessSecurityLogs ? 'grid-cols-1' : 
           'grid-cols-1'
         }`}>
           <TabsTrigger value="employees" className="cursor-pointer">
             {permissions.accessLevel === 'all' ? 'All Employees' : permissions.accessLevel === 'team' ? 'My Team' : 'My Profile'}
           </TabsTrigger>
-          {permissions.canAccessAssetManagement && (
+          {canAccessAssetManagement && (
             <TabsTrigger value="assets" className="cursor-pointer">Asset Management</TabsTrigger>
           )}
           {/* {canAccessSecurityLogs && (
@@ -375,26 +380,6 @@ export function EmployeeManagement() {
                               <Shield className="h-4 w-4" />
                             </Button>
                           )}
-                          
-                          <Dialog open={isAccessDialogOpen} onOpenChange={setIsAccessDialogOpen}>
-                            <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
-                              <DialogHeader>
-                                <DialogTitle>Manage Access Permissions</DialogTitle>
-                                <DialogDescription>
-                                  Configure dashboard and feature-level access permissions for {selectedEmployeeForAccess?.full_name}
-                                </DialogDescription>
-                              </DialogHeader>
-                              {selectedEmployeeForAccess && (
-                                <DashboardAccessManager
-                                  employee={selectedEmployeeForAccess as any}
-                                  onClose={() => {
-                                    setIsAccessDialogOpen(false);
-                                    setSelectedEmployeeForAccess(null);
-                                  }}
-                                />
-                              )}
-                            </DialogContent>
-                          </Dialog>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -403,9 +388,38 @@ export function EmployeeManagement() {
               </Table>
             </CardContent>
           </Card>
+          
+          {/* Access Management Dialog - Moved outside loop for better performance */}
+          <Dialog open={isAccessDialogOpen} onOpenChange={(open) => {
+            setIsAccessDialogOpen(open);
+            if (!open) {
+              setSelectedEmployeeForAccess(null);
+            }
+          }}>
+            <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Manage Access Permissions</DialogTitle>
+                <DialogDescription>
+                  {selectedEmployeeForAccess 
+                    ? `Configure dashboard and feature-level access permissions for ${selectedEmployeeForAccess.full_name}`
+                    : 'Configure dashboard and feature-level access permissions'
+                  }
+                </DialogDescription>
+              </DialogHeader>
+              {selectedEmployeeForAccess && (
+                <DashboardAccessManager
+                  employee={selectedEmployeeForAccess as any}
+                  onClose={() => {
+                    setIsAccessDialogOpen(false);
+                    setSelectedEmployeeForAccess(null);
+                  }}
+                />
+              )}
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
-        {permissions.canAccessAssetManagement && (
+        {canAccessAssetManagement && (
           <TabsContent value="assets" className="space-y-6">
   {/* Top-right button */}
   <div className="flex justify-end">

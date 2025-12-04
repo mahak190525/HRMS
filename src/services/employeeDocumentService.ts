@@ -348,6 +348,26 @@ export class EmployeeDocumentService {
   }
 
   /**
+   * Update a document type (for custom documents only)
+   */
+  static async updateDocumentType(documentTypeId: string, updates: {
+    name?: string;
+  }): Promise<EmployeeDocumentType> {
+    const { data, error } = await supabase
+      .from('employee_document_types')
+      .update({
+        name: updates.name,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', documentTypeId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  /**
    * Get employee documents
    */
   static async getEmployeeDocuments(employeeId: string): Promise<EmployeeDocument[]> {

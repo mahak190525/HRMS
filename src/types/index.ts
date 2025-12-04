@@ -64,6 +64,7 @@ export interface User {
   employment_terms?: 'part_time' | 'full_time';
   tenure_mechlin?: string; // interval type from PostgreSQL
   isSA?: boolean;
+  comp_off_balance?: number; // Compensatory off balance
 }
 
 export interface DashboardPermissions {
@@ -130,6 +131,7 @@ export interface LeaveApplication {
   approved_by?: string;
   approved_at?: string;
   comments?: string;
+  lop_days?: number;
   created_at: string;
   updated_at: string;
 }

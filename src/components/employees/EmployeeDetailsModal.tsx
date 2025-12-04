@@ -15,7 +15,8 @@ import {
   useUploadEmployeeDocument, 
   useRequestEmployeeDocument, 
   useDeleteEmployeeDocument, 
-  useCreateDocumentType 
+  useCreateDocumentType,
+  useUpdateDocumentType
 } from '@/hooks/useEmployeeDocuments';
 import { 
   useWorkExperience,
@@ -49,8 +50,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
-import { Check, ChevronsUpDown } from 'lucide-react';
 import {
+  Check,
+  ChevronsUpDown,
   Users,
   Phone,
   Building,
@@ -64,7 +66,10 @@ import {
   Plus,
   Eye,
   AlertTriangle,
-  X
+  X,
+  Pencil,
+  XCircle,
+  Calendar
 } from 'lucide-react';
 
 const employeeSchema = z.object({
@@ -111,6 +116,7 @@ const employeeSchema = z.object({
   ifsc_code: z.string().optional(),
   qualification: z.string().optional(),
   employment_terms: z.enum(['part_time', 'full_time', 'associate', 'contract', 'internship']).optional(),
+  comp_off_balance: z.number().min(0, 'Comp off balance must be positive').optional(),
   // New onboarding fields
   appointment_formalities: z.enum(['Done', 'Not Done']).optional(),
   orientation: z.enum(['Done', 'Not Done']).optional(),
@@ -187,6 +193,7 @@ export function EmployeeDetailsModal({
   const requestDocument = useRequestEmployeeDocument();
   const deleteDocument = useDeleteEmployeeDocument();
   const createDocumentType = useCreateDocumentType();
+  const updateDocumentType = useUpdateDocumentType();
 
   // Incident-related hooks
   const { data: employeeIncidents } = useEmployeeIncidents(employee?.id || '');
@@ -317,6 +324,7 @@ export function EmployeeDetailsModal({
       position: '',
       designation_offer_letter: '',
       salary: 0,
+      comp_off_balance: 0,
       address: '',
       permanent_address: '',
       date_of_birth: '',
@@ -378,6 +386,7 @@ export function EmployeeDetailsModal({
         position: currentEmployeeData.position || '',
         designation_offer_letter: currentEmployeeData.designation_offer_letter || '',
         salary: currentEmployeeData.salary || 0,
+        comp_off_balance: currentEmployeeData.comp_off_balance || 0,
         address: currentEmployeeData.address || '',
         permanent_address: currentEmployeeData.permanent_address || '',
         date_of_birth: currentEmployeeData.date_of_birth || '',
@@ -478,6 +487,7 @@ export function EmployeeDetailsModal({
       department_id: data.department_id || null,
       manager_id: data.manager_id === 'none' ? null : data.manager_id || null,
       salary: data.salary || null,
+      comp_off_balance: data.comp_off_balance || 0,
       date_of_birth: data.date_of_birth || null,
       date_of_joining: data.date_of_joining || null,
       date_of_marriage_anniversary: data.date_of_marriage_anniversary || null,
@@ -624,6 +634,16 @@ export function EmployeeDetailsModal({
     setNewDocumentType('');
   };
 
+  const handleRenameDocumentType = async (documentTypeId: string, newName: string) => {
+    if (!newName.trim() || !employee) return;
+
+    await updateDocumentType.mutateAsync({
+      documentTypeId,
+      updates: { name: newName.trim() },
+      employeeId: employee.id
+    });
+  };
+
   const getStatusBadge = (status: string) => {
     const variants = {
       active: 'bg-green-100 text-green-800',
@@ -766,6 +786,7 @@ export function EmployeeDetailsModal({
             handleRequestDocument={handleRequestDocument}
             handleDeleteDocument={handleDeleteDocument}
             handleCreateCustomDocumentType={handleCreateCustomDocumentType}
+            handleRenameDocumentType={handleRenameDocumentType}
             newDocumentType={newDocumentType}
             setNewDocumentType={setNewDocumentType}
             uploadingDocumentId={uploadingDocumentId}
@@ -773,6 +794,7 @@ export function EmployeeDetailsModal({
             documentTypes={documentTypes}
             employeeDocuments={employeeDocuments}
             createDocumentType={createDocumentType}
+            updateDocumentType={updateDocumentType}
             requestDocument={requestDocument}
             deleteDocument={deleteDocument}
             permissions={permissions}
@@ -806,6 +828,7 @@ export function EmployeeDetailsModal({
             handleRequestDocument={handleRequestDocument}
             handleDeleteDocument={handleDeleteDocument}
             handleCreateCustomDocumentType={handleCreateCustomDocumentType}
+            handleRenameDocumentType={handleRenameDocumentType}
             newDocumentType={newDocumentType}
             setNewDocumentType={setNewDocumentType}
             uploadingDocumentId={uploadingDocumentId}
@@ -813,6 +836,7 @@ export function EmployeeDetailsModal({
             documentTypes={documentTypes}
             employeeDocuments={employeeDocuments}
             createDocumentType={createDocumentType}
+            updateDocumentType={updateDocumentType}
             requestDocument={requestDocument}
             deleteDocument={deleteDocument}
             permissions={permissions}
@@ -845,6 +869,7 @@ function ViewMode({
   handleRequestDocument,
   handleDeleteDocument,
   handleCreateCustomDocumentType,
+  handleRenameDocumentType,
   newDocumentType,
   setNewDocumentType,
   uploadingDocumentId,
@@ -852,6 +877,7 @@ function ViewMode({
   documentTypes,
   employeeDocuments,
   createDocumentType,
+  updateDocumentType,
   requestDocument,
   deleteDocument,
   permissions,
@@ -977,6 +1003,7 @@ function ViewMode({
               handleRequestDocument={handleRequestDocument}
               handleDeleteDocument={handleDeleteDocument}
               handleCreateCustomDocumentType={handleCreateCustomDocumentType}
+              handleRenameDocumentType={handleRenameDocumentType}
               newDocumentType={newDocumentType}
               setNewDocumentType={setNewDocumentType}
               uploadingDocumentId={uploadingDocumentId}
@@ -984,6 +1011,7 @@ function ViewMode({
               documentTypes={documentTypes}
               employeeDocuments={employeeDocuments}
               createDocumentType={createDocumentType}
+              updateDocumentType={updateDocumentType}
               requestDocument={requestDocument}
               deleteDocument={deleteDocument}
               permissions={permissions}
@@ -1017,6 +1045,7 @@ function EditMode({
   handleRequestDocument,
   handleDeleteDocument,
   handleCreateCustomDocumentType,
+  handleRenameDocumentType,
   newDocumentType,
   setNewDocumentType,
   uploadingDocumentId,
@@ -1024,6 +1053,7 @@ function EditMode({
   documentTypes,
   employeeDocuments,
   createDocumentType,
+  updateDocumentType,
   requestDocument,
   deleteDocument,
   permissions,
@@ -1208,18 +1238,20 @@ function EditMode({
                 handleFileUpload={handleFileUpload}
                 handleRequestDocument={handleRequestDocument}
                 handleDeleteDocument={handleDeleteDocument}
-                handleCreateCustomDocumentType={handleCreateCustomDocumentType}
-                newDocumentType={newDocumentType}
-                setNewDocumentType={setNewDocumentType}
-                uploadingDocumentId={uploadingDocumentId}
-                downloadingAll={downloadingAll}
-                documentTypes={documentTypes}
-                employeeDocuments={employeeDocuments}
-                createDocumentType={createDocumentType}
-                requestDocument={requestDocument}
-                deleteDocument={deleteDocument}
-                permissions={permissions}
-                mode={'edit'}
+            handleCreateCustomDocumentType={handleCreateCustomDocumentType}
+            handleRenameDocumentType={handleRenameDocumentType}
+            newDocumentType={newDocumentType}
+            setNewDocumentType={setNewDocumentType}
+            uploadingDocumentId={uploadingDocumentId}
+            downloadingAll={downloadingAll}
+            documentTypes={documentTypes}
+            employeeDocuments={employeeDocuments}
+            createDocumentType={createDocumentType}
+            updateDocumentType={updateDocumentType}
+            requestDocument={requestDocument}
+            deleteDocument={deleteDocument}
+            permissions={permissions}
+            mode={'edit'}
               />
             </TabsContent>
           </div>
@@ -1590,6 +1622,19 @@ function WorkInfoView({ employee, getStatusBadge }: { employee: Employee; getSta
           <p className="text-sm text-muted-foreground">Annual salary</p>
         </div>
       )}
+      
+      {employee.comp_off_balance !== undefined && (
+        <div className="p-4 bg-blue-50 rounded-lg mt-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Calendar className="h-4 w-4 text-blue-600" />
+            <span className="font-medium">Compensatory Off Balance</span>
+          </div>
+          <p className="text-2xl font-bold text-blue-600">
+            {employee.comp_off_balance} {employee.comp_off_balance === 1 ? 'day' : 'days'}
+          </p>
+          <p className="text-sm text-muted-foreground">Available compensatory off balance</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -1603,6 +1648,7 @@ function DocumentsView({
   handleRequestDocument,
   handleDeleteDocument,
   handleCreateCustomDocumentType,
+  handleRenameDocumentType,
   newDocumentType,
   setNewDocumentType,
   uploadingDocumentId,
@@ -1610,11 +1656,47 @@ function DocumentsView({
   documentTypes,
   employeeDocuments,
   createDocumentType,
+  updateDocumentType,
   requestDocument,
   deleteDocument,
   permissions,
   mode
 }: any) {
+  const [editingDocTypeId, setEditingDocTypeId] = useState<string | null>(null);
+  const [editingDocTypeName, setEditingDocTypeName] = useState<string>('');
+
+  // Sort document types: custom documents (with created_for_employee_id) first, then others
+  const sortedDocumentTypes = React.useMemo(() => {
+    if (!documentTypes) return [];
+    return [...documentTypes].sort((a: any, b: any) => {
+      const aIsCustom = !!a.created_for_employee_id;
+      const bIsCustom = !!b.created_for_employee_id;
+      if (aIsCustom && !bIsCustom) return -1;
+      if (!aIsCustom && bIsCustom) return 1;
+      return 0;
+    });
+  }, [documentTypes]);
+
+  const handleStartEdit = (docType: any) => {
+    setEditingDocTypeId(docType.id);
+    setEditingDocTypeName(docType.name);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingDocTypeId(null);
+    setEditingDocTypeName('');
+  };
+
+  const handleSaveEdit = async (docTypeId: string) => {
+    if (!editingDocTypeName.trim()) {
+      toast.error('Document name cannot be empty');
+      return;
+    }
+    await handleRenameDocumentType(docTypeId, editingDocTypeName);
+    setEditingDocTypeId(null);
+    setEditingDocTypeName('');
+  };
+
   return (
     <div className="pb-4">
       {/* Add Custom Document Type Section - Only in Edit Mode */}
@@ -1670,9 +1752,9 @@ function DocumentsView({
           </Button>
         </div>
         
-        {documentTypes && documentTypes.length > 0 ? (
+        {sortedDocumentTypes && sortedDocumentTypes.length > 0 ? (
           <div className="grid gap-4">
-            {documentTypes.map((docType: any) => {
+            {sortedDocumentTypes.map((docType: any) => {
               const existingDoc = employeeDocuments?.find((doc: any) => doc.document_type_id === docType.id);
               const isUploading = uploadingDocumentId === docType.id;
               
@@ -1681,7 +1763,59 @@ function DocumentsView({
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <h4 className="font-medium">{docType.name}</h4>
+                        {editingDocTypeId === docType.id ? (
+                          // Edit mode for custom documents
+                          <div className="flex items-center gap-2 flex-1">
+                            <Input
+                              value={editingDocTypeName}
+                              onChange={(e) => setEditingDocTypeName(e.target.value)}
+                              className="flex-1 max-w-xs"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleSaveEdit(docType.id);
+                                } else if (e.key === 'Escape') {
+                                  handleCancelEdit();
+                                }
+                              }}
+                              autoFocus
+                            />
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleSaveEdit(docType.id)}
+                              disabled={updateDocumentType.isPending || !editingDocTypeName.trim()}
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={handleCancelEdit}
+                              disabled={updateDocumentType.isPending}
+                            >
+                              <XCircle className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          // View mode
+                          <>
+                            <h4 className="font-medium">{docType.name}</h4>
+                            {permissions.canManageAccess && mode === 'edit' && docType.created_for_employee_id && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleStartEdit(docType)}
+                                className="h-6 w-6 p-0"
+                                title="Rename document"
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </>
+                        )}
                         {docType.is_mandatory && (
                           <Badge variant="destructive" className="text-xs">
                             Mandatory
@@ -2527,6 +2661,27 @@ function WorkInfoEdit({ form, departmentOptions, roleOptions, userOptions, emplo
                 <Input 
                   type="number" 
                   placeholder="Enter salary" 
+                  {...field}
+                  onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                  className="mt-1"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="comp_off_balance"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-sm font-medium text-gray-700">Compensatory Off Balance</FormLabel>
+              <FormControl>
+                <Input 
+                  type="number" 
+                  step="0.5"
+                  min="0"
+                  placeholder="Enter comp off balance" 
                   {...field}
                   onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                   className="mt-1"
