@@ -1,23 +1,22 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { 
   Plus, 
   Save,
   Target,
-  Weight
+  Weight,
+  Trash2
 } from 'lucide-react';
-import { dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
-import { reorder } from '@atlaskit/pragmatic-drag-and-drop/reorder';
 import type { KRATemplate, KRAGoal } from '@/hooks/useKRA';
 import { useKRACategories, useCreateKRACategory } from '@/hooks/useKRA';
 import { DraggableGoalItem } from './DraggableGoalItem';
+import { Collapsible } from '@/components/ui/collapsible';
 
 interface KRATemplateFormProps {
   template?: KRATemplate;
@@ -29,6 +28,89 @@ interface KRATemplateFormProps {
 interface GoalFormData extends Partial<KRAGoal> {
   isNew?: boolean;
   tempId?: string;
+}
+
+interface CollapsibleGoalProps {
+  goal: GoalFormData;
+  index: number;
+  goalTitle: string;
+  goalId: string;
+  goalWeight: number;
+  categories?: Array<{ id: string; name: string; }>;
+  newCategoryName: string;
+  showNewCategoryInput: boolean;
+  isCreatingCategory: boolean;
+  onUpdateGoal: (index: number, field: keyof GoalFormData, value: any) => void;
+  onRemoveGoal: (index: number) => void;
+  onCreateCategory: () => void;
+  onSetNewCategoryName: (name: string) => void;
+  onToggleNewCategoryInput: (show: boolean) => void;
+}
+
+function CollapsibleGoal({
+  goal,
+  index,
+  goalTitle,
+  goalId,
+  goalWeight,
+  categories,
+  newCategoryName,
+  showNewCategoryInput,
+  isCreatingCategory,
+  onUpdateGoal,
+  onRemoveGoal,
+  onCreateCategory,
+  onSetNewCategoryName,
+  onToggleNewCategoryInput,
+}: CollapsibleGoalProps) {
+  return (
+    <div className="w-full max-w-full">
+      <Collapsible
+        defaultOpen={false}
+        trigger={
+          <div className="flex items-start gap-3 w-full min-w-0" style={{ flexWrap: 'nowrap' }}>
+            <Badge variant="outline" className="flex-shrink-0">
+              {goalId}
+            </Badge>
+            <span className="flex-1 font-medium min-w-0 block" style={{ wordBreak: 'normal', overflowWrap: 'anywhere', whiteSpace: 'normal', lineHeight: '1.5' }}>
+              {goalTitle}
+            </span>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Badge variant="secondary" className="flex-shrink-0">
+                {goalWeight}%
+              </Badge>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="flex-shrink-0 h-8 w-8 p-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemoveGoal(index);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        }
+      >
+        <DraggableGoalItem
+          goal={goal}
+          index={index}
+          categories={categories}
+          newCategoryName={newCategoryName}
+          showNewCategoryInput={showNewCategoryInput}
+          isCreatingCategory={isCreatingCategory}
+          onUpdateGoal={onUpdateGoal}
+          onRemoveGoal={onRemoveGoal}
+          onCreateCategory={onCreateCategory}
+          onSetNewCategoryName={onSetNewCategoryName}
+          onToggleNewCategoryInput={onToggleNewCategoryInput}
+        />
+      </Collapsible>
+    </div>
+  );
 }
 
 export function KRATemplateForm({ template, onSubmit, onCancel, isLoading = false }: KRATemplateFormProps) {
@@ -43,46 +125,22 @@ export function KRATemplateForm({ template, onSubmit, onCancel, isLoading = fals
   const [goals, setGoals] = useState<GoalFormData[]>([]);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
-  const dropTargetRef = useRef<HTMLDivElement>(null);
 
   const { data: categories } = useKRACategories();
   const createCategory = useCreateKRACategory();
 
   useEffect(() => {
     if (template?.goals) {
-      setGoals(template.goals.map(goal => ({ ...goal, isNew: false })));
+      // Sort goals by display_order when loading from template
+      const sortedGoals = template.goals
+        .map(goal => ({ ...goal, isNew: false }))
+        .sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+      setGoals(sortedGoals);
     }
   }, [template]);
 
-  useEffect(() => {
-    const element = dropTargetRef.current;
-    if (!element) return;
-
-    return dropTargetForElements({
-      element,
-      onDrop({ source, location }) {
-        const { index: startIndex } = source.data as { index: number };
-        
-        // Find closest goal item to drop position
-        const dropTargets = location.current.dropTargets;
-        if (dropTargets.length === 0) return;
-        
-        // Get all draggable goal items
-        const goalElements = Array.from(element.querySelectorAll('[data-goal-index]'));
-        const targetElement = dropTargets.find(target => 
-          goalElements.includes(target.element)
-        )?.element;
-        
-        if (targetElement) {
-          const targetIndex = parseInt(targetElement.getAttribute('data-goal-index') || '0');
-          if (startIndex !== targetIndex) {
-            handleReorder(startIndex, targetIndex);
-          }
-        }
-      },
-    });
-  }, []);
-
+  // Sort goals by display_order for consistent rendering
+  const sortedGoals = [...goals].sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
   const totalWeight = goals.reduce((sum, goal) => sum + (goal.weight || 0), 0);
 
   const addNewGoal = () => {
@@ -128,19 +186,6 @@ export function KRATemplateForm({ template, onSubmit, onCancel, isLoading = fals
     setGoals(updatedGoals);
   };
 
-  const handleReorder = (startIndex: number, finishIndex: number) => {
-    const updatedItems = reorder({
-      list: goals,
-      startIndex,
-      finishIndex,
-    }).map((item, index) => ({
-      ...item,
-      display_order: index,
-    }));
-
-    setGoals(updatedItems);
-  };
-
   const handleCreateCategory = async () => {
     if (!newCategoryName.trim()) return;
     
@@ -176,7 +221,7 @@ export function KRATemplateForm({ template, onSubmit, onCancel, isLoading = fals
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6 w-full max-w-full overflow-x-hidden">
       {/* Template Basic Info */}
       <Card>
         <CardHeader>
@@ -274,25 +319,42 @@ export function KRATemplateForm({ template, onSubmit, onCancel, isLoading = fals
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          {goals.length > 0 ? (
-            <div ref={dropTargetRef} className="space-y-4">
-              {goals.map((goal, index) => (
-                <DraggableGoalItem
-                  key={goal.id || goal.tempId || `goal-${index}`}
-                  goal={goal}
-                  index={index}
-                  categories={categories}
-                  newCategoryName={newCategoryName}
-                  showNewCategoryInput={showNewCategoryInput}
-                  isCreatingCategory={createCategory.isPending}
-                  onUpdateGoal={updateGoalField}
-                  onRemoveGoal={removeGoal}
-                  onCreateCategory={handleCreateCategory}
-                  onSetNewCategoryName={setNewCategoryName}
-                  onToggleNewCategoryInput={setShowNewCategoryInput}
-                />
-              ))}
+        <CardContent className="w-full max-w-full overflow-x-hidden">
+          {sortedGoals.length > 0 ? (
+            <div className="space-y-4 w-full max-w-full">
+              {sortedGoals.map((goal, sortedIndex) => {
+                // Find the original index in the goals array for proper updates
+                const originalIndex = goals.findIndex(
+                  g => (g.id && g.id === goal.id) || 
+                       (g.tempId && g.tempId === goal.tempId) ||
+                       (g.goal_id && g.goal_id === goal.goal_id && !g.id && !g.tempId)
+                );
+                const actualIndex = originalIndex !== -1 ? originalIndex : sortedIndex;
+                
+                const goalTitle = goal.strategic_goal_title || 'Untitled Goal';
+                const goalId = goal.goal_id || `Goal ${sortedIndex + 1}`;
+                const goalWeight = goal.weight || 0;
+                
+                return (
+                  <CollapsibleGoal
+                    key={goal.id || goal.tempId || `goal-${actualIndex}`}
+                    goal={goal}
+                    index={actualIndex}
+                    goalTitle={goalTitle}
+                    goalId={goalId}
+                    goalWeight={goalWeight}
+                    categories={categories}
+                    newCategoryName={newCategoryName}
+                    showNewCategoryInput={showNewCategoryInput}
+                    isCreatingCategory={createCategory.isPending}
+                    onUpdateGoal={updateGoalField}
+                    onRemoveGoal={removeGoal}
+                    onCreateCategory={handleCreateCategory}
+                    onSetNewCategoryName={setNewCategoryName}
+                    onToggleNewCategoryInput={setShowNewCategoryInput}
+                  />
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-8 text-muted-foreground">
@@ -304,25 +366,27 @@ export function KRATemplateForm({ template, onSubmit, onCancel, isLoading = fals
       </Card>
 
       {/* Form Actions */}
-      <div className="flex items-center justify-end gap-3">
-        <Button type="button" variant="outline" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button type="submit" disabled={isLoading}>
-          {isLoading ? (
-            <>Saving...</>
-          ) : (
-            <>
-              <Save className="h-4 w-4 mr-2" />
-              {template ? 'Update Template' : 'Create Template'}
-            </>
-          )}
-        </Button>
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 w-full max-w-full">
         {totalWeight !== 100 && (
-          <p className="text-sm text-amber-600 mt-2">
+          <p className="text-sm text-amber-600 sm:mr-auto">
             <strong>Note:</strong> Total weight is {totalWeight}%. For active templates, the total weight should be 100%.
           </p>
         )}
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isLoading}>
+            {isLoading ? (
+              <>Saving...</>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                {template ? 'Update Template' : 'Create Template'}
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     </form>
   );

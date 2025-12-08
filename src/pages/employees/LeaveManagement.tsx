@@ -7,6 +7,7 @@ import { useLeaveWithdrawalLogs } from '@/hooks/useLeave';
 import { useHolidays, useCreateHoliday, useDeleteHoliday } from '@/hooks/useHolidays';
 import { useEmployeePermissions } from '@/hooks/useEmployeePermissions';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useEmploymentTermLeaveRates } from '@/hooks/useEmploymentTermLeaveRates';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,6 +23,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Calendar,
   Filter,
@@ -55,6 +57,31 @@ import {
 import { toast } from 'sonner';
 
 // Helper functions
+// Helper function to format days for display (always show 1 decimal place, but don't round)
+const formatDaysForDisplay = (days: number): string => {
+  // Parse to ensure we have a valid number, then format to 1 decimal place
+  const num = Number(days);
+  if (isNaN(num)) return '0.0';
+  // Use toFixed(1) to show one decimal place, but the actual value isn't rounded
+  return num.toFixed(1);
+};
+
+// Helper function to restrict input to one decimal place
+const restrictToOneDecimal = (value: string): string => {
+  // Remove any characters that aren't digits or decimal point
+  let cleaned = value.replace(/[^\d.]/g, '');
+  // Only allow one decimal point
+  const parts = cleaned.split('.');
+  if (parts.length > 2) {
+    cleaned = parts[0] + '.' + parts.slice(1).join('');
+  }
+  // Restrict to one decimal place
+  if (parts.length === 2 && parts[1].length > 1) {
+    cleaned = parts[0] + '.' + parts[1].substring(0, 1);
+  }
+  return cleaned;
+};
+
 const getStatusIcon = (status: string) => {
   switch (status) {
     case 'approved':
@@ -182,7 +209,7 @@ function LeaveApplicationActions({ application }: { application: any }) {
               <div>
                 <p className="font-medium">Duration:</p>
                 <p className="text-muted-foreground">
-                  {application.days_count} days
+                  {formatDaysForDisplay(Number(application.days_count))} days
                   {application.is_half_day && (
                     <span className="ml-2 text-blue-600">
                       ({application.half_day_period === '1st_half' ? '1st half' : 
@@ -239,7 +266,7 @@ function LeaveApplicationActions({ application }: { application: any }) {
                                 )}>
                                   <div className="flex justify-between text-sm">
                                     <span>Actual Working Days:</span>
-                                    <span className="font-medium">{application.days_count}</span>
+                                    <span className="font-medium">{formatDaysForDisplay(Number(application.days_count))}</span>
                                   </div>
                                   <div className="flex justify-between text-sm">
                                     <span>Days Deducted from Balance:</span>
@@ -247,14 +274,14 @@ function LeaveApplicationActions({ application }: { application: any }) {
                                       "font-medium",
                                       application.is_sandwich_leave ? "text-orange-700" : "text-blue-700"
                                     )}>
-                                      {application.sandwich_deducted_days || application.days_count}
+                                      {formatDaysForDisplay(Number(application.sandwich_deducted_days || application.days_count))}
                                     </span>
                                   </div>
                                   {application.sandwich_deducted_days && application.sandwich_deducted_days !== application.days_count && (
                                     <div className="flex justify-between text-sm">
                                       <span>Additional Deduction:</span>
                                       <span className="font-medium text-red-600">
-                                        +{(application.sandwich_deducted_days - application.days_count).toFixed(1)} days
+                                        +{formatDaysForDisplay(Number(application.sandwich_deducted_days) - Number(application.days_count))} days
                                       </span>
                                     </div>
                                   )}
@@ -318,7 +345,7 @@ function LeaveApplicationActions({ application }: { application: any }) {
                   <div>
                     <span className="font-medium">Duration:</span>
                     <span className="ml-2">
-                      {application.days_count} days
+                      {formatDaysForDisplay(Number(application.days_count))} days
                       {application.is_half_day && (
                         <span className="ml-2 text-blue-600 text-xs">
                           ({application.half_day_period === '1st_half' ? '1st half' : 
@@ -420,7 +447,7 @@ function LeaveApplicationActions({ application }: { application: any }) {
                   <div>
                     <span className="font-medium">Duration:</span>
                     <span className="ml-2">
-                      {application.days_count} days
+                      {formatDaysForDisplay(Number(application.days_count))} days
                       {application.is_half_day && (
                         <span className="ml-2 text-blue-600 text-xs">
                           ({application.half_day_period === '1st_half' ? '1st half' : 
@@ -1170,11 +1197,14 @@ function LeaveBalanceAdjustment({ employee, onClose, onSuccess }: {
         <Input
           type="number"
           value={amount}
-          onChange={(e) => setAmount(e.target.value)}
+          onChange={(e) => {
+            const restricted = restrictToOneDecimal(e.target.value);
+            setAmount(restricted);
+          }}
           placeholder="Enter number of days"
-          step="0.5"
-          min="0.5"
-          pattern="\d*\.?\d*"
+          step="0.1"
+          min="0.1"
+          pattern="\d*\.?\d{0,1}"
         />
       </div>
 
@@ -1222,6 +1252,50 @@ export function LeaveManagement() {
   
   // Withdrawal logs data
   const { data: withdrawalLogs, isLoading: withdrawalLogsLoading } = useLeaveWithdrawalLogs();
+  
+  // Employment term leave rates
+  const { data: employmentTermLeaveRates } = useEmploymentTermLeaveRates();
+  
+  // Helper function to get leave rate based on employment term
+  const getLeaveRateByEmploymentTerm = (employmentTerm: string | null): number => {
+    if (!employmentTerm || !employmentTermLeaveRates) return 0;
+    const rateConfig = employmentTermLeaveRates.find(
+      (rate) => rate.employment_term === employmentTerm
+    );
+    return rateConfig?.leave_rate || 0;
+  };
+  
+  // Helper function to format employment term name for display
+  const formatEmploymentTermName = (term: string | null): string => {
+    if (!term) return 'Not Set';
+    const termMap: Record<string, string> = {
+      'full_time': 'Full Time',
+      'part_time': 'Part Time',
+      'associate': 'Associate',
+      'contract': 'Contract',
+      'probation/internship': 'Probation/Internship'
+    };
+    return termMap[term] || term;
+  };
+  
+  // Helper function to get employment term info
+  const getEmploymentTermInfo = (employmentTerm: string | null) => {
+    if (!employmentTerm || !employmentTermLeaveRates) {
+      return {
+        term: 'Not Set',
+        rate: 0,
+        description: 'Employment term not configured'
+      };
+    }
+    const rateConfig = employmentTermLeaveRates.find(
+      (rate) => rate.employment_term === employmentTerm
+    );
+    return {
+      term: formatEmploymentTermName(employmentTerm),
+      rate: rateConfig?.leave_rate || 0,
+      description: rateConfig?.description || `Leave rate for ${formatEmploymentTermName(employmentTerm)} employees`
+    };
+  };
 
   // Filter data based on permissions
   // If user has page access but not employee permissions, grant view access to all
@@ -1325,7 +1399,7 @@ export function LeaveManagement() {
         app.leave_type?.name || '',
         app.start_date,
         app.end_date,
-        app.days_count,
+        Number(app.days_count),
         `"${app.reason}"`,
         app.status,
         formatDateForDisplay(app.applied_at, 'yyyy-MM-dd'),
@@ -1717,7 +1791,7 @@ export function LeaveManagement() {
                           </TableCell>
                           <TableCell>
                             <div className="text-center">
-                              <div className="font-medium">{application.days_count}</div>
+                              <div className="font-medium">{formatDaysForDisplay(Number(application.days_count))}</div>
                               <div className="text-xs text-muted-foreground flex items-center justify-center gap-1 flex-wrap">
                                 {application.is_half_day && (
                                   <span className="text-blue-600">
@@ -1858,6 +1932,46 @@ export function LeaveManagement() {
             </Card>
           </div>
 
+          {/* Leave Rates Reference Section */}
+          {employmentTermLeaveRates && employmentTermLeaveRates.length > 0 && (
+            <Card className="bg-blue-50/50 border-blue-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Info className="h-4 w-4 text-blue-600" />
+                  Leave Rates by Employment Term - Reference
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Quick reference of leave rates configured for each employment term type
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+                  {employmentTermLeaveRates
+                    .sort((a, b) => {
+                      const order = ['full_time', 'part_time', 'associate', 'contract', 'probation/internship'];
+                      return order.indexOf(a.employment_term) - order.indexOf(b.employment_term);
+                    })
+                    .map((rate) => (
+                      <div
+                        key={rate.employment_term}
+                        className="flex flex-col p-3 bg-white rounded-lg border border-blue-100"
+                      >
+                        <div className="text-sm font-medium text-gray-900 mb-1">
+                          {formatEmploymentTermName(rate.employment_term)}
+                        </div>
+                        <div className="mt-auto">
+                          <div className="text-lg font-bold text-blue-600">
+                            {rate.leave_rate.toFixed(2)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">days/month</div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Balance Filters */}
           <Card>
             <CardHeader>
@@ -1867,19 +1981,19 @@ export function LeaveManagement() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div>
-                  <Label htmlFor="employee-name-filter" className='mb-2 ml-2'>Employee Name</Label>
+              <div className="flex flex-wrap items-end gap-4">
+                <div className="flex-1 min-w-[200px] max-w-[300px]">
+                  <Label htmlFor="employee-name-filter" className='mb-2'>Employee Name</Label>
                   <Input
                     placeholder="Search employees..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
-                <div>
+                <div className="flex-1 min-w-[200px] max-w-[300px]">
                   <Label htmlFor="balance-filter" className='mb-2'>Balance Status</Label>
                   <Select value={balanceFilter} onValueChange={setBalanceFilter}>
-                    <SelectTrigger >
+                    <SelectTrigger>
                       <SelectValue placeholder="All Balances" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1890,7 +2004,6 @@ export function LeaveManagement() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div></div>
                 <div className='mt-4'>
                   <Button 
                     variant="outline" 
@@ -1932,6 +2045,7 @@ export function LeaveManagement() {
                       <TableHead>Tenure</TableHead>
                       {/* <TableHead>Monthly Rate</TableHead> */}
                       <TableHead>Rate of Leave</TableHead>
+                      {/* <TableHead>Employment Term</TableHead> */}
                       <TableHead>Allocated</TableHead>
                       <TableHead>Used</TableHead>
                       <TableHead>Remaining</TableHead>
@@ -1976,23 +2090,47 @@ export function LeaveManagement() {
                             <div className="text-xs text-muted-foreground">days/month</div>
                           </TableCell> */}
                           <TableCell className="text-center">
-                            {permissions.canEditAllEmployees ? (
-                              <RateOfLeaveEditor 
-                                balance={{
-                                  ...balance,
-                                  balance_id: balance.balance_id,
-                                  user_id: balance.user_id,
-                                  full_name: balance.full_name
-                                }}
-                                currentRate={Number(balance.rate_of_leave) || 0}
-                              />
-                            ) : (
-                              <div>
-                                <div className="font-medium">{(Number(balance.rate_of_leave) || 0).toFixed(2)}</div>
-                                <div className="text-xs text-muted-foreground">days/month</div>
-                              </div>
-                            )}
+                            {(() => {
+                              // Get leave rate from employment term (HR can't configure this)
+                              const employmentTerm = balance.employment_terms || balance.user?.employment_terms;
+                              const leaveRate = getLeaveRateByEmploymentTerm(employmentTerm);
+                              return (
+                                <div>
+                                  <div className="font-medium">{leaveRate.toFixed(2)}</div>
+                                  <div className="text-xs text-muted-foreground">days/month</div>
+                                </div>
+                              );
+                            })()}
                           </TableCell>
+                          {/* <TableCell className="text-center">
+                            {(() => {
+                              const employmentTerm = balance.employment_terms || balance.user?.employment_terms;
+                              const termInfo = getEmploymentTermInfo(employmentTerm);
+                              return (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="flex items-center justify-center gap-1 cursor-help">
+                                        <Info className="h-4 w-4 text-muted-foreground" />
+                                        <span className="text-sm font-medium">{termInfo.term}</span>
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs">
+                                      <div className="space-y-1">
+                                        <div className="font-semibold">{termInfo.term}</div>
+                                        <div className="text-xs">
+                                          <div>Leave Rate: <strong>{termInfo.rate.toFixed(2)} days/month</strong></div>
+                                          {termInfo.description && (
+                                            <div className="mt-1 text-muted-foreground">{termInfo.description}</div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              );
+                            })()}
+                          </TableCell> */}
                           <TableCell className="text-center">
                             <div className="font-medium">{allocatedDays}</div>
                             <div className="text-xs text-muted-foreground">allocated</div>
@@ -2031,7 +2169,7 @@ export function LeaveManagement() {
                                   {balance.can_carry_forward && (
                                     <Badge variant="secondary" className="text-xs">
                                       Can Carry Forward
-                                    </Badge>
+                                    </Badge>     
                                   )}
                                   {tenureMonths < 9 && (
                                     <Badge variant="outline" className="text-xs text-orange-600">
@@ -2247,7 +2385,7 @@ export function LeaveManagement() {
                                 {log.leave_application?.leave_type?.name}
                               </Badge>
                               <span className="text-sm">
-                                {log.leave_application?.days_count} days
+                                {formatDaysForDisplay(Number(log.leave_application?.days_count || 0))} days
                                 {log.leave_application?.is_half_day && (
                                   <span className="ml-1 text-blue-600 text-xs">
                                     ({log.leave_application?.half_day_period === '1st_half' ? '1st half' : 

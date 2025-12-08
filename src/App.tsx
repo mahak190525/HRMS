@@ -59,7 +59,7 @@ const ExitClearance = lazy(() => import('@/pages/exit/ExitClearance').then(m => 
 const ExitInterview = lazy(() => import('@/pages/exit/ExitInterview').then(m => ({ default: m.ExitInterview })));
 const NotificationsPage = lazy(() => import('@/pages/notifications/Notifications').then(m => ({ default: m.NotificationsPage })));
 const PolicyDashboard = lazy(() => import('@/pages/policies/PolicyDashboard').then(m => ({ default: m.PolicyDashboard })));
-const RolePermissionsPage = lazy(() => import('@/pages/admin/RolePermissionsPage').then(m => ({ default: m.RolePermissionsPage })));
+const SettingsPage = lazy(() => import('@/pages/admin/SettingsPage').then(m => ({ default: m.SettingsPage })));
 
 const queryClient = new QueryClient();
 
@@ -247,9 +247,9 @@ function AppRoutes() {
             <ProjectManagement />
           </GuardedRoute>
         } />
-        <Route path="employees/role-permissions" element={
+        <Route path="employees/admin-settings" element={
           <GuardedRoute>
-            <RolePermissionsPage />
+            <SettingsPage />
           </GuardedRoute>
         } />
         <Route path="grievance" element={

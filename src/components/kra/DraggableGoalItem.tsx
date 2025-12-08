@@ -6,12 +6,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { 
-  GripVertical,
-  Trash2,
   X,
   Plus
 } from 'lucide-react';
-import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 
 interface GoalFormData {
   id?: string;
@@ -71,63 +68,23 @@ export function DraggableGoalItem({
   onSetNewCategoryName,
   onToggleNewCategoryInput,
 }: DraggableGoalItemProps) {
-  const dragRef = useRef<HTMLDivElement>(null);
-  const dragHandleRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const element = dragRef.current;
-    const dragHandle = dragHandleRef.current;
-    
-    if (!element || !dragHandle) return;
-
-    const cleanupDraggable = draggable({
-      element,
-      dragHandle,
-      getInitialData: () => ({ index, goalId: goal.id || goal.tempId }),
-    });
-
-    const cleanupDropTarget = dropTargetForElements({
-      element,
-      getData: () => ({ index }),
-    });
-
-    return () => {
-      cleanupDraggable();
-      cleanupDropTarget();
-    };
-  }, [index, goal.id, goal.tempId]);
-
   return (
-    <div
-      ref={dragRef}
-      className="border rounded-lg p-4 bg-white"
-      data-goal-index={index}
-    >
-      {/* Goal Header */}
-      <div className="flex items-center gap-2 mb-4">
-        <div ref={dragHandleRef} className="cursor-grab active:cursor-grabbing">
-          <GripVertical className="h-4 w-4 text-muted-foreground" />
+    <div className="space-y-4 w-full max-w-full">
+      {/* Goal ID and Basic Info */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Goal ID *</Label>
+          <Input
+            value={goal.goal_id || ''}
+            onChange={(e) => onUpdateGoal(index, 'goal_id', e.target.value)}
+            placeholder="Goal ID (e.g., G001)"
+            required
+          />
         </div>
-        <Badge variant="outline">Goal {index + 1}</Badge>
-        <Input
-          value={goal.goal_id || ''}
-          onChange={(e) => onUpdateGoal(index, 'goal_id', e.target.value)}
-          placeholder="Goal ID (e.g., G001)"
-          className="w-32"
-        />
-        <div className="flex-1" />
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => onRemoveGoal(index)}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
       </div>
 
       {/* Goal Details */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Strategic Goal Title *</Label>
           <Input
@@ -249,7 +206,7 @@ export function DraggableGoalItem({
           <p className="text-xs text-muted-foreground">
             Define performance criteria (text with line breaks supported) and corresponding points (numbers) for each level
           </p>
-          <div className="grid grid-cols-2 md:grid-cols-1 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2">
             {[1, 2, 3, 4, 5].map(level => (
               <div key={level} className="space-y-2 p-3 border rounded">
                 <div className="text-sm font-medium text-center">

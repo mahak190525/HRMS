@@ -90,7 +90,7 @@ export const DASHBOARD_CONFIG = [
       // { id: 'attendance', name: 'Attendance Reports', slug: 'attendance', path: '/employees/attendance', icon: 'Clock' },
       // { id: 'projects', name: 'Project Management', slug: 'projects', path: '/employees/projects', icon: 'Building' },
       { id: 'feedback', name: 'HRMS Feedback', slug: 'feedback', path: '/employees/feedback', icon: 'MessageSquare' },
-      { id: 'role-permissions', name: 'Role Permissions', slug: 'role-permissions', path: '/employees/role-permissions', icon: 'Shield' },
+      { id: 'admin-settings', name: 'Admin Settings', slug: 'admin-settings', path: '/employees/admin-settings', icon: 'Settings' },
     ],
   },
   {

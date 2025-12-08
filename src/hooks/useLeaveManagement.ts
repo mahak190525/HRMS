@@ -317,11 +317,13 @@ export function useUpdateLeaveApplicationStatus() {
       return transformedData;
     },
     onSuccess: async(data) => {
+      // Invalidate both employee-side and manager/HR-side leave application queries
       queryClient.invalidateQueries({ queryKey: ['all-leave-applications'] });
       queryClient.invalidateQueries({ queryKey: ['leave-applications'] });
       
       // IMPORTANT: Also invalidate leave balance queries since approval updates balances
       queryClient.invalidateQueries({ queryKey: ['all-employees-leave-balances'] });
+      queryClient.invalidateQueries({ queryKey: ['all-employees-leave-balances-with-manager'] });
       queryClient.invalidateQueries({ queryKey: ['leave-balance', data.user_id] });
       queryClient.invalidateQueries({ queryKey: ['user-leave-summary', data.user_id] });
       

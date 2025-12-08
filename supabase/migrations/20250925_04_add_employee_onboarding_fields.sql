@@ -38,7 +38,7 @@ BEGIN
     
     -- Add new constraint with additional options
     ALTER TABLE users ADD CONSTRAINT users_employment_terms_check 
-        CHECK (employment_terms IN ('full_time', 'part_time', 'associate', 'contract', 'internship'));
+        CHECK (employment_terms IN ('full_time', 'part_time', 'associate', 'contract', 'probation/internship'));
 END $$;
 
 -- Add indexes for performance on frequently queried fields

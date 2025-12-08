@@ -30,7 +30,7 @@ import {
   Calculator,
   RotateCcw
 } from 'lucide-react';
-import { differenceInDays, addYears, differenceInCalendarDays } from 'date-fns';
+import { differenceInDays, addYears, differenceInCalendarDays, subDays } from 'date-fns';
 import { formatDateForDisplay, getCurrentISTDate } from '@/utils/dateUtils';
 import { cn } from '@/lib/utils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -147,6 +147,25 @@ export function LeaveApplication() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, endDate, isHalfDay, user?.id]);
+
+  // Helper function to check if a date is more than 7 days before today
+  const isMoreThan7DaysPast = (date: Date): boolean => {
+    const today = getCurrentISTDate();
+    today.setHours(0, 0, 0, 0);
+    const sevenDaysAgo = subDays(today, 7);
+    const dateToCheck = new Date(date);
+    dateToCheck.setHours(0, 0, 0, 0);
+    return dateToCheck < sevenDaysAgo;
+  };
+
+  // Helper function to format days for display (always show 1 decimal place, but don't round)
+  const formatDaysForDisplay = (days: number): string => {
+    // Parse to ensure we have a valid number, then format to 1 decimal place
+    const num = Number(days);
+    if (isNaN(num)) return '0.0';
+    // Use toFixed(1) to show one decimal place, but the actual value isn't rounded
+    return num.toFixed(1);
+  };
 
   const calculateDays = () => {
     if (isHalfDay) {
@@ -278,6 +297,18 @@ export function LeaveApplication() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedType || !startDate || !endDate || !reason.trim() || !user) return;
+
+    // Validate that start date is not more than 7 days in the past
+    if (isMoreThan7DaysPast(startDate)) {
+      toast.error('You can only apply for backdated leave up to 7 days from today. Please select a date within the allowed range.');
+      return;
+    }
+
+    // Validate that end date is not more than 7 days in the past
+    if (endDate && isMoreThan7DaysPast(endDate)) {
+      toast.error('End date cannot be more than 7 days in the past. Please select a date within the allowed range.');
+      return;
+    }
 
     const leaveType = leaveTypes?.find(lt => lt.name.toLowerCase().replace(' ', '_') === selectedType);
     if (!leaveType) {
@@ -427,20 +458,20 @@ export function LeaveApplication() {
           // No LOP needed - balance will go negative and be covered by rate
           lopDays = 0;
           toast.info(
-            `Your leave balance will go negative by ${shortfall} day(s), but this will be covered by your monthly leave rate (${leaveRate} days/month) in the next allocation.`
+            `Your leave balance will go negative by ${formatDaysForDisplay(shortfall)} day(s), but this will be covered by your monthly leave rate (${formatDaysForDisplay(leaveRate)} days/month) in the next allocation.`
           );
         } else if (leaveRate > 0 && leaveRate < shortfall) {
           // Leave rate is less than shortfall - mark excess as LOP
           lopDays = shortfall - leaveRate;
           const coveredByRate = shortfall - lopDays;
           toast.warning(
-            `Your leave balance is insufficient. ${coveredByRate} day(s) will be covered by your monthly leave rate, and ${lopDays} day(s) will be marked as Loss of Pay (LOP).`
+            `Your leave balance is insufficient. ${formatDaysForDisplay(coveredByRate)} day(s) will be covered by your monthly leave rate, and ${formatDaysForDisplay(lopDays)} day(s) will be marked as Loss of Pay (LOP).`
           );
         } else {
           // No leave rate set - all excess is LOP
           lopDays = shortfall;
           toast.warning(
-            `Your leave balance is insufficient. ${lopDays} day(s) will be marked as Loss of Pay (LOP).`
+            `Your leave balance is insufficient. ${formatDaysForDisplay(lopDays)} day(s) will be marked as Loss of Pay (LOP).`
           );
         }
       }
@@ -553,6 +584,9 @@ export function LeaveApplication() {
                 variant="outline"
                 className="bg-pink-100 hover:bg-pink-200 border-pink-300 text-pink-900 font-semibold mt-2 w-1/4 sm:flex-shrink-0 text-sm sm:text-base px-3 sm:px-4"
                 onClick={() => {
+                  // Switch to "Apply for Leave" tab
+                  setDefaultTab('apply');
+                  
                   // Auto-select birthday leave and set the date
                   const birthdayLeaveType = leaveTypes?.find(
                     lt => lt.name.toLowerCase().includes('birthday')
@@ -563,13 +597,14 @@ export function LeaveApplication() {
                     setStartDate(birthdayReminder.birthdayDate);
                     setEndDate(birthdayReminder.birthdayDate);
                     setIsHalfDay(false);
-                    // Scroll to form
+                    
+                    // Scroll to form after tab switch (with longer delay to ensure tab is visible)
                     setTimeout(() => {
                       document.getElementById('leave-application-form')?.scrollIntoView({ 
                         behavior: 'smooth', 
                         block: 'start' 
                       });
-                    }, 100);
+                    }, 300);
                   }
                 }}
               >
@@ -732,6 +767,7 @@ export function LeaveApplication() {
                                   setEndDate(date);
                                 }
                               }}
+                              disabled={(date) => isMoreThan7DaysPast(date)}
                               initialFocus
                             />
                           </PopoverContent>
@@ -763,7 +799,13 @@ export function LeaveApplication() {
                                   mode="single"
                                   selected={endDate}
                                   onSelect={setEndDate}
-                                  disabled={(date) => startDate ? date < startDate : false}
+                                  disabled={(date) => {
+                                    // Disable dates more than 7 days in the past
+                                    if (isMoreThan7DaysPast(date)) return true;
+                                    // Disable dates before start date
+                                    if (startDate && date < startDate) return true;
+                                    return false;
+                                  }}
                                   initialFocus
                                 />
                               </PopoverContent>
@@ -776,19 +818,19 @@ export function LeaveApplication() {
                     {startDate && (isHalfDay || endDate) && (
                       <>
                         {/* Backdated Leave Warning */}
-                        {isPastDate(startDate) && (
+                        {isPastDate(startDate) && !isMoreThan7DaysPast(startDate) && (
                           <Alert className="bg-amber-50 border-amber-200">
                             <AlertCircle className="h-4 w-4 text-amber-600" />
                             <AlertDescription className="text-amber-800">
                               <strong>Backdated Leave:</strong> You are applying for a leave that has already passed. 
-                              This is allowed for cases where you were unable to apply in advance. Your leave balance will be deducted accordingly.
+                              Backdated leave applications are allowed up to 7 days from today. Your leave balance will be deducted accordingly.
                             </AlertDescription>
                           </Alert>
                         )}
                         <Alert>
                           <Info className="h-4 w-4" />
                           <AlertDescription>
-                            Total days requested: <strong>{calculateDays()} {calculateDays() === 1 ? 'day' : 'days'}</strong>
+                            Total days requested: <strong>{formatDaysForDisplay(calculateDays())} {calculateDays() === 1 ? 'day' : 'days'}</strong>
                             {isHalfDay && (
                               <span className="text-muted-foreground ml-2">
                                 ({halfDayPeriod === '1st_half' ? '1st Half' : '2nd Half'} on {formatDateForDisplay(startDate, "PPP")})
@@ -967,8 +1009,19 @@ export function LeaveApplication() {
                           <span>Total Leave Balance</span>
                           <span>{leaveSummary.balance?.allocated_days || totalLeaveBalance} days</span>
                         </div>
-                        <Progress value={leaveSummary.balance?.allocated_days > 0 ? 
-                          ((leaveSummary.balance.allocated_days - (leaveSummary.balance.used_days || 0)) / leaveSummary.balance.allocated_days) * 100 : 0} />
+                        {(() => {
+                          // Use actual remaining_days from database for accurate progress calculation
+                          const allocatedDays = leaveSummary.balance?.allocated_days || totalLeaveBalance;
+                          const remainingDays = leaveBalance && leaveBalance.length > 0 
+                            ? totalRemainingDays 
+                            : (leaveSummary?.balance?.remaining_days != null 
+                              ? Number(leaveSummary.balance.remaining_days) 
+                              : (totalLeaveBalance - usedLeave));
+                          const progressValue = allocatedDays > 0 
+                            ? Math.max(0, Math.min(100, (remainingDays / allocatedDays) * 100)) 
+                            : 0;
+                          return <Progress value={progressValue} />;
+                        })()}
                       </div>
                       <div>
                         <div className="flex justify-between text-sm mb-1">
@@ -985,15 +1038,17 @@ export function LeaveApplication() {
                         <div className="flex justify-between text-sm mb-1">
                           <span>Remaining</span>
                           {(() => {
-                            // Use leaveBalance data directly if available, as it comes from the database
-                            // and will have the correct negative values
+                            // Prioritize leaveBalance data (direct from database) to ensure negative values are shown correctly
+                            // Then fallback to leaveSummary, then calculated value
                             let remaining: number;
                             if (leaveBalance && leaveBalance.length > 0) {
                               // Sum remaining_days from all leave types (this will correctly show negative values)
                               remaining = totalRemainingDays;
                             } else if (leaveSummary?.balance?.remaining_days != null) {
+                              // Use the actual remaining_days from database (may be negative)
                               remaining = Number(leaveSummary.balance.remaining_days);
                             } else {
+                              // Fallback calculation (should match database value)
                               remaining = totalLeaveBalance - usedLeave;
                             }
                             return (
@@ -1160,7 +1215,7 @@ export function LeaveApplication() {
                           <div className="text-right">
                             <div className="flex flex-col items-end gap-1">
                               <Badge variant="secondary" className="text-xs">
-                                {leave.days_count} day{leave.days_count !== 1 ? 's' : ''}
+                                {formatDaysForDisplay(Number(leave.days_count))} day{Number(leave.days_count) !== 1 ? 's' : ''}
                                 {leave.is_half_day && (
                                   leave.half_day_period === '1st_half' ? ' (1st half)' : 
                                   leave.half_day_period === '2nd_half' ? ' (2nd half)' : ' (Half Day)'
@@ -1168,7 +1223,7 @@ export function LeaveApplication() {
                               </Badge>
                               {leave.lop_days && leave.lop_days > 0 && (
                                 <Badge variant="destructive" className="text-xs">
-                                  {leave.lop_days} LOP
+                                  {formatDaysForDisplay(Number(leave.lop_days))} LOP
                                 </Badge>
                               )}
                             </div>
@@ -1349,7 +1404,7 @@ export function LeaveApplication() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <span>{leave.days_count}</span>
+                            <span>{formatDaysForDisplay(Number(leave.days_count))}</span>
                             {leave.is_half_day && (
                               <Badge variant="outline" className="text-xs">
                                 {leave.half_day_period === '1st_half' ? '1st half' : 
@@ -1358,7 +1413,7 @@ export function LeaveApplication() {
                             )}
                             {leave.lop_days && leave.lop_days > 0 && (
                               <Badge variant="destructive" className="text-xs">
-                                {leave.lop_days} LOP
+                                {formatDaysForDisplay(Number(leave.lop_days))} LOP
                               </Badge>
                             )}
                           </div>
@@ -1462,7 +1517,7 @@ export function LeaveApplication() {
                   <div>
                     <span className="font-medium">Duration:</span>
                     <span className="ml-2">
-                      {selectedLeaveForWithdraw.days_count} day{selectedLeaveForWithdraw.days_count !== 1 ? 's' : ''}
+                      {formatDaysForDisplay(Number(selectedLeaveForWithdraw.days_count))} day{Number(selectedLeaveForWithdraw.days_count) !== 1 ? 's' : ''}
                       {selectedLeaveForWithdraw.is_half_day && (
                         selectedLeaveForWithdraw.half_day_period === '1st_half' ? ' (1st half)' : 
                         selectedLeaveForWithdraw.half_day_period === '2nd_half' ? ' (2nd half)' : ' (Half Day)'

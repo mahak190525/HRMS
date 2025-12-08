@@ -86,6 +86,11 @@ export function KRADetailsPage() {
     );
   }
   
+  // Sort goals by display_order for consistent rendering
+  const sortedGoals = assignment?.template?.goals 
+    ? [...assignment.template.goals].sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+    : [];
+
   if (!assignment) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -390,7 +395,7 @@ export function KRADetailsPage() {
                       {/* Goals for this quarter */}
                       <div className="space-y-4">
                         <h4 className="font-medium">Goals & Evaluations</h4>
-                        {assignment.template?.goals?.map((goal) => {
+                        {sortedGoals.map((goal) => {
                           const evaluation = quarterEvaluations.find(e => e.goal_id === goal.id);
                           
                           return (
@@ -413,7 +418,9 @@ export function KRADetailsPage() {
                               <CardContent className="space-y-4">
                                 <div>
                                   <Label className="text-sm font-medium">SMART Goal</Label>
-                                  <p className="text-sm text-muted-foreground mt-1">{goal.smart_goal}</p>
+                                  <div className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap" style={{ whiteSpace: 'pre-wrap' }}>
+                                    {goal.smart_goal}
+                                  </div>
                                 </div>
                                 
                                 <div>
