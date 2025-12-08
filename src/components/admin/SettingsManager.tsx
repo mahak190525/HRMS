@@ -332,15 +332,15 @@ export function SettingsManager() {
 
       <Tabs defaultValue="general" className="w-full">
         <TabsList className="grid w-full grid-cols-5 lg:grid-cols-10">
-          <TabsTrigger value="general" className="flex items-center gap-2">
+          {/* <TabsTrigger value="general" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
             <span className="hidden sm:inline">General</span>
-          </TabsTrigger>
+          </TabsTrigger> */}
           <TabsTrigger value="leave" className="flex items-center gap-2">
             <Calendar className="h-4 w-4" />
             <span className="hidden sm:inline">Leave</span>
           </TabsTrigger>
-          <TabsTrigger value="assets" className="flex items-center gap-2">
+          {/* <TabsTrigger value="assets" className="flex items-center gap-2">
             <Package className="h-4 w-4" />
             <span className="hidden sm:inline">Assets</span>
           </TabsTrigger>
@@ -359,19 +359,19 @@ export function SettingsManager() {
           <TabsTrigger value="email" className="flex items-center gap-2">
             <Mail className="h-4 w-4" />
             <span className="hidden sm:inline">Email</span>
-          </TabsTrigger>
+          </TabsTrigger> */}
           <TabsTrigger value="employees" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             <span className="hidden sm:inline">Employees</span>
           </TabsTrigger>
-          <TabsTrigger value="grievance" className="flex items-center gap-2">
+          {/* <TabsTrigger value="grievance" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
             <span className="hidden sm:inline">Grievance</span>
           </TabsTrigger>
           <TabsTrigger value="finance" className="flex items-center gap-2">
             <DollarSign className="h-4 w-4" />
             <span className="hidden sm:inline">Finance</span>
-          </TabsTrigger>
+          </TabsTrigger> */}
         </TabsList>
 
         {/* General Settings */}
