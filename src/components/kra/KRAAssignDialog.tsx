@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,7 +13,8 @@ import {
   Calendar,
   Send,
   User,
-  X
+  X,
+  Search
 } from 'lucide-react';
 import { formatDateForDisplay } from '@/utils/dateUtils';
 
@@ -33,6 +34,23 @@ interface KRAAssignDialogProps {
 export function KRAAssignDialog({ isOpen, onClose, template, teamMembers, existingAssignments = [], onAssign, isLoading = false }: KRAAssignDialogProps) {
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
   const [assignmentMode, setAssignmentMode] = useState<'assign' | 'reassign'>('assign');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Check which employees already have assignments
+  const employeesWithAssignments = existingAssignments.map(assignment => assignment.employee_id);
+  const newEmployees = teamMembers.filter(member => !employeesWithAssignments.includes(member.id));
+  const existingEmployees = teamMembers.filter(member => employeesWithAssignments.includes(member.id));
+
+  // Filter team members based on search query
+  const filteredTeamMembers = teamMembers.filter((member) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      member.full_name?.toLowerCase().includes(query) ||
+      member.email?.toLowerCase().includes(query) ||
+      member.employee_id?.toLowerCase().includes(query)
+    );
+  });
 
   const handleEmployeeToggle = (employeeId: string, checked: boolean) => {
     if (checked) {
@@ -44,12 +62,15 @@ export function KRAAssignDialog({ isOpen, onClose, template, teamMembers, existi
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedEmployees(teamMembers.map(member => member.id));
+      // Only select filtered members
+      const filteredIds = filteredTeamMembers.map(member => member.id);
+      setSelectedEmployees([...new Set([...selectedEmployees, ...filteredIds])]);
     } else {
-      setSelectedEmployees([]);
+      // Only deselect filtered members
+      const filteredIds = filteredTeamMembers.map(member => member.id);
+      setSelectedEmployees(selectedEmployees.filter(id => !filteredIds.includes(id)));
     }
   };
-
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,10 +83,12 @@ export function KRAAssignDialog({ isOpen, onClose, template, teamMembers, existi
     onAssign(template.id, selectedEmployees, assignmentMode);
   };
 
-  // Check which employees already have assignments
-  const employeesWithAssignments = existingAssignments.map(assignment => assignment.employee_id);
-  const newEmployees = teamMembers.filter(member => !employeesWithAssignments.includes(member.id));
-  const existingEmployees = teamMembers.filter(member => employeesWithAssignments.includes(member.id));
+  // Reset search when dialog closes
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchQuery('');
+    }
+  }, [isOpen]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -150,17 +173,34 @@ export function KRAAssignDialog({ isOpen, onClose, template, teamMembers, existi
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="select_all"
-                  checked={selectedEmployees.length === teamMembers.length}
+                  checked={filteredTeamMembers.length > 0 && filteredTeamMembers.every(member => selectedEmployees.includes(member.id))}
                   onCheckedChange={handleSelectAll}
                 />
                 <Label htmlFor="select_all" className="text-sm">
-                  Select All ({teamMembers.length})
+                  Select All ({filteredTeamMembers.length})
                 </Label>
               </div>
             </div>
 
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search by name, email, or employee ID..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+
             <div className="max-h-60 overflow-y-auto space-y-2 border rounded-lg p-3">
-              {teamMembers.map((member) => {
+              {filteredTeamMembers.length === 0 ? (
+                <div className="text-center py-8 text-sm text-muted-foreground">
+                  No team members found matching "{searchQuery}"
+                </div>
+              ) : (
+                filteredTeamMembers.map((member) => {
                 const hasExistingAssignment = employeesWithAssignments.includes(member.id);
                 const isDisabled = assignmentMode === 'assign' && hasExistingAssignment;
                 
@@ -199,7 +239,8 @@ export function KRAAssignDialog({ isOpen, onClose, template, teamMembers, existi
                     </div>
                   </div>
                 );
-              })}
+                })
+              )}
             </div>
 
             {selectedEmployees.length > 0 && (

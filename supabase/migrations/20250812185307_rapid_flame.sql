@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS job_positions (
   description text,
   requirements text,
   experience_level text CHECK (experience_level IN ('entry', 'mid', 'senior', 'lead')),
-  employment_type text DEFAULT 'full_time' CHECK (employment_type IN ('full_time', 'part_time', 'contract', 'internship')),
+  employment_type text DEFAULT 'full_time' CHECK (employment_type IN ('full_time', 'part_time', 'contract', 'probation/internship')),
   salary_range_min numeric(10,2),
   salary_range_max numeric(10,2),
   location text,

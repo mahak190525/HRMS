@@ -191,12 +191,17 @@ export function KRAEmployeeForm({ assignment, isReadOnly = false, onClose }: KRA
   const dueDate = assignment.due_date ? parseToISTDate(assignment.due_date) : null;
   const isOverdue = dueDate && getCurrentISTDate() > dueDate && !isCompleted;
 
+  // Sort goals by display_order for consistent rendering
+  const sortedGoals = detailedAssignment?.template?.goals 
+    ? [...detailedAssignment.template.goals].sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+    : [];
+
   if (!detailedAssignment) {
     return <div>Loading...</div>;
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full max-w-full overflow-x-hidden">
       {/* Header Info */}
       <Card>
         <CardHeader>
@@ -267,23 +272,28 @@ export function KRAEmployeeForm({ assignment, isReadOnly = false, onClose }: KRA
       </Card>
 
       {/* Goals */}
-      <div className="space-y-6">
-        {detailedAssignment.template?.goals?.map((goal) => {
+      <div className="space-y-6 w-full max-w-full">
+        {sortedGoals.map((goal) => {
           const evaluation = evaluations[goal.id] || {};
           const isGoalComplete = evaluation.employee_comments?.trim();
           
           return (
-            <Card key={goal.id} className={`${
+            <Card key={goal.id} className={`w-full max-w-full overflow-hidden ${
               isGoalComplete ? 'border-green-200 bg-green-50' : 
               isOverdue ? 'border-red-200' : ''
             }`}>
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Badge variant="outline">{goal.goal_id}</Badge>
-                      {goal.strategic_goal_title}
-                      {isGoalComplete && <CheckCircle className="h-4 w-4 text-green-600" />}
+              <CardHeader className="w-full max-w-full">
+                <div className="flex items-start justify-between gap-4 w-full min-w-0">
+                  <div className="flex-1 min-w-0">
+                    <CardTitle className="text-lg flex items-start gap-2 flex-wrap">
+                      <Badge variant="outline" className="flex-shrink-0">{goal.goal_id}</Badge>
+                      <span 
+                        className="flex-1 font-medium min-w-0 block" 
+                        style={{ wordBreak: 'normal', overflowWrap: 'anywhere', whiteSpace: 'normal', lineHeight: '1.5' }}
+                      >
+                        {goal.strategic_goal_title}
+                      </span>
+                      {isGoalComplete && <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />}
                     </CardTitle>
                     {goal.category && (
                       <Badge variant="secondary" className="mt-2">
@@ -291,7 +301,7 @@ export function KRAEmployeeForm({ assignment, isReadOnly = false, onClose }: KRA
                       </Badge>
                     )}
                   </div>
-                  <div className="text-right">
+                  <div className="text-right flex-shrink-0">
                     <div className="flex items-center gap-1 text-sm text-muted-foreground">
                       <Weight className="h-4 w-4" />
                       <span>{goal.weight}% weight</span>
@@ -303,23 +313,25 @@ export function KRAEmployeeForm({ assignment, isReadOnly = false, onClose }: KRA
                 </div>
               </CardHeader>
               
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-6 w-full max-w-full overflow-x-hidden">
                 {/* Goal Details */}
                 <div className="space-y-4">
                   <div>
                     <Label className="text-sm font-medium">SMART Goal</Label>
-                    <p className="text-sm mt-1 p-3 bg-muted rounded-lg whitespace-pre-line">{goal.smart_goal}</p>
+                    <div className="text-sm mt-1 p-3 bg-muted rounded-lg whitespace-pre-wrap break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
+                      {goal.smart_goal}
+                    </div>
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label className="text-sm font-medium">Target</Label>
-                      <p className="text-sm mt-1 p-3 bg-muted rounded-lg">{goal.target}</p>
+                      <p className="text-sm mt-1 p-3 bg-muted rounded-lg break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>{goal.target}</p>
                     </div>
                     {goal.dependencies && (
                       <div>
                         <Label className="text-sm font-medium">Dependencies</Label>
-                        <p className="text-sm mt-1 p-3 bg-muted rounded-lg">{goal.dependencies}</p>
+                        <p className="text-sm mt-1 p-3 bg-muted rounded-lg break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>{goal.dependencies}</p>
                       </div>
                     )}
                   </div>
@@ -327,7 +339,7 @@ export function KRAEmployeeForm({ assignment, isReadOnly = false, onClose }: KRA
                   {goal.manager_comments && (
                     <div>
                       <Label className="text-sm font-medium">Manager Comments</Label>
-                      <p className="text-sm mt-1 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm mt-1 p-3 bg-blue-50 border border-blue-200 rounded-lg break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>
                         {goal.manager_comments}
                       </p>
                     </div>
@@ -345,7 +357,7 @@ export function KRAEmployeeForm({ assignment, isReadOnly = false, onClose }: KRA
                   <p className="text-xs text-muted-foreground">
                     These are the performance criteria your manager will use to evaluate your work. Focus on providing detailed evidence in your comments.
                   </p>
-                  <div className="grid grid-cols-1 md:grid-cols-1 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2">
                     {[1, 2, 3, 4, 5].map(level => {
                       const marks = goal[`level_${level}_marks` as keyof typeof goal] as string || '';
                       const points = goal[`level_${level}_points` as keyof typeof goal] as number ?? 0;
@@ -364,8 +376,8 @@ export function KRAEmployeeForm({ assignment, isReadOnly = false, onClose }: KRA
                           <div className="font-medium text-center">Level {level}</div>
                           <div className="text-muted-foreground text-center">{rating}</div>
                           <div className="mt-2">
-                            <div className="whitespace-pre-line text-start">{marks}</div>
-                            <div className="text-end">{points} points</div>
+                            <div className="whitespace-pre-line text-start break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>{marks}</div>
+                            <div className="text-end mt-2">{points} points</div>
                           </div>
                           {isSelected && (
                             <div className="mt-1 text-green-600 font-medium">

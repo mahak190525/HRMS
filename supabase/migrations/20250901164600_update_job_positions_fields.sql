@@ -4,7 +4,7 @@
 
 -- Job Basics (update existing fields and add new ones)
 ALTER TABLE job_positions ADD COLUMN IF NOT EXISTS job_title text;
-ALTER TABLE job_positions ADD COLUMN IF NOT EXISTS work_type text CHECK (work_type IN ('full_time', 'part_time', 'contract', 'internship'));
+ALTER TABLE job_positions ADD COLUMN IF NOT EXISTS work_type text CHECK (work_type IN ('full_time', 'part_time', 'contract', 'probation/internship'));
 
 -- Role Overview
 ALTER TABLE job_positions ADD COLUMN IF NOT EXISTS key_responsibilities text;
@@ -31,7 +31,7 @@ COMMENT ON COLUMN job_positions.job_title IS 'Clear and accurate job title (e.g.
 COMMENT ON COLUMN job_positions.department_id IS 'Department/Team (references departments table)';
 COMMENT ON COLUMN job_positions.location IS 'Work location including city information';
 COMMENT ON COLUMN job_positions.is_remote IS 'Remote work availability (true/false)';
-COMMENT ON COLUMN job_positions.work_type IS 'Work arrangement type (full_time, part_time, contract, internship)';
+COMMENT ON COLUMN job_positions.work_type IS 'Work arrangement type (full_time, part_time, contract, probation/internship)';
 COMMENT ON COLUMN job_positions.key_responsibilities IS '5-8 bullet points describing key responsibilities';
 COMMENT ON COLUMN job_positions.experience_level_description IS 'Detailed experience requirements (e.g., 2-4 years in relevant field)';
 COMMENT ON COLUMN job_positions.technical_skills_required IS 'Required technical skills';

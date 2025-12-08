@@ -948,7 +948,7 @@ export function ReferralDashboard() {
                               <SelectItem value="full_time">Full-time</SelectItem>
                               <SelectItem value="part_time">Part-time</SelectItem>
                               <SelectItem value="contract">Contract</SelectItem>
-                              <SelectItem value="internship">Internship</SelectItem>
+                              <SelectItem value="probation/internship">Probation/Internship</SelectItem>
                               <SelectItem value="temporary">Temporary</SelectItem>
                             </SelectContent>
                           </Select>
@@ -1096,7 +1096,7 @@ export function ReferralDashboard() {
                               <SelectItem value="full_time">Full-time</SelectItem>
                               <SelectItem value="part_time">Part-time</SelectItem>
                               <SelectItem value="contract">Contract</SelectItem>
-                              <SelectItem value="internship">Internship</SelectItem>
+                              <SelectItem value="probation/internship">Probation/Internship</SelectItem>
                               <SelectItem value="temporary">Temporary</SelectItem>
                             </SelectContent>
                           </Select>
@@ -1523,7 +1523,7 @@ export function ReferralDashboard() {
                                           <SelectItem value="full_time">Full-time</SelectItem>
                                           <SelectItem value="part_time">Part-time</SelectItem>
                                           <SelectItem value="contract">Contract</SelectItem>
-                                          <SelectItem value="internship">Internship</SelectItem>
+                                          <SelectItem value="probation/internship">Probation/Internship</SelectItem>
                                           <SelectItem value="temporary">Temporary</SelectItem>
                                         </SelectContent>
                                       </Select>
@@ -1638,7 +1638,7 @@ export function ReferralDashboard() {
                                           <SelectItem value="full_time">Full-time</SelectItem>
                                           <SelectItem value="part_time">Part-time</SelectItem>
                                           <SelectItem value="contract">Contract</SelectItem>
-                                          <SelectItem value="internship">Internship</SelectItem>
+                                          <SelectItem value="probation/internship">Probation/Internship</SelectItem>
                                           <SelectItem value="temporary">Temporary</SelectItem>
                                         </SelectContent>
                                       </Select>

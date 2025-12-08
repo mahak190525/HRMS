@@ -95,6 +95,11 @@ export function KRAModal({
   
   const currentAssignment = detailedAssignment || assignment;
 
+  // Sort goals by display_order for consistent rendering
+  const sortedGoals = currentAssignment.template?.goals 
+    ? [...currentAssignment.template.goals].sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+    : [];
+
   // Determine user role capabilities
   const isEmployee = currentAssignment.employee_id === user?.id;
   const isManager = currentAssignment.assigned_by === user?.id;
@@ -606,20 +611,25 @@ export function KRAModal({
           )}
 
           {/* Template Goals */}
-          {currentAssignment.template?.goals && currentAssignment.template.goals.length > 0 && (
-            <div className="space-y-4">
+          {sortedGoals.length > 0 && (
+            <div className="space-y-4 w-full max-w-full">
               <h3 className="text-lg font-semibold">KRA Goals</h3>
-              {currentAssignment.template.goals.map((goal) => {
+              {sortedGoals.map((goal) => {
                 const evaluation = currentAssignment.evaluations?.find(e => e.goal_id === goal.id);
                 
                 return (
-                  <Card key={goal.id}>
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <CardTitle className="text-lg flex items-center gap-2">
-                            <Badge variant="outline">{goal.goal_id}</Badge>
-                            {goal.strategic_goal_title}
+                  <Card key={goal.id} className="w-full max-w-full overflow-hidden">
+                    <CardHeader className="w-full max-w-full">
+                      <div className="flex items-start justify-between gap-4 w-full min-w-0">
+                        <div className="flex-1 min-w-0">
+                          <CardTitle className="text-lg flex items-start gap-2 flex-wrap">
+                            <Badge variant="outline" className="flex-shrink-0">{goal.goal_id}</Badge>
+                            <span 
+                              className="flex-1 font-medium min-w-0 block" 
+                              style={{ wordBreak: 'normal', overflowWrap: 'anywhere', whiteSpace: 'normal', lineHeight: '1.5' }}
+                            >
+                              {goal.strategic_goal_title}
+                            </span>
                           </CardTitle>
                           {goal.category && (
                             <Badge variant="secondary" className="mt-2">
@@ -627,30 +637,32 @@ export function KRAModal({
                             </Badge>
                           )}
                         </div>
-                        <div className="text-right">
+                        <div className="text-right flex-shrink-0">
                           <div className="font-medium">{goal.weight}%</div>
                           <div className="text-xs text-muted-foreground">Weight</div>
                         </div>
                       </div>
                     </CardHeader>
                     
-                    <CardContent className="space-y-4">
+                    <CardContent className="space-y-4 w-full max-w-full overflow-x-hidden">
                       {/* Goal Details */}
                       <div className="space-y-3">
                         <div>
                           <Label className="text-sm font-medium">SMART Goal</Label>
-                          <p className="text-sm mt-1 p-3 bg-muted rounded-lg whitespace-pre-line">{goal.smart_goal}</p>
+                          <div className="text-sm mt-1 p-3 bg-muted rounded-lg whitespace-pre-wrap break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
+                            {goal.smart_goal}
+                          </div>
                         </div>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <Label className="text-sm font-medium">Target</Label>
-                            <p className="text-sm mt-1 p-3 bg-muted rounded-lg">{goal.target}</p>
+                            <p className="text-sm mt-1 p-3 bg-muted rounded-lg break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>{goal.target}</p>
                           </div>
                           {goal.dependencies && (
                             <div>
                               <Label className="text-sm font-medium">Dependencies</Label>
-                              <p className="text-sm mt-1 p-3 bg-muted rounded-lg">{goal.dependencies}</p>
+                              <p className="text-sm mt-1 p-3 bg-muted rounded-lg break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>{goal.dependencies}</p>
                             </div>
                           )}
                         </div>
@@ -669,7 +681,7 @@ export function KRAModal({
                           </p>
                         )}
                         
-                        <div className="grid grid-cols-1 md:grid-cols-1 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
                           {[1, 2, 3, 4, 5].map(level => {
                             const marks = goal[`level_${level}_marks` as keyof typeof goal] as string || '';
                             const points = goal[`level_${level}_points` as keyof typeof goal] as number || 0;
@@ -689,11 +701,11 @@ export function KRAModal({
                                 } ${!editCapabilities.canEditManager ? 'cursor-default' : ''}`}
                               >
                                 <div className="flex items-center justify-between">
-                                  <div className="flex-1">
+                                  <div className="flex-1 min-w-0">
                                     <div className="font-medium text-sm">Level {level} - {rating}</div>
-                                    <div className="text-xs text-muted-foreground mt-1 whitespace-pre-line">{marks}</div>
+                                    <div className="text-xs text-muted-foreground mt-1 whitespace-pre-line break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>{marks}</div>
                                   </div>
-                                  <div className="text-right">
+                                  <div className="text-right flex-shrink-0 ml-2">
                                     <div className="font-medium text-blue-600">{points} points</div>
                                     {isSelected && (
                                       <div className="text-green-600 font-medium text-xs mt-1">
@@ -849,10 +861,10 @@ export function KRAModal({
             <div className="space-y-2 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex justify-between text-sm">
                 <span>Completion Progress</span>
-                <span>{Math.round((currentAssignment.template?.goals?.filter(goal => evaluations[goal.id]?.employee_comments?.trim()).length || 0) / (currentAssignment.template?.goals?.length || 1) * 100)}%</span>
+                <span>{Math.round((sortedGoals.filter(goal => evaluations[goal.id]?.employee_comments?.trim()).length || 0) / (sortedGoals.length || 1) * 100)}%</span>
               </div>
               <Progress 
-                value={(currentAssignment.template?.goals?.filter(goal => evaluations[goal.id]?.employee_comments?.trim()).length || 0) / (currentAssignment.template?.goals?.length || 1) * 100} 
+                value={(sortedGoals.filter(goal => evaluations[goal.id]?.employee_comments?.trim()).length || 0) / (sortedGoals.length || 1) * 100} 
                 className="h-2" 
               />
               <p className="text-xs text-blue-600">
@@ -866,10 +878,10 @@ export function KRAModal({
             <div className="space-y-2 p-4 bg-orange-50 border border-orange-200 rounded-lg">
               <div className="flex justify-between text-sm">
                 <span>Evaluation Progress</span>
-                <span>{Math.round((currentAssignment.template?.goals?.filter(goal => evaluations[goal.id]?.selected_level && evaluations[goal.id]?.manager_evaluation_comments?.trim()).length || 0) / (currentAssignment.template?.goals?.length || 1) * 100)}%</span>
+                <span>{Math.round((sortedGoals.filter(goal => evaluations[goal.id]?.selected_level && evaluations[goal.id]?.manager_evaluation_comments?.trim()).length || 0) / (sortedGoals.length || 1) * 100)}%</span>
               </div>
               <Progress 
-                value={(currentAssignment.template?.goals?.filter(goal => evaluations[goal.id]?.selected_level && evaluations[goal.id]?.manager_evaluation_comments?.trim()).length || 0) / (currentAssignment.template?.goals?.length || 1) * 100} 
+                value={(sortedGoals.filter(goal => evaluations[goal.id]?.selected_level && evaluations[goal.id]?.manager_evaluation_comments?.trim()).length || 0) / (sortedGoals.length || 1) * 100} 
                 className="h-2" 
               />
               <p className="text-xs text-orange-600">

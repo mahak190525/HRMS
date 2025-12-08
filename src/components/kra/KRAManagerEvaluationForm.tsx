@@ -56,6 +56,13 @@ export function KRAManagerEvaluationForm({ assignment, assignmentId, permissions
     return <div>Loading...</div>;
   }
 
+  // Sort goals by display_order for consistent rendering
+  const sortedGoals = detailedAssignment?.template?.goals 
+    ? [...detailedAssignment.template.goals].sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+    : currentAssignment?.template?.goals 
+    ? [...currentAssignment.template.goals].sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+    : [];
+
   const updateAssignmentStatus = async (status: string) => {
     const { error } = await supabase
       .from('kra_assignments')
@@ -327,7 +334,7 @@ export function KRAManagerEvaluationForm({ assignment, assignmentId, permissions
 
       {/* Goals Evaluation */}
       <div className="space-y-6">
-        {detailedAssignment.template?.goals?.map((goal) => {
+        {sortedGoals.map((goal) => {
           const employeeEval = detailedAssignment.evaluations?.find(e => e.goal_id === goal.id);
           const managerEval = evaluations[goal.id] || {};
           
@@ -358,7 +365,9 @@ export function KRAManagerEvaluationForm({ assignment, assignmentId, permissions
                 <div className="space-y-4">
                   <div>
                     <Label className="text-sm font-medium">SMART Goal</Label>
-                    <p className="text-sm mt-1 p-3 bg-muted rounded-lg">{goal.smart_goal}</p>
+                    <div className="text-sm mt-1 p-3 bg-muted rounded-lg whitespace-pre-wrap break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
+                      {goal.smart_goal}
+                    </div>
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

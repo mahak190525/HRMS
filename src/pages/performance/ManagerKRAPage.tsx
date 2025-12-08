@@ -67,6 +67,11 @@ export function ManagerKRAPage() {
   const currentAssignment = detailedAssignment || assignment;
   const isLoading = assignmentsLoading || detailsLoading;
 
+  // Sort goals by display_order for consistent rendering
+  const sortedGoals = currentAssignment?.template?.goals 
+    ? [...currentAssignment.template.goals].sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+    : [];
+
   // Initialize evaluations when assignment data loads
   useEffect(() => {
     if (currentAssignment?.template?.goals) {
@@ -714,7 +719,7 @@ export function ManagerKRAPage() {
           )}
 
           {/* Goals Section */}
-          {isQuarterEnabled(currentAssignment, selectedQuarter) && currentAssignment.template.goals.map((goal, index) => {
+          {isQuarterEnabled(currentAssignment, selectedQuarter) && sortedGoals.map((goal, index) => {
             const evaluation = evaluations[goal.id] || {};
             const existingEvaluation = currentAssignment.evaluations?.find(
               (evaluation) => evaluation.goal_id === goal.id && evaluation.quarter === selectedQuarter
@@ -728,9 +733,9 @@ export function ManagerKRAPage() {
                       <CardTitle className="text-lg">
                         Goal {index + 1}: {goal.strategic_goal_title}
                       </CardTitle>
-                      <CardDescription className="mt-2">
+                      <div className="text-sm text-muted-foreground mt-2 whitespace-pre-wrap" style={{ whiteSpace: 'pre-wrap' }}>
                         {goal.smart_goal}
-                      </CardDescription>
+                      </div>
                       <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
                         <span>Weight: {goal.weight}%</span>
                         <span>Max Score: {goal.max_score}</span>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,9 +25,12 @@ export function LoginForm() {
   const [availableAccounts, setAvailableAccounts] = useState<any[]>([]);
   const [showInactivityMessage, setShowInactivityMessage] = useState(false);
   const { instance } = useMsal();
-  const activeAccount = instance.getActiveAccount();
+  
+  // Memoize activeAccount to prevent unnecessary re-renders
+  const [activeAccount, setActiveAccount] = React.useState(instance.getActiveAccount());
+  const activeAccountRef = useRef(instance.getActiveAccount());
 
-  // Check for inactivity logout reason in URL
+  // Check for inactivity logout reason in URL and handle MSAL redirect
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('reason') === 'inactivity') {
@@ -40,19 +43,72 @@ export function LoginForm() {
       // Hide message after 10 seconds
       setTimeout(() => setShowInactivityMessage(false), 10000);
     }
+    
+    // After MSAL redirect, check for active account
+    // This ensures we detect the account after redirect completes
+    const checkAccountAfterRedirect = () => {
+      const currentAccount = instance.getActiveAccount();
+      if (currentAccount) {
+        activeAccountRef.current = currentAccount;
+        setActiveAccount(currentAccount);
+        const accounts = instance.getAllAccounts();
+        setAvailableAccounts(accounts);
+      }
+    };
+    
+    // Check immediately and after a short delay (for redirect completion)
+    checkAccountAfterRedirect();
+    const timeoutId = setTimeout(checkAccountAfterRedirect, 500);
+    
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Get available accounts when component mounts
+  // Update activeAccount and available accounts on mount and when instance changes
   useEffect(() => {
-    const accounts = instance.getAllAccounts();
-    setAvailableAccounts(accounts);
+    const updateAccounts = () => {
+      const currentActiveAccount = instance.getActiveAccount();
+      const currentAccountId = currentActiveAccount?.homeAccountId;
+      const prevAccountId = activeAccountRef.current?.homeAccountId;
+      
+      // Only update if the account actually changed
+      if (currentAccountId !== prevAccountId) {
+        activeAccountRef.current = currentActiveAccount;
+        setActiveAccount(currentActiveAccount);
+      }
+      
+      const accounts = instance.getAllAccounts();
+      setAvailableAccounts(accounts);
+    };
+    
+    // Update immediately on mount
+    updateAccounts();
+    
+    // Subscribe to account changes via MSAL events
+    const callbackId = instance.addEventCallback((message: any) => {
+      if (message.eventType === 'msal:loginSuccess' || 
+          message.eventType === 'msal:acquireTokenSuccess' ||
+          message.eventType === 'msal:loginFailure' ||
+          message.eventType === 'msal:acquireTokenFailure') {
+        // Small delay to ensure MSAL has updated its internal state
+        setTimeout(updateAccounts, 100);
+      }
+    });
+    
+    // Also check after redirect (when URL changes)
+    const handleHashChange = () => {
+      setTimeout(updateAccounts, 100);
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    
+    return () => {
+      if (callbackId) {
+        instance.removeEventCallback(callbackId);
+      }
+      window.removeEventListener('hashchange', handleHashChange);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [instance]);
-
-  // Refresh available accounts when activeAccount changes
-  useEffect(() => {
-    const accounts = instance.getAllAccounts();
-    setAvailableAccounts(accounts);
-  }, [activeAccount, instance]);
 
   const refreshAvailableAccounts = () => {
     const accounts = instance.getAllAccounts();
@@ -83,6 +139,8 @@ export function LoginForm() {
   const handleSelectSpecificAccount = (account: any) => {
     // Set the selected account as active and attempt login
     instance.setActiveAccount(account);
+    activeAccountRef.current = account;
+    setActiveAccount(account);
     setHasAttemptedSync(false);
     setError('');
     // The sync effect will automatically trigger since activeAccount changed

@@ -179,7 +179,8 @@ export const leaveApi = {
   },
 
   async getLeaveBalance(userId: string, year: number = new Date().getFullYear()) {
-    const { data, error } = await supabase
+    // First, try to get data for the requested year
+    let { data, error } = await supabase
       .from('leave_balances')
       .select(`
         *,
@@ -189,6 +190,24 @@ export const leaveApi = {
       .eq('year', year);
 
     if (error) throw error;
+    
+    // If no data found for the requested year, try to get the most recent year's data
+    // This handles cases where records might be created for future years
+    if (!data || data.length === 0) {
+      const { data: recentData, error: recentError } = await supabase
+        .from('leave_balances')
+        .select(`
+          *,
+          leave_type:leave_types(name, description)
+        `)
+        .eq('user_id', userId)
+        .order('year', { ascending: false })
+        .limit(1);
+
+      if (recentError) throw recentError;
+      return recentData || [];
+    }
+    
     return data;
   },
 
@@ -229,10 +248,10 @@ export const leaveApi = {
 
     if (balanceError) throw balanceError;
 
-    // Then get user manager information and comp_off_balance
+    // Then get user manager information, comp_off_balance, and employment_terms
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('id, manager_id, comp_off_balance')
+      .select('id, manager_id, comp_off_balance, employment_terms')
       .in('id', balanceData?.map((b: any) => b.user_id) || []);
 
     if (userError) throw userError;
@@ -243,12 +262,14 @@ export const leaveApi = {
       return {
         ...balance,
         comp_off_balance: userInfo?.comp_off_balance || 0,
+        employment_terms: userInfo?.employment_terms || null,
         user: {
           id: balance.user_id,
           full_name: balance.full_name,
           employee_id: balance.employee_id,
           email: balance.email,
-          manager_id: userInfo?.manager_id
+          manager_id: userInfo?.manager_id,
+          employment_terms: userInfo?.employment_terms || null
         }
       };
     }) || [];

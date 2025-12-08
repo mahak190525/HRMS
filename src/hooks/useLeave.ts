@@ -39,7 +39,10 @@ export function useCreateLeaveApplication() {
   return useMutation({
     mutationFn: leaveApi.createLeaveApplication,
     onSuccess: () => {
+      // Invalidate employee-side leave applications
       queryClient.invalidateQueries({ queryKey: ['leave-applications', user?.id] });
+      // Invalidate manager/HR-side leave applications so they see new applications immediately
+      queryClient.invalidateQueries({ queryKey: ['all-leave-applications'] });
       queryClient.invalidateQueries({ queryKey: ['leave-balance', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['employees-on-leave'] });
       queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
@@ -57,6 +60,8 @@ export function useCreateLeaveApplication() {
         console.warn('Leave application created but email trigger failed:', error);
         // Still invalidate queries since the leave was likely created successfully
         queryClient.invalidateQueries({ queryKey: ['leave-applications', user?.id] });
+        // Invalidate manager/HR-side leave applications
+        queryClient.invalidateQueries({ queryKey: ['all-leave-applications'] });
         queryClient.invalidateQueries({ queryKey: ['leave-balance', user?.id] });
         queryClient.invalidateQueries({ queryKey: ['employees-on-leave'] });
         queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });

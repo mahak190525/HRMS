@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,12 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { 
   ArrowLeft, 
-  Save, 
   Users, 
-  Calendar,
   Target,
-  FileText,
-  Plus
+  FileText
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -473,9 +470,9 @@ export function KRATemplatePage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full max-w-full overflow-x-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between w-full max-w-full overflow-x-hidden flex-wrap gap-4">
         <div className="flex items-center gap-4">
           <Button 
             variant="ghost" 
@@ -531,9 +528,9 @@ export function KRATemplatePage() {
       </div>
 
       {/* Content */}
-      <div className="grid gap-6">
+      <div className="grid gap-6 w-full max-w-full">
         {showForm ? (
-          <Card>
+          <Card className="w-full max-w-full overflow-hidden">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Target className="h-5 w-5" />
@@ -546,7 +543,7 @@ export function KRATemplatePage() {
                 }
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="w-full max-w-full overflow-x-hidden">
               <KRATemplateForm
                 template={template}
                 onSubmit={mode === 'create' ? handleCreateTemplate : handleUpdateTemplate}

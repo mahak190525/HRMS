@@ -115,7 +115,7 @@ const employeeSchema = z.object({
   bank_account_no: z.string().optional(),
   ifsc_code: z.string().optional(),
   qualification: z.string().optional(),
-  employment_terms: z.enum(['part_time', 'full_time', 'associate', 'contract', 'internship']).optional(),
+  employment_terms: z.enum(['part_time', 'full_time', 'associate', 'contract', 'probation/internship']).optional(),
   comp_off_balance: z.number().min(0, 'Comp off balance must be positive').optional(),
   // New onboarding fields
   appointment_formalities: z.enum(['Done', 'Not Done']).optional(),
@@ -912,7 +912,7 @@ function ViewMode({
                  employee.employment_terms === 'part_time' ? 'Part Time' :
                  employee.employment_terms === 'associate' ? 'Associate' :
                  employee.employment_terms === 'contract' ? 'Contract' :
-                 employee.employment_terms === 'internship' ? 'Internship' : 'Not specified'}
+                 employee.employment_terms === 'probation/internship' ? 'Probation/Internship' : 'Not specified'}
               </Badge>
             )}
           </div>
@@ -1587,7 +1587,7 @@ function WorkInfoView({ employee, getStatusBadge }: { employee: Employee; getSta
              employee.employment_terms === 'part_time' ? 'Part Time' :
              employee.employment_terms === 'associate' ? 'Associate' :
              employee.employment_terms === 'contract' ? 'Contract' :
-             employee.employment_terms === 'internship' ? 'Internship' : 'Not specified'}
+             employee.employment_terms === 'probation/internship' ? 'Probation/Internship' : 'Not specified'}
           </p>
         </div>
         <div>
@@ -2644,7 +2644,7 @@ function WorkInfoEdit({ form, departmentOptions, roleOptions, userOptions, emplo
                   <SelectItem value="part_time">Part Time</SelectItem>
                   <SelectItem value="associate">Associate</SelectItem>
                   <SelectItem value="contract">Contract</SelectItem>
-                  <SelectItem value="internship">Internship</SelectItem>
+                  <SelectItem value="probation/internship">Probation/Internship</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
