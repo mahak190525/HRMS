@@ -1799,12 +1799,12 @@ export function LeaveManagement() {
                                      application.half_day_period === '2nd_half' ? '2nd half' : 'Half Day'}
                                   </span>
                                 )}
-                                {application.lop_days && application.lop_days > 0 && (
+                                {application.lop_days != null && Number(application.lop_days) > 0 && (
                                   <Badge variant="destructive" className="text-xs">
-                                    {application.lop_days} LOP
+                                    {formatDaysForDisplay(Number(application.lop_days))} LOP
                                   </Badge>
                                 )}
-                                {!application.is_half_day && !application.lop_days && 'days'}
+                                {!application.is_half_day && (application.lop_days == null || Number(application.lop_days) === 0) && 'days'}
                               </div>
                             </div>
                           </TableCell>
