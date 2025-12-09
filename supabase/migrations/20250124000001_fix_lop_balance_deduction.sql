@@ -4,7 +4,17 @@
   Update the trigger to exclude LOP days from balance deduction.
   LOP days should not be deducted from leave balance.
   When restoring balance (withdrawal), also account for LOP days.
+  
+  IMPORTANT: Remove constraint that prevents negative used_days to allow
+  negative balances (which will be corrected by monthly credits).
 */
+
+-- Remove constraint that prevents negative used_days (we need to allow negative balances)
+ALTER TABLE leave_balances 
+DROP CONSTRAINT IF EXISTS leave_balances_used_not_negative;
+
+ALTER TABLE leave_balances 
+DROP CONSTRAINT IF EXISTS leave_balances_used_days_not_negative;
 
 -- Add LOP days variable to the function
 CREATE OR REPLACE FUNCTION update_leave_balance_on_status_change()
@@ -68,16 +78,20 @@ BEGIN
     
     -- If changing from approved to something else, restore days
     IF OLD.status = 'approved' AND NEW.status != 'approved' THEN
-      -- Use the original deducted days (stored in the application)
-      -- When restoring, we need to restore the non-LOP portion only
-      days_to_add_to_used := -COALESCE(OLD.sandwich_deducted_days, OLD.days_count);
+      -- IMPORTANT: When restoring, we need to restore only the non-LOP portion that was deducted
+      -- The sandwich_deducted_days should already exclude LOP days (since we subtracted LOP when approving)
+      -- If sandwich_deducted_days is NULL, calculate it as days_count - lop_days (non-LOP portion)
+      IF OLD.sandwich_deducted_days IS NOT NULL THEN
+        -- Use the stored value (already excludes LOP)
+        days_to_add_to_used := -OLD.sandwich_deducted_days;
+      ELSE
+        -- Calculate non-LOP portion: days_count - lop_days
+        days_to_add_to_used := -(OLD.days_count - COALESCE(old_lop_days, 0));
+      END IF;
       
-      -- If there were LOP days, we need to adjust the restoration
-      -- The sandwich_deducted_days should already exclude LOP, but let's be safe
+      -- Log the restoration for debugging
       IF old_lop_days > 0 THEN
-        -- The deducted days should already exclude LOP, so we restore as-is
-        -- But log it for clarity
-        RAISE NOTICE 'Restoring % days for withdrawn application % (sandwich_deducted_days: %, days_count: %, LOP: %)', 
+        RAISE NOTICE 'Restoring % days for withdrawn application % (sandwich_deducted_days: %, days_count: %, LOP: %, restoring non-LOP portion only)', 
           -days_to_add_to_used, OLD.id, OLD.sandwich_deducted_days, OLD.days_count, old_lop_days;
       ELSE
         RAISE NOTICE 'Restoring % days for withdrawn application % (sandwich_deducted_days: %, days_count: %)', 
@@ -202,10 +216,12 @@ BEGIN
     
     -- Update the regular leave balance if this is NOT a compensatory off leave AND NOT a birthday leave
     IF NOT is_compensatory_off AND NOT is_birthday_leave AND days_to_add_to_used != 0 THEN
-      -- Subtract LOP days from the deduction (LOP days should not be deducted from balance)
+      -- IMPORTANT: Only deduct non-LOP days from leave balance
+      -- LOP days should NOT be deducted from balance (they are Loss of Pay, salary deduction only)
       -- This applies when approving (positive days_to_add_to_used) or withdrawing (negative days_to_add_to_used)
       IF days_to_add_to_used > 0 THEN
         -- When approving: subtract LOP days from deduction
+        -- Example: If leave has 3.0 days and 0.9 LOP, only 2.1 days should be deducted from balance
         days_to_add_to_used := GREATEST(0, days_to_add_to_used - lop_days_to_exclude);
       ELSIF days_to_add_to_used < 0 THEN
         -- When withdrawing: the restoration should already account for LOP (since deduction excluded it)
@@ -231,10 +247,13 @@ BEGIN
           AND year = EXTRACT(YEAR FROM NEW.start_date);
         
         -- Calculate new used_days
-        -- Allow negative balances (users can go over their allocation)
-        -- Only deduct non-LOP days
+        -- IMPORTANT: Allow negative used_days to support negative balances
+        -- Negative used_days means positive balance (allocated - used = allocated - negative = allocated + positive)
+        -- This is necessary when withdrawing leaves that were approved with insufficient balance
+        -- The negative balance will be corrected by monthly credits
+        -- Only deduct non-LOP days (LOP days are excluded above)
         UPDATE leave_balances SET
-          used_days = current_used + days_to_add_to_used,
+          used_days = current_used + days_to_add_to_used, -- Can be negative, which is allowed
           updated_at = now()
         WHERE user_id = NEW.user_id 
           AND leave_type_id = total_leave_type_id 
@@ -270,7 +289,7 @@ BEGIN
           total_leave_type_id,
           EXTRACT(YEAR FROM NEW.start_date),
           0, -- No allocation, but track usage
-          GREATEST(0, days_to_add_to_used), -- Don't allow negative initial values
+          days_to_add_to_used, -- Allow negative values (negative used_days = positive balance)
           now(),
           now()
         );

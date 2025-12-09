@@ -330,7 +330,7 @@ export function SettingsManager() {
         </p>
       </div>
 
-      <Tabs defaultValue="general" className="w-full">
+      <Tabs defaultValue="leave" className="w-full">
         <TabsList className="grid w-full grid-cols-5 lg:grid-cols-10">
           {/* <TabsTrigger value="general" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />

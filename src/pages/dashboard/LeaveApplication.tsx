@@ -17,6 +17,7 @@ import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -39,6 +40,7 @@ import { useUpcomingHolidays } from '@/hooks/useDashboard';
 import { useLocation } from 'react-router-dom';
 import { formatDateForDatabase, isPastDate } from '@/utils/dateUtils';
 import { Gift } from 'lucide-react';
+import { supabase } from '@/services/supabase';
 
 const leaveTypeColors = {
   annual: 'bg-blue-500',
@@ -432,7 +434,7 @@ export function LeaveApplication() {
       }
     }
 
-    // Calculate LOP days based on leave rate and balance
+    // Calculate LOP days based on monthly leave rate usage for the application month
     let lopDays = 0;
     if (!isBirthdayLeave && !isCompensatoryOff) {
       const remainingDays = leaveSummary?.success 
@@ -448,32 +450,157 @@ export function LeaveApplication() {
       // Access rate_of_leave from the balance record
       const leaveRate = (mainLeaveBalance as any)?.rate_of_leave || 0;
       
-      // If balance is insufficient or zero
-      if (remainingDays < daysRequested) {
-        const shortfall = daysRequested - remainingDays;
-        
-        // If leave rate can cover the shortfall, allow negative balance (no LOP)
-        // The balance will be neutralized in next month's allocation
-        if (leaveRate > 0 && leaveRate >= shortfall) {
-          // No LOP needed - balance will go negative and be covered by rate
-          lopDays = 0;
-          toast.info(
-            `Your leave balance will go negative by ${formatDaysForDisplay(shortfall)} day(s), but this will be covered by your monthly leave rate (${formatDaysForDisplay(leaveRate)} days/month) in the next allocation.`
-          );
-        } else if (leaveRate > 0 && leaveRate < shortfall) {
-          // Leave rate is less than shortfall - mark excess as LOP
-          lopDays = shortfall - leaveRate;
-          const coveredByRate = shortfall - lopDays;
+      // Get the month and year of the leave application
+      const leaveMonth = startDate.getMonth() + 1; // JavaScript months are 0-indexed
+      const leaveYear = startDate.getFullYear();
+      
+      // Calculate how much of the monthly leave rate has been used this month
+      // IMPORTANT: Check ALL existing approved leaves for this month to determine remaining monthly rate
+      // Only non-LOP days from approved leaves count against the monthly rate
+      let monthlyRateUsed = 0;
+      let remainingMonthlyRate = 0;
+      
+      if (leaveRate > 0 && user?.id) {
+        try {
+          // Get compensatory off and birthday leave type IDs to exclude (these don't count against monthly rate)
+          const { data: leaveTypesData } = await supabase
+            .from('leave_types')
+            .select('id, name');
+          
+          const compOffTypeId = leaveTypesData?.find(lt => 
+            lt.name.toLowerCase().includes('compensatory') || lt.name.toLowerCase().includes('comp off')
+          )?.id;
+          
+          const birthdayLeaveTypeId = leaveTypesData?.find(lt => 
+            lt.name.toLowerCase() === 'birthday leave'
+          )?.id;
+          
+          // Query ALL approved leaves for this month (excluding compensatory off and birthday leave)
+          // This tells us how much of the monthly rate has already been consumed
+          let query = supabase
+            .from('leave_applications')
+            .select('days_count, lop_days, leave_type_id, start_date')
+            .eq('user_id', user.id)
+            .eq('status', 'approved')
+            .filter('start_date', 'gte', `${leaveYear}-${String(leaveMonth).padStart(2, '0')}-01`)
+            .filter('start_date', 'lt', leaveMonth === 12 
+              ? `${leaveYear + 1}-01-01` 
+              : `${leaveYear}-${String(leaveMonth + 1).padStart(2, '0')}-01`);
+          
+          // Exclude compensatory off and birthday leave from monthly rate calculation
+          if (compOffTypeId) {
+            query = query.neq('leave_type_id', compOffTypeId);
+          }
+          if (birthdayLeaveTypeId) {
+            query = query.neq('leave_type_id', birthdayLeaveTypeId);
+          }
+          
+          const { data: monthlyLeaves, error } = await query;
+          
+          if (!error && monthlyLeaves) {
+            // Sum up only non-LOP days from approved leaves
+            // LOP days don't count against monthly rate, so we subtract them
+            monthlyRateUsed = monthlyLeaves.reduce((sum: number, leave: any) => {
+              const daysUsed = Number(leave.days_count) || 0;
+              const lopDaysInLeave = Number(leave.lop_days) || 0;
+              // Only count non-LOP days against the monthly rate
+              // Example: If a leave has 2.0 days_count and 0.5 lop_days, only 1.5 counts against monthly rate
+              return sum + Math.max(0, daysUsed - lopDaysInLeave);
+            }, 0);
+          }
+          
+          // Calculate remaining monthly rate available for this month
+          // This is what can still be used from the monthly allocation
+          remainingMonthlyRate = Math.max(0, leaveRate - monthlyRateUsed);
+          
+        } catch (error) {
+          console.error('Error calculating monthly leave usage:', error);
+          // On error, assume monthly rate is exhausted to be safe
+          remainingMonthlyRate = 0;
+        }
+      }
+      
+      // Priority order for covering leave days:
+      // 1) Use positive balance first (if available)
+      // 2) Then use remaining monthly rate (if available and not exhausted by existing approved leaves)
+      // 3) Mark remainder as LOP (only what can't be covered by balance or monthly rate)
+      let daysCoveredByBalance = 0;
+      let daysCoveredByRate = 0;
+      let daysAsLOP = 0;
+      
+      // Step 1: Use positive balance first (if available)
+      // This uses the accumulated leave balance from previous allocations
+      if (remainingDays > 0) {
+        daysCoveredByBalance = Math.min(remainingDays, daysRequested);
+      }
+      
+      // Step 2: Calculate what's left after using balance
+      const remainingAfterBalance = daysRequested - daysCoveredByBalance;
+      
+      // Step 3: Use remaining monthly rate for the remainder (if available)
+      // remainingMonthlyRate already accounts for existing approved leaves for this month
+      // Only use it if there's still rate available after checking existing approved leaves
+      if (remainingAfterBalance > 0 && leaveRate > 0 && remainingMonthlyRate > 0) {
+        daysCoveredByRate = Math.min(remainingMonthlyRate, remainingAfterBalance);
+      }
+      
+      // Step 4: Mark the remainder as LOP
+      // This is what can't be covered by either balance or monthly rate
+      const remainingAfterRate = remainingAfterBalance - daysCoveredByRate;
+      if (remainingAfterRate > 0) {
+        daysAsLOP = remainingAfterRate;
+      }
+      
+      lopDays = daysAsLOP;
+      
+      // Provide appropriate user feedback
+      if (lopDays > 0) {
+        if (daysCoveredByBalance > 0 && daysCoveredByRate > 0) {
+          // Used both balance and rate, still have LOP
           toast.warning(
-            `Your leave balance is insufficient. ${formatDaysForDisplay(coveredByRate)} day(s) will be covered by your monthly leave rate, and ${formatDaysForDisplay(lopDays)} day(s) will be marked as Loss of Pay (LOP).`
+            `This leave will use ${formatDaysForDisplay(daysCoveredByBalance)} day(s) from your balance, ` +
+            `${formatDaysForDisplay(daysCoveredByRate)} day(s) from your monthly leave rate, ` +
+            `and ${formatDaysForDisplay(lopDays)} day(s) will be marked as Loss of Pay (LOP).`
+          );
+        } else if (daysCoveredByBalance > 0 && daysCoveredByRate === 0) {
+          // Used balance, but rate exhausted or not available, have LOP
+          if (leaveRate > 0 && remainingMonthlyRate <= 0) {
+            toast.warning(
+              `This leave will use ${formatDaysForDisplay(daysCoveredByBalance)} day(s) from your balance. ` +
+              `You have already used your monthly leave rate (${formatDaysForDisplay(leaveRate)} days) for ${startDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}. ` +
+              `${formatDaysForDisplay(lopDays)} day(s) will be marked as Loss of Pay (LOP).`
+            );
+          } else {
+            toast.warning(
+              `This leave will use ${formatDaysForDisplay(daysCoveredByBalance)} day(s) from your balance. ` +
+              `${formatDaysForDisplay(lopDays)} day(s) will be marked as Loss of Pay (LOP).`
+            );
+          }
+        } else if (daysCoveredByBalance === 0 && daysCoveredByRate > 0) {
+          // No balance, used rate, have LOP
+          toast.warning(
+            `This leave will use ${formatDaysForDisplay(daysCoveredByRate)} day(s) from your monthly leave rate. ` +
+            `${formatDaysForDisplay(lopDays)} day(s) will be marked as Loss of Pay (LOP).`
           );
         } else {
-          // No leave rate set - all excess is LOP
-          lopDays = shortfall;
-          toast.warning(
-            `Your leave balance is insufficient. ${formatDaysForDisplay(lopDays)} day(s) will be marked as Loss of Pay (LOP).`
-          );
+          // No balance, no rate (or exhausted), all LOP
+          if (leaveRate > 0 && remainingMonthlyRate <= 0) {
+            toast.warning(
+              `You have already used your monthly leave rate (${formatDaysForDisplay(leaveRate)} days) for ${startDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}. ` +
+              `All ${formatDaysForDisplay(lopDays)} day(s) will be marked as Loss of Pay (LOP) and will not be deducted from your leave balance.`
+            );
+          } else {
+            toast.warning(
+              `All ${formatDaysForDisplay(lopDays)} day(s) will be marked as Loss of Pay (LOP).`
+            );
+          }
         }
+      } else if (daysCoveredByRate > 0 && remainingDays < daysRequested) {
+        // Used rate to cover shortfall, no LOP
+        toast.info(
+          `This leave will use ${formatDaysForDisplay(daysCoveredByBalance)} day(s) from your balance. ` +
+          `The remaining ${formatDaysForDisplay(daysCoveredByRate)} day(s) will be covered by your monthly leave rate (${formatDaysForDisplay(remainingMonthlyRate)} days remaining this month).`
+        );
       }
     }
 
@@ -1172,7 +1299,7 @@ export function LeaveApplication() {
                     Who's On Leave
                   </CardTitle>
                   <CardDescription>
-                    All employees on leave today and upcoming days
+                    All employees on leave today and upcoming days. LOP (Loss of Pay) days are marked in red.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -1221,10 +1348,22 @@ export function LeaveApplication() {
                                   leave.half_day_period === '2nd_half' ? ' (2nd half)' : ' (Half Day)'
                                 )}
                               </Badge>
-                              {leave.lop_days && leave.lop_days > 0 && (
-                                <Badge variant="destructive" className="text-xs">
-                                  {formatDaysForDisplay(Number(leave.lop_days))} LOP
-                                </Badge>
+                              {leave.lop_days != null && Number(leave.lop_days) > 0 && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Badge variant="destructive" className="text-xs cursor-help">
+                                        {formatDaysForDisplay(Number(leave.lop_days))} LOP
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs">
+                                      <p className="font-medium mb-1">Loss of Pay (LOP)</p>
+                                      <p className="text-xs">
+                                        {formatDaysForDisplay(Number(leave.lop_days))} day(s) will be deducted from salary as this leave exceeds the available balance.
+                                      </p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
                               )}
                             </div>
                           </div>
@@ -1411,7 +1550,7 @@ export function LeaveApplication() {
                                  leave.half_day_period === '2nd_half' ? '2nd half' : 'Half Day'}
                               </Badge>
                             )}
-                            {leave.lop_days && leave.lop_days > 0 && (
+                            {leave.lop_days != null && Number(leave.lop_days) > 0 && (
                               <Badge variant="destructive" className="text-xs">
                                 {formatDaysForDisplay(Number(leave.lop_days))} LOP
                               </Badge>
