@@ -21,7 +21,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import {
   Calendar as CalendarIcon,
   Clock,
-  Plus,
   CheckCircle,
   XCircle,
   AlertCircle,
@@ -41,6 +40,7 @@ import { useLocation } from 'react-router-dom';
 import { formatDateForDatabase, isPastDate } from '@/utils/dateUtils';
 import { Gift } from 'lucide-react';
 import { supabase } from '@/services/supabase';
+import { useQueryClient } from '@tanstack/react-query';
 
 const leaveTypeColors = {
   annual: 'bg-blue-500',
@@ -56,6 +56,7 @@ const leaveTypeColors = {
 export function LeaveApplication() {
   const { user, refreshUserRoles } = useAuth();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const { data: leaveTypes, isLoading: typesLoading } = useLeaveTypes();
   const { data: leaveBalance, isLoading: balanceLoading } = useLeaveBalance();
   const { data: leaveHistory, isLoading: historyLoading } = useLeaveApplications();
@@ -74,6 +75,57 @@ export function LeaveApplication() {
       refreshUserRoles().catch(console.error);
     }
   }, []); // Only run once on mount
+
+  // Subscribe to real-time updates for leave applications
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`leave-applications-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'leave_applications',
+          filter: `user_id=eq.${user.id}`, // Only listen to changes for this user's applications
+        },
+        (payload) => {
+          console.log('Leave application change detected:', payload);
+          
+          // Invalidate queries to trigger refetch
+          queryClient.invalidateQueries({ queryKey: ['leave-applications', user.id] });
+          queryClient.invalidateQueries({ queryKey: ['leave-balance', user.id] });
+          queryClient.invalidateQueries({ queryKey: ['user-leave-summary', user.id] });
+          queryClient.invalidateQueries({ queryKey: ['employees-on-leave'] });
+          
+          // Refresh user data to get updated comp_off_balance if needed
+          refreshUserRoles().catch(console.error);
+          
+          // Show a subtle notification if status changed
+          if (payload.eventType === 'UPDATE' && payload.new && payload.old) {
+            const oldStatus = (payload.old as any).status;
+            const newStatus = (payload.new as any).status;
+            if (oldStatus !== newStatus) {
+              toast.info(`Leave application status updated to ${newStatus}`, {
+                duration: 3000,
+              });
+            }
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('Subscribed to leave applications real-time updates');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.warn('Error subscribing to leave applications real-time updates');
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, queryClient, refreshUserRoles]);
   
   const [selectedType, setSelectedType] = useState('');
   const [startDate, setStartDate] = useState<Date>();
@@ -636,6 +688,28 @@ export function LeaveApplication() {
     return sum + remaining;
   }, 0) || 0;
 
+  // Check if birthday leave has already been applied for a specific birthday date
+  const hasBirthdayLeaveApplied = (birthdayDate: Date): boolean => {
+    if (!leaveHistory || leaveHistory.length === 0) return false;
+
+    const birthdayMonth = birthdayDate.getMonth();
+    const birthdayDay = birthdayDate.getDate();
+
+    // Check if there's a birthday leave application for this birthday date
+    return leaveHistory.some((leave: any) => {
+      // Check if it's a birthday leave type
+      const isBirthdayLeave = leave.leave_type?.name?.toLowerCase().includes('birthday');
+      if (!isBirthdayLeave) return false;
+
+      // Check if status is pending or approved (not rejected or withdrawn)
+      if (leave.status !== 'pending' && leave.status !== 'approved') return false;
+
+      // Check if the leave date matches the birthday (month and day)
+      const leaveDate = new Date(leave.start_date);
+      return leaveDate.getMonth() === birthdayMonth && leaveDate.getDate() === birthdayDay;
+    });
+  };
+
   // Calculate next birthday and check if it's within 15 days
   const getBirthdayReminderInfo = () => {
     if (!user?.date_of_birth) return null;
@@ -657,11 +731,13 @@ export function LeaveApplication() {
     
     // Show banner if birthday is within 15 days (0 to 15 days)
     if (daysUntilBirthday >= 0 && daysUntilBirthday <= 15) {
+      const alreadyApplied = hasBirthdayLeaveApplied(nextBirthday);
       return {
         daysUntil: daysUntilBirthday,
         birthdayDate: nextBirthday,
         isToday: daysUntilBirthday === 0,
-        isTomorrow: daysUntilBirthday === 1
+        isTomorrow: daysUntilBirthday === 1,
+        alreadyApplied
       };
     }
     
@@ -689,9 +765,20 @@ export function LeaveApplication() {
 
       {/* Birthday Leave Reminder Banner */}
       {birthdayReminder && (
-        <Alert className="bg-gradient-to-r from-pink-50 to-purple-50 border-2 border-pink-300 shadow-lg max-w-2/3">
-          <Gift className="h-5 w-5 text-pink-600 flex-shrink-0" />
-          <AlertDescription className="text-pink-900 min-w-0 max-w-full overflow-visible">
+        <Alert className={cn(
+          "border-2 shadow-lg max-w-2/3",
+          birthdayReminder.alreadyApplied 
+            ? "bg-gradient-to-r from-gray-50 to-gray-100 border-gray-300" 
+            : "bg-gradient-to-r from-pink-50 to-purple-50 border-pink-300"
+        )}>
+          <Gift className={cn(
+            "h-5 w-5 flex-shrink-0",
+            birthdayReminder.alreadyApplied ? "text-gray-600" : "text-pink-600"
+          )} />
+          <AlertDescription className={cn(
+            "min-w-0 max-w-full overflow-visible",
+            birthdayReminder.alreadyApplied ? "text-gray-900" : "text-pink-900"
+          )}>
             <div className="flex flex-col items-left w-full min-w-0">
               <div className="flex-1 min-w-0 pr-0 sm:pr-2">
                 <strong className="text-base sm:text-lg block break-words">
@@ -702,15 +789,32 @@ export function LeaveApplication() {
                     : `Your birthday is in ${birthdayReminder.daysUntil} day${birthdayReminder.daysUntil !== 1 ? 's' : ''}!`}
                 </strong>
                 <p className="mt-1 text-xs sm:text-sm break-words leading-relaxed">
-                  You can apply for a <strong>paid Birthday Leave</strong> on{' '}
-                  <strong>{formatDateForDisplay(birthdayReminder.birthdayDate, 'MMMM do, yyyy')}</strong>. 
-                  This is a paid leave that does not deduct from your leave balance!
+                  {birthdayReminder.alreadyApplied ? (
+                    <>
+                      You have already applied for <strong>Birthday Leave</strong> on{' '}
+                      <strong>{formatDateForDisplay(birthdayReminder.birthdayDate, 'MMMM do, yyyy')}</strong>.
+                      {birthdayReminder.isToday && " Enjoy your special day! 🎂"}
+                    </>
+                  ) : (
+                    <>
+                      You can apply for a <strong>paid Birthday Leave</strong> on{' '}
+                      <strong>{formatDateForDisplay(birthdayReminder.birthdayDate, 'MMMM do, yyyy')}</strong>. 
+                      This is a paid leave that does not deduct from your leave balance!
+                    </>
+                  )}
                 </p>
               </div>
               <Button
                 variant="outline"
-                className="bg-pink-100 hover:bg-pink-200 border-pink-300 text-pink-900 font-semibold mt-2 w-1/4 sm:flex-shrink-0 text-sm sm:text-base px-3 sm:px-4"
+                className={cn(
+                  "font-semibold mt-2 w-1/4 sm:flex-shrink-0 text-sm sm:text-base px-3 sm:px-4",
+                  birthdayReminder.alreadyApplied
+                    ? "bg-gray-100 hover:bg-gray-100 border-gray-300 text-gray-600 cursor-not-allowed opacity-60"
+                    : "bg-pink-100 hover:bg-pink-200 border-pink-300 text-pink-900"
+                )}
                 onClick={() => {
+                  if (birthdayReminder.alreadyApplied) return;
+                  
                   // Switch to "Apply for Leave" tab
                   setDefaultTab('apply');
                   
@@ -734,8 +838,9 @@ export function LeaveApplication() {
                     }, 300);
                   }
                 }}
+                disabled={birthdayReminder.alreadyApplied}
               >
-                Apply for Birthday Leave
+                {birthdayReminder.alreadyApplied ? "Already Applied" : "Apply for Birthday Leave"}
               </Button>
             </div>
           </AlertDescription>
@@ -755,7 +860,7 @@ export function LeaveApplication() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Plus className="h-5 w-5" />
+                    {/* <Plus className="h-5 w-5" /> */}
                     New Leave Application
                   </CardTitle>
                   <CardDescription>

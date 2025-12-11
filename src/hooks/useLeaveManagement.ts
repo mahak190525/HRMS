@@ -235,14 +235,27 @@ export function useUpdateLeaveApplicationStatus() {
     }) => {
       if (!user) throw new Error('User not authenticated');
       
-      // First, get the leave application to check the user_id
+      // First, get the leave application to check the user_id and current status
       const { data: application, error: appError } = await supabase
         .from('leave_applications')
-        .select('user_id')
+        .select('user_id, status')
         .eq('id', applicationId)
         .single();
       
       if (appError) throw appError;
+      
+      // Check if application is already withdrawn - cannot approve/reject withdrawn applications
+      if (application.status === 'withdrawn') {
+        console.log('Status discrepancy:', { user_id: application.user_id, status: application.status });
+        throw new Error('Cannot approve or reject a leave application that has been withdrawn');
+      }
+      
+      // Check if application is already in a final state (approved/rejected/cancelled)
+      // Only allow status updates if current status is 'pending'
+      if (application.status !== 'pending') {
+        console.log('Status discrepancy:', { user_id: application.user_id, status: application.status });
+        throw new Error(`Cannot change status of a leave application that is already ${application.status}`);
+      }
       
       // Check permissions
       const permissions = await checkLeaveApplicationPermissions(user.id, application.user_id);
@@ -251,8 +264,30 @@ export function useUpdateLeaveApplicationStatus() {
         throw new Error(`Access denied. You cannot edit this leave application. Reason: ${permissions.reason}`);
       }
       
+      // Re-check status right before update to prevent race conditions
+      // This ensures the status hasn't changed between the check and the update
+      const { data: currentApplication, error: currentAppError } = await supabase
+        .from('leave_applications')
+        .select('status, user_id')
+        .eq('id', applicationId)
+        .single();
+      
+      if (currentAppError) throw currentAppError;
+      
+      // Final status check right before update
+      if (currentApplication.status === 'withdrawn') {
+        console.log('Status discrepancy:', { user_id: currentApplication.user_id || application.user_id, status: currentApplication.status });
+        throw new Error('This leave application has been withdrawn and cannot be approved or rejected');
+      }
+      
+      if (currentApplication.status !== 'pending') {
+        console.log('Status discrepancy:', { user_id: currentApplication.user_id || application.user_id, status: currentApplication.status });
+        throw new Error(`This leave application is already ${currentApplication.status} and cannot be changed`);
+      }
+      
       // Update the leave application
-      const { error: updateError } = await supabase
+      // Use optimistic locking: only update if status is still 'pending'
+      const { data: updatedData, error: updateError } = await supabase
         .from('leave_applications')
         .update({
           status,
@@ -261,9 +296,37 @@ export function useUpdateLeaveApplicationStatus() {
           comments: comments || null,
           updated_at: new Date().toISOString()
         })
-        .eq('id', applicationId);
+        .eq('id', applicationId)
+        .eq('status', 'pending') // Only update if status is still 'pending' (optimistic locking)
+        .select();
       
-      if (updateError) throw updateError;
+      if (updateError) {
+        throw updateError;
+      }
+      
+      // Check if update actually affected any rows (optimistic locking check)
+      if (!updatedData || updatedData.length === 0) {
+        // Status must have changed between our check and the update
+        // Re-fetch to see current status and provide accurate error message
+        const { data: latestApplication } = await supabase
+          .from('leave_applications')
+          .select('status, user_id')
+          .eq('id', applicationId)
+          .single();
+        
+        if (latestApplication) {
+          console.log('Status discrepancy:', { user_id: latestApplication.user_id, status: latestApplication.status });
+          
+          if (latestApplication.status === 'withdrawn') {
+            throw new Error('Cannot approve/reject: This leave application has been withdrawn');
+          }
+          if (latestApplication.status !== 'pending') {
+            throw new Error(`Cannot change status: This leave application is already ${latestApplication.status}`);
+          }
+        }
+        
+        throw new Error('Failed to update leave application: Status may have changed');
+      }
       
       // Fetch the updated data using our custom function
       const { data, error } = await supabase
@@ -319,6 +382,9 @@ export function useUpdateLeaveApplicationStatus() {
     onSuccess: async(data) => {
       // Invalidate both employee-side and manager/HR-side leave application queries
       queryClient.invalidateQueries({ queryKey: ['all-leave-applications'] });
+      // Invalidate with specific user ID to ensure employee dashboard refetches
+      queryClient.invalidateQueries({ queryKey: ['leave-applications', data.user_id] });
+      // Also invalidate all leave-applications queries (for broader coverage)
       queryClient.invalidateQueries({ queryKey: ['leave-applications'] });
       
       // IMPORTANT: Also invalidate leave balance queries since approval updates balances
@@ -326,6 +392,7 @@ export function useUpdateLeaveApplicationStatus() {
       queryClient.invalidateQueries({ queryKey: ['all-employees-leave-balances-with-manager'] });
       queryClient.invalidateQueries({ queryKey: ['leave-balance', data.user_id] });
       queryClient.invalidateQueries({ queryKey: ['user-leave-summary', data.user_id] });
+      queryClient.invalidateQueries({ queryKey: ['employees-on-leave'] });
       
       // Note: If this is a compensatory off leave, the database trigger will automatically
       // deduct from comp_off_balance. The user will need to refresh to see the updated balance.
@@ -336,8 +403,9 @@ export function useUpdateLeaveApplicationStatus() {
       
       toast.success(`Leave application ${data.status} successfully! Balance updated.`);
     },
-    onError: (error) => {
-      toast.error('Failed to update leave application');
+    onError: (error: any) => {
+      const errorMessage = error?.message || 'Failed to update leave application';
+      toast.error(errorMessage);
       console.error('Leave application update error:', error);
     },
   });

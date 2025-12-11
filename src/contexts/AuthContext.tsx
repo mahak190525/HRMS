@@ -53,60 +53,76 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const token = localStorage.getItem('hrms_token');
         if (token) {
-          // In a real app, you'd verify the JWT and get user data
-          // For now, we'll simulate this
+          // Always fetch fresh user data from database to ensure we have the latest role information
+          // This ensures role changes are reflected immediately after page refresh
           const userData = JSON.parse(localStorage.getItem('hrms_user') || 'null');
-          if (userData) {
-            // Check if user has additional_role_ids but missing additional_roles data
-            if (userData.additional_role_ids && userData.additional_role_ids.length > 0 && 
-                (!userData.additional_roles || userData.additional_roles.length === 0)) {
-              
-              console.log('🔄 Fetching missing additional roles data for session restoration...');
-              
-              try {
-                // Fetch additional roles data from database
-                const { data: additionalRoles, error } = await supabase
+          if (userData && userData.id) {
+            console.log('🔄 Fetching fresh user data from database on app initialization...');
+            
+            try {
+              // Fetch fresh user data with all roles from database
+              const { data: freshUserData, error } = await supabase
+                .from('users')
+                .select(`
+                  *,
+                  role:roles(name, description),
+                  department:departments!users_department_id_fkey(name, description)
+                `)
+                .eq('id', userData.id)
+                .single();
+
+              if (error) {
+                console.error('Failed to fetch fresh user data:', error);
+                // Fallback to localStorage data
+                const enhancedUserData = {
+                  ...userData,
+                  additional_roles: userData.additional_roles || []
+                };
+                setUser(enhancedUserData);
+                setLoading(false);
+                return;
+              }
+
+              // Enhance with additional roles data
+              let enhancedUser = freshUserData;
+              if (freshUserData?.additional_role_ids && freshUserData.additional_role_ids.length > 0) {
+                const { data: additionalRoles } = await supabase
                   .from('roles')
                   .select('id, name, description')
-                  .in('id', userData.additional_role_ids);
+                  .in('id', freshUserData.additional_role_ids);
                 
-                if (!error && additionalRoles) {
-                  const enhancedUserData = {
-                    ...userData,
-                    additional_roles: additionalRoles
-                  };
-                  
-                  console.log('✅ Additional roles fetched:', additionalRoles.map(r => r.name));
-                  
-                  // Update localStorage with complete data
-                  localStorage.setItem('hrms_user', JSON.stringify(enhancedUserData));
-                  setUser(enhancedUserData);
-                } else {
-                  console.error('Failed to fetch additional roles:', error);
-                  // Fallback to user data with empty additional_roles
-                  const fallbackUserData = {
-                    ...userData,
-                    additional_roles: []
-                  };
-                  setUser(fallbackUserData);
-                }
-              } catch (fetchError) {
-                console.error('Error fetching additional roles:', fetchError);
-                // Fallback to user data with empty additional_roles
-                const fallbackUserData = {
-                  ...userData,
+                enhancedUser = {
+                  ...freshUserData,
+                  additional_roles: additionalRoles || []
+                };
+              } else {
+                enhancedUser = {
+                  ...freshUserData,
                   additional_roles: []
                 };
-                setUser(fallbackUserData);
               }
-            } else {
-              // User data is complete or no additional roles
+              
+              console.log('✅ Fresh user data loaded:', {
+                primary_role: enhancedUser.role?.name,
+                additional_roles: enhancedUser.additional_roles?.map(r => r.name)
+              });
+              
+              // Update localStorage with fresh data
+              localStorage.setItem('hrms_user', JSON.stringify(enhancedUser));
+              setUser(enhancedUser);
+            } catch (fetchError) {
+              console.error('Error fetching fresh user data:', fetchError);
+              // Fallback to localStorage data
               const enhancedUserData = {
                 ...userData,
                 additional_roles: userData.additional_roles || []
               };
               setUser(enhancedUserData);
             }
+          } else {
+            // No user data in localStorage, clear session
+            localStorage.removeItem('hrms_token');
+            localStorage.removeItem('hrms_user');
           }
         }
       } catch (error) {
@@ -398,10 +414,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       
-      // If additional_role_ids are being updated, fetch fresh user data from database
+      // If role_id or additional_role_ids are being updated, fetch fresh user data from database
       // to ensure we have the complete role information
-      if (updates.additional_role_ids !== undefined) {
-        console.log('🔄 Refreshing user data after role update...');
+      if (updates.role_id !== undefined || updates.additional_role_ids !== undefined) {
+        console.log('🔄 Refreshing user data after role update...', {
+          role_id_changed: updates.role_id !== undefined,
+          additional_roles_changed: updates.additional_role_ids !== undefined
+        });
         
         // Fetch fresh user data with all roles
         const { data: freshUserData, error } = await supabase
