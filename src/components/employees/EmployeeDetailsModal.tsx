@@ -178,7 +178,7 @@ export function EmployeeDetailsModal({
   mode, 
   onModeChange 
 }: EmployeeDetailsModalProps) {
-  const { user, updateUser } = useAuth();
+  const { user, refreshUserRoles } = useAuth();
   const permissions = useEmployeePermissions();
   const updateEmployee = useUpdateEmployee();
   const [activeTab, setActiveTab] = useState('basic');
@@ -558,9 +558,25 @@ export function EmployeeDetailsModal({
         
         // If the current user is editing their own profile and roles were updated,
         // refresh the auth context to get the new permissions
-        if (user?.id === currentEmployee.id && safeUpdates.additional_role_ids !== undefined) {
-          console.log('🔄 Refreshing current user permissions after role update...');
-          await updateUser({ additional_role_ids: safeUpdates.additional_role_ids });
+        if (user?.id === currentEmployee.id) {
+          const roleChanged = safeUpdates.role_id !== undefined && safeUpdates.role_id !== currentEmployee.role_id;
+          const additionalRolesChanged = safeUpdates.additional_role_ids !== undefined && 
+            JSON.stringify(safeUpdates.additional_role_ids) !== JSON.stringify(currentEmployee.additional_role_ids || []);
+          
+          if (roleChanged || additionalRolesChanged) {
+            console.log('🔄 Refreshing current user permissions after role update...', {
+              roleChanged,
+              additionalRolesChanged,
+              newRoleId: safeUpdates.role_id,
+              oldRoleId: currentEmployee.role_id
+            });
+            
+            // Use refreshUserRoles to fetch fresh data from database
+            // This ensures we get the complete role information including role details
+            await refreshUserRoles();
+            
+            toast.success('Your role has been updated. Please refresh the page to access your new role.');
+          }
         }
       },
       onError: (error) => {

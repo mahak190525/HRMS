@@ -133,6 +133,10 @@ function LeaveApplicationActions({ application }: { application: any }) {
         setIsUpdateDialogOpen(false);
         setNewStatus('');
         setComments('');
+      },
+      onError: (error: any) => {
+        // Error is already handled in the hook's onError, but we can add additional handling here if needed
+        console.error('Error updating leave status:', error);
       }
     });
   };
@@ -320,8 +324,8 @@ function LeaveApplicationActions({ application }: { application: any }) {
         </DialogContent>
       </Dialog>
       
-      {/* Review button - for users with edit permissions, disabled if already approved/rejected */}
-      {permissions?.canEdit && !['approved', 'rejected'].includes(application.status) && (
+      {/* Review button - for users with edit permissions, disabled if already approved/rejected/withdrawn */}
+      {permissions?.canEdit && !['approved', 'rejected', 'withdrawn'].includes(application.status) && (
         <Dialog open={isUpdateDialogOpen} onOpenChange={setIsUpdateDialogOpen}>
           <DialogTrigger asChild>
             <Button size="sm">

@@ -128,7 +128,8 @@ export function useWithdrawLeaveApplication() {
       
       // Check if application can be withdrawn (pending or approved)
       if (!['pending', 'approved'].includes(application.status)) {
-        throw new Error('Only pending or approved leave applications can be withdrawn');
+        console.log('Status discrepancy:', { user_id: application.user_id, status: application.status });
+        throw new Error(`Only pending or approved leave applications can be withdrawn`);
       }
       
       // Check if the leave is in the past (cannot withdraw past leaves)
@@ -137,8 +138,25 @@ export function useWithdrawLeaveApplication() {
         throw new Error('Cannot withdraw leave applications that have already started or are in the past');
       }
       
+      // Re-check status right before update to prevent race conditions
+      // This ensures the status hasn't changed between the check and the update
+      const { data: currentApplication, error: currentAppError } = await supabase
+        .from('leave_applications')
+        .select('status, user_id')
+        .eq('id', applicationId)
+        .single();
+      
+      if (currentAppError) throw currentAppError;
+      
+      // Final status check right before update
+      if (!['pending', 'approved'].includes(currentApplication.status)) {
+        console.log('Status discrepancy:', { user_id: currentApplication.user_id || application.user_id, status: currentApplication.status });
+        throw new Error(`This leave application is ${currentApplication.status} and cannot be withdrawn`);
+      }
+      
       // Update the leave application status to 'withdrawn'
-      const { error: updateError } = await supabase
+      // Use optimistic locking: only update if status is still 'pending' or 'approved'
+      const { data: updatedData, error: updateError } = await supabase
         .from('leave_applications')
         .update({
           status: 'withdrawn',
@@ -147,7 +165,9 @@ export function useWithdrawLeaveApplication() {
           withdrawal_reason: reason,
           updated_at: getCurrentISTTimestamp()
         })
-        .eq('id', applicationId);
+        .eq('id', applicationId)
+        .in('status', ['pending', 'approved']) // Only update if status is still pending or approved
+        .select();
       
       if (updateError) {
         // Check if it's the email function error, but still allow withdrawal
@@ -157,6 +177,30 @@ export function useWithdrawLeaveApplication() {
         } else {
           throw updateError;
         }
+      }
+      
+      // Check if update actually affected any rows (optimistic locking check)
+      if (!updatedData || updatedData.length === 0) {
+        // Status must have changed between our check and the update
+        // Re-fetch to see current status and provide accurate error message
+        const { data: latestApplication } = await supabase
+          .from('leave_applications')
+          .select('status, user_id')
+          .eq('id', applicationId)
+          .single();
+        
+        if (latestApplication) {
+          console.log('Status discrepancy:', { user_id: latestApplication.user_id, status: latestApplication.status });
+          
+          if (latestApplication.status === 'withdrawn') {
+            throw new Error('This leave application has already been withdrawn');
+          }
+          if (!['pending', 'approved'].includes(latestApplication.status)) {
+            throw new Error(`Cannot withdraw: This leave application is now ${latestApplication.status}`);
+          }
+        }
+        
+        throw new Error('Failed to withdraw leave application: Status may have changed');
       }
       
       // Create a withdrawal log entry
@@ -175,9 +219,17 @@ export function useWithdrawLeaveApplication() {
         // Don't throw error here as the main operation succeeded
       }
       
-      return { applicationId, previousStatus: application.status };
+      return { applicationId, previousStatus: application.status, userId: application.user_id };
     },
     onSuccess: (data) => {
+      // Invalidate with specific user ID if available
+      if (data.userId) {
+        queryClient.invalidateQueries({ queryKey: ['leave-applications', data.userId] });
+        queryClient.invalidateQueries({ queryKey: ['leave-balance', data.userId] });
+        queryClient.invalidateQueries({ queryKey: ['user-leave-summary', data.userId] });
+      }
+      
+      // Also invalidate all queries (for broader coverage)
       queryClient.invalidateQueries({ queryKey: ['leave-applications'] });
       queryClient.invalidateQueries({ queryKey: ['all-leave-applications'] });
       queryClient.invalidateQueries({ queryKey: ['leave-balance'] });
