@@ -170,14 +170,15 @@ export const AssignPoliciesPage: React.FC = () => {
       if (error) throw error;
 
       // Update policy counts in pending emails for bulk assignments
-      if (selectedPolicyIds.length > 1 || selectedUserIds.length > 1) {
-        try {
-          await supabase.rpc('update_policy_email_counts');
-          console.log('✅ Policy email counts updated for bulk assignment');
-        } catch (emailCountError) {
-          console.warn('Failed to update policy email counts:', emailCountError);
-          // Don't throw - this is not critical
-        }
+      // Always call this to ensure counts are correct, especially for multiple policies
+      try {
+        // Add a small delay to ensure all triggers have completed
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await supabase.rpc('update_policy_email_counts');
+        console.log('✅ Policy email counts updated for bulk assignment');
+      } catch (emailCountError) {
+        console.warn('Failed to update policy email counts:', emailCountError);
+        // Don't throw - this is not critical
       }
 
       // Notifications and emails will be sent automatically by database triggers
