@@ -518,7 +518,12 @@ class MicrosoftGraphService {
     let mainMessage = '';
     let footerMessage = '';
     
-    const policyText = policyData.policy_count === 1 ? '1 policy has' : `${policyData.policy_count} policies have`;
+    // Ensure policy_count is a valid number, default to 1 if missing or 0
+    const policyCount = policyData.policy_count && policyData.policy_count > 0 
+      ? policyData.policy_count 
+      : 1;
+    
+    const policyText = policyCount === 1 ? '1 policy has' : `${policyCount} policies have`;
     
     if (recipientType === 'employee') {
       greeting = `Dear ${policyData.employee_name},`;
@@ -558,7 +563,7 @@ class MicrosoftGraphService {
               <h3>Assignment Details</h3>
               <p><strong>Status:</strong> <span class="status-assigned">Assigned</span></p>
               <p><strong>Employee:</strong> ${policyData.employee_name}</p>
-              <p><strong>Number of Policies:</strong> ${policyData.policy_count}</p>
+              <p><strong>Number of Policies:</strong> ${policyCount}</p>
               <p><strong>Assigned By:</strong> ${policyData.assigned_by_name}</p>
               <p><strong>Assigned Date:</strong> ${new Date(policyData.assigned_at).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
             </div>
