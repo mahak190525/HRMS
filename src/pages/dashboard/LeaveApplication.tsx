@@ -1453,7 +1453,7 @@ export function LeaveApplication() {
                                   leave.half_day_period === '2nd_half' ? ' (2nd half)' : ' (Half Day)'
                                 )}
                               </Badge>
-                              {leave.lop_days != null && Number(leave.lop_days) > 0 && (
+                              {/* {leave.lop_days != null && Number(leave.lop_days) > 0 && (
                                 <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
@@ -1469,7 +1469,7 @@ export function LeaveApplication() {
                                     </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
-                              )}
+                              )} */}
                             </div>
                           </div>
                         </div>
