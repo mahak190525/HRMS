@@ -22,6 +22,7 @@ import type { KRAAssignment } from '@/hooks/useKRA';
 import type { KRAPermissions } from '@/hooks/useKRAPermissions';
 import { useKRAAssignmentDetails, useUpdateKRAEvaluation, triggerKRAEmail } from '@/hooks/useKRA';
 import { supabase } from '@/services/supabase';
+import { Collapsible } from '@/components/ui/collapsible';
 
 interface KRAManagerEvaluationFormProps {
   assignment?: KRAAssignment;
@@ -337,30 +338,36 @@ export function KRAManagerEvaluationForm({ assignment, assignmentId, permissions
         {sortedGoals.map((goal) => {
           const employeeEval = detailedAssignment.evaluations?.find(e => e.goal_id === goal.id);
           const managerEval = evaluations[goal.id] || {};
+          const isEvaluated = managerEval.selected_level && managerEval.manager_evaluation_comments?.trim();
+          const goalTitle = goal.strategic_goal_title || 'Untitled Goal';
+          const goalId = goal.goal_id || 'Goal';
+          const goalWeight = goal.weight || 0;
           
           return (
-            <Card key={goal.id}>
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Badge variant="outline">{goal.goal_id}</Badge>
-                      {goal.strategic_goal_title}
-                    </CardTitle>
-                    {goal.category && (
-                      <Badge variant="secondary" className="mt-2">
-                        {goal.category.name}
+            <div key={goal.id} className="w-full max-w-full">
+              <Collapsible
+                defaultOpen={false}
+                trigger={
+                  <div className={`flex items-start gap-3 w-full min-w-0 p-4 rounded-lg border ${
+                    isEvaluated ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-white'
+                  } hover:bg-gray-50 transition-colors`} style={{ flexWrap: 'nowrap' }}>
+                    <Badge variant="outline" className="flex-shrink-0">
+                      {goalId}
+                    </Badge>
+                    <span className="flex-1 font-medium min-w-0 block" style={{ wordBreak: 'normal', overflowWrap: 'anywhere', whiteSpace: 'normal', lineHeight: '1.5' }}>
+                      {goalTitle}
+                    </span>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <Badge variant="secondary" className="flex-shrink-0">
+                        {goalWeight}%
                       </Badge>
-                    )}
+                      {isEvaluated && <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />}
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <div className="font-medium">{goal.weight}%</div>
-                    <div className="text-xs text-muted-foreground">Weight</div>
-                  </div>
-                </div>
-              </CardHeader>
-              
-              <CardContent className="space-y-6">
+                }
+              >
+                <Card className="w-full max-w-full overflow-hidden mt-2">
+                  <CardContent className="space-y-6 pt-6">
                 {/* Goal Details */}
                 <div className="space-y-4">
                   <div>
@@ -502,8 +509,10 @@ export function KRAManagerEvaluationForm({ assignment, assignmentId, permissions
                     )}
                   </div>
                 )}
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
+              </Collapsible>
+            </div>
           );
         })}
       </div>

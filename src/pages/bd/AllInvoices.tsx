@@ -24,7 +24,8 @@ import {
   MessageSquare,
   Send,
   CheckCircle,
-  AlertTriangle
+  AlertTriangle,
+  Download
 } from 'lucide-react';
 import { formatDateForDisplay, getCurrentISTDate, parseToISTDate } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -45,6 +46,7 @@ const invoiceSchema = z.object({
   currency: z.string().min(1, 'Currency is required'),
   notes_to_finance: z.string().optional(),
   assigned_finance_poc: z.string().optional(),
+  status: z.string().optional(),
 });
 
 type InvoiceFormData = z.infer<typeof invoiceSchema>;
@@ -59,6 +61,11 @@ export function AllInvoices() {
   
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [clientFilter, setClientFilter] = useState('');
+  const [dateRangeFilter, setDateRangeFilter] = useState<{
+    from: Date | undefined;
+    to: Date | undefined;
+  }>({ from: undefined, to: undefined });
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -66,6 +73,9 @@ export function AllInvoices() {
   const [newComment, setNewComment] = useState('');
 
   const { data: comments, isLoading: commentsLoading } = useInvoiceComments(selectedInvoice?.id || '');
+
+  // Get unique client names for filter dropdown
+  const uniqueClients = invoices ? [...new Set(invoices.map(invoice => invoice.client_name))].sort() : [];
 
   const form = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceSchema),
@@ -79,6 +89,7 @@ export function AllInvoices() {
       currency: 'USD',
       notes_to_finance: '',
       assigned_finance_poc: '',
+      status: 'assigned',
     },
   });
 
@@ -87,8 +98,26 @@ export function AllInvoices() {
                          invoice.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          invoice.project?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = !statusFilter || statusFilter === 'all' || invoice.status === statusFilter;
+    const matchesClient = !clientFilter || clientFilter === 'all' || invoice.client_name === clientFilter;
     
-    return matchesSearch && matchesStatus;
+    // Date range filter based on created_at (invoice creation date)
+    let matchesDateRange = true;
+    if (dateRangeFilter.from || dateRangeFilter.to) {
+      if (invoice.created_at) {
+        const invoiceDate = parseToISTDate(invoice.created_at);
+        if (dateRangeFilter.from && invoiceDate < dateRangeFilter.from) {
+          matchesDateRange = false;
+        }
+        if (dateRangeFilter.to && invoiceDate > dateRangeFilter.to) {
+          matchesDateRange = false;
+        }
+      } else {
+        // If no created_at, exclude from date range filter
+        matchesDateRange = false;
+      }
+    }
+    
+    return matchesSearch && matchesStatus && matchesClient && matchesDateRange;
   });
 
   const onSubmit = async (data: InvoiceFormData) => {
@@ -96,9 +125,9 @@ export function AllInvoices() {
 
     const invoiceData = {
       ...data,
-      due_date: getCurrentISTDate().toISOString().split('T')[0],
+      due_date: data.due_date ? data.due_date.toISOString().split('T')[0] : getCurrentISTDate().toISOString().split('T')[0],
       created_by: user.id,
-      status: 'assigned',
+      status: data.status || 'assigned',
     };
 
     if (selectedInvoice) {
@@ -135,6 +164,7 @@ export function AllInvoices() {
       currency: invoice.currency,
       notes_to_finance: invoice.notes_to_finance || '',
       assigned_finance_poc: invoice.assigned_finance_poc || '',
+      status: invoice.status || 'assigned',
     });
     setIsEditDialogOpen(true);
   };
@@ -152,6 +182,55 @@ export function AllInvoices() {
         setNewComment('');
       }
     });
+  };
+
+  const exportInvoicesToCSV = () => {
+    if (!filteredInvoices || filteredInvoices.length === 0) {
+      alert('No invoices to export');
+      return;
+    }
+
+    const headers = [
+      'Invoice Number',
+      'Invoice Title',
+      'Client Name',
+      'Project',
+      'Amount',
+      'Currency',
+      'Due Date',
+      'Status',
+      'Payment Terms',
+      'Assigned Finance POC',
+      'Created Date'
+    ];
+
+    const csvData = filteredInvoices.map(invoice => [
+      invoice.invoice_number || '',
+      invoice.invoice_title || '',
+      invoice.client_name || '',
+      invoice.project || '',
+      invoice.invoice_amount || 0,
+      invoice.currency || '',
+      formatDateForDisplay(invoice.due_date, 'yyyy-MM-dd'),
+      invoice.status || '',
+      invoice.payment_terms?.replace('_', ' ') || '',
+      invoice.assigned_finance_poc_user?.full_name || 'Unassigned',
+      formatDateForDisplay(invoice.created_at, 'yyyy-MM-dd HH:mm')
+    ]);
+
+    const csvContent = [headers, ...csvData]
+      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `invoices_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const getStatusBadge = (status: string) => {
@@ -453,7 +532,7 @@ export function AllInvoices() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             <div>
               <Input
                 placeholder="Search invoices..."
@@ -477,14 +556,86 @@ export function AllInvoices() {
               </Select>
             </div>
             <div>
+              <Select value={clientFilter} onValueChange={setClientFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Clients" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Clients</SelectItem>
+                  {uniqueClients.map((client) => (
+                    <SelectItem key={client} value={client}>
+                      {client}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="xl:col-span-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      (!dateRangeFilter.from && !dateRangeFilter.to) && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
+                    <span>
+                      {dateRangeFilter.from ? (
+                        dateRangeFilter.to ? (
+                          <>
+                            {formatDateForDisplay(dateRangeFilter.from, "MMM dd, yyyy")} -{" "}
+                            {formatDateForDisplay(dateRangeFilter.to, "MMM dd, yyyy")}
+                          </>
+                        ) : (
+                          formatDateForDisplay(dateRangeFilter.from, "MMM dd, yyyy")
+                        )
+                      ) : (
+                        "Invoice Date Range"
+                      )}
+                    </span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRangeFilter.from}
+                    selected={{
+                      from: dateRangeFilter.from,
+                      to: dateRangeFilter.to,
+                    }}
+                    onSelect={(range) => {
+                      setDateRangeFilter({
+                        from: range?.from,
+                        to: range?.to,
+                      });
+                    }}
+                    numberOfMonths={2}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="flex gap-2">
               <Button 
                 variant="outline" 
                 onClick={() => {
                   setSearchTerm('');
                   setStatusFilter('');
+                  setClientFilter('');
+                  setDateRangeFilter({ from: undefined, to: undefined });
                 }}
               >
                 Clear Filters
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={exportInvoicesToCSV}
+                disabled={!filteredInvoices || filteredInvoices.length === 0}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export ({filteredInvoices?.length || 0})
               </Button>
             </div>
           </div>
@@ -517,7 +668,13 @@ export function AllInvoices() {
                 <TableRow key={invoice.id}>
                   <TableCell>
                     <div>
-                      <div className="font-medium">{invoice.invoice_title}</div>
+                      <div className="font-medium">
+                        {invoice.invoice_number && (
+                          <span className="text-blue-600 font-semibold">#{invoice.invoice_number}</span>
+                        )}
+                        {invoice.invoice_number && invoice.invoice_title && <span className="mx-2">-</span>}
+                        {invoice.invoice_title}
+                      </div>
                       {invoice.billing_reference && (
                         <div className="text-sm text-muted-foreground">Ref: {invoice.billing_reference}</div>
                       )}
@@ -572,7 +729,6 @@ export function AllInvoices() {
                       <Button 
                         size="sm" 
                         variant="outline"
-                        asChild
                         onClick={() => handleEdit(invoice)}
                       >
                         <Edit className="h-4 w-4" />
@@ -582,7 +738,6 @@ export function AllInvoices() {
                           <Button 
                             size="sm" 
                             variant="outline"
-                            asChild
                             onClick={() => setSelectedInvoice(invoice)}
                           >
                             <MessageSquare className="h-4 w-4" />
@@ -592,7 +747,7 @@ export function AllInvoices() {
                           <DialogHeader>
                             <DialogTitle>Invoice Communication</DialogTitle>
                             <DialogDescription>
-                              BD-Finance communication for {selectedInvoice?.invoice_title}
+                              BD-Finance communication for {selectedInvoice?.invoice_number && `#${selectedInvoice.invoice_number}`}{selectedInvoice?.invoice_number && selectedInvoice?.invoice_title && ' - '}{selectedInvoice?.invoice_title}
                             </DialogDescription>
                           </DialogHeader>
                           <Tabs defaultValue="details" className="space-y-4">
@@ -605,6 +760,16 @@ export function AllInvoices() {
                               {selectedInvoice && (
                                 <div className="space-y-4">
                                   <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                      <p className="font-medium">Invoice Number:</p>
+                                      <p className="text-muted-foreground font-semibold text-blue-600">
+                                        {selectedInvoice.invoice_number ? `#${selectedInvoice.invoice_number}` : 'Not assigned'}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="font-medium">Invoice Title:</p>
+                                      <p className="text-muted-foreground">{selectedInvoice.invoice_title || 'Not specified'}</p>
+                                    </div>
                                     <div>
                                       <p className="font-medium">Client:</p>
                                       <p className="text-muted-foreground">{selectedInvoice.client_name}</p>
@@ -753,7 +918,7 @@ export function AllInvoices() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Assigned Finance POC</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select finance contact" />
@@ -772,6 +937,31 @@ export function AllInvoices() {
                   )}
                 />
               </div>
+
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="assigned">Assigned</SelectItem>
+                        <SelectItem value="in_progress">In Progress</SelectItem>
+                        <SelectItem value="sent">Sent</SelectItem>
+                        <SelectItem value="paid">Paid</SelectItem>
+                        <SelectItem value="overdue">Overdue</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <div className="flex justify-end gap-2">
                 <Button 

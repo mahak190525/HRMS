@@ -16,15 +16,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  Settings,
   Calendar,
-  Package,
-  Target,
   Shield,
-  Bell,
-  Mail,
   Users,
-  FileText,
   DollarSign,
   Save,
   Info,
@@ -36,6 +30,13 @@ import {
   useEmploymentTermLeaveRates,
   useUpdateMultipleLeaveRates,
 } from '@/hooks/useEmploymentTermLeaveRates';
+import {
+  useAppConfig,
+  useUpdateIndianDeets,
+  useUpdateLLCDeets,
+  type IndianDeets,
+  type LLCDeets,
+} from '@/hooks/useAppConfig';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { supabase } from '@/services/supabase';
 import { DASHBOARD_CONFIG } from '@/constants';
@@ -152,6 +153,51 @@ export function SettingsManager() {
   const [enablePayroll, setEnablePayroll] = useState(true);
   const [enableBilling, setEnableBilling] = useState(true);
   const [financeApprovalRequired, setFinanceApprovalRequired] = useState(true);
+
+  // App Configuration
+  const { data: appConfig, isLoading: configLoading } = useAppConfig();
+  const updateIndianDeets = useUpdateIndianDeets();
+  const updateLLCDeets = useUpdateLLCDeets();
+  
+  // Local state for configuration forms
+  const [indianConfig, setIndianConfig] = useState<IndianDeets>({
+    bank: {
+      account_name: '',
+      bank_name: '',
+      account_no: '',
+      ifsc_code: '',
+      gstin: '',
+      pan: '',
+      registration_number: '',
+    },
+    email: '',
+  });
+
+  const [llcConfig, setLLCConfig] = useState<LLCDeets>({
+    ach: {
+      bank_name: '',
+      account_name: '',
+      ach_routing_number: '',
+      account_number: '',
+    },
+    wire: {
+      bank_name: '',
+      account_name: '',
+      wire_routing_number: '',
+      account_number: '',
+      domestic_swift_code: '',
+      foreign_swift_code: '',
+    },
+    email: '',
+  });
+
+  // Initialize config when data loads
+  useEffect(() => {
+    if (appConfig) {
+      setIndianConfig(appConfig.indian_deets);
+      setLLCConfig(appConfig.llc_deets);
+    }
+  }, [appConfig]);
 
   // Role-based Dashboard/Page Access Settings
   const queryClient = useQueryClient();
@@ -321,6 +367,14 @@ export function SettingsManager() {
     toast.success(`${section} settings saved successfully!`);
   };
 
+  const handleSaveIndianConfig = () => {
+    updateIndianDeets.mutate(indianConfig);
+  };
+
+  const handleSaveLLCConfig = () => {
+    updateLLCDeets.mutate(llcConfig);
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -367,11 +421,11 @@ export function SettingsManager() {
           {/* <TabsTrigger value="grievance" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
             <span className="hidden sm:inline">Grievance</span>
-          </TabsTrigger>
+          </TabsTrigger> */}
           <TabsTrigger value="finance" className="flex items-center gap-2">
             <DollarSign className="h-4 w-4" />
             <span className="hidden sm:inline">Finance</span>
-          </TabsTrigger> */}
+          </TabsTrigger>
         </TabsList>
 
         {/* General Settings */}
@@ -1249,82 +1303,496 @@ export function SettingsManager() {
 
         {/* Finance Settings */}
         <TabsContent value="finance" className="space-y-4">
+          {/* Indian Details Configuration */}
           <Card>
             <CardHeader>
-              <CardTitle>Finance Module Settings</CardTitle>
+              <CardTitle>Indian Entity Configuration</CardTitle>
               <CardDescription>
-                Configure finance and billing module settings.
+                Configure bank details and contact information for Indian operations.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="enableFinanceModule">Enable Finance Module</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Enable the finance management module
-                    </p>
-                  </div>
-                  <Switch
-                    id="enableFinanceModule"
-                    checked={enableFinanceModule}
-                    onCheckedChange={setEnableFinanceModule}
-                  />
+              {configLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <LoadingSpinner size="md" />
                 </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="enablePayroll">Enable Payroll</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Enable payroll management features
-                    </p>
+              ) : (
+                <div className="space-y-6">
+                  {/* Bank Details */}
+                  <div className="space-y-4">
+                    <Label className="text-base font-semibold">Bank Details</Label>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="indian-account-name">Account Name</Label>
+                        <Input
+                          id="indian-account-name"
+                          value={indianConfig.bank.account_name}
+                          onChange={(e) => setIndianConfig(prev => ({
+                            ...prev,
+                            bank: { ...prev.bank, account_name: e.target.value }
+                          }))}
+                          placeholder="Enter account name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="indian-bank-name">Bank Name</Label>
+                        <Input
+                          id="indian-bank-name"
+                          value={indianConfig.bank.bank_name}
+                          onChange={(e) => setIndianConfig(prev => ({
+                            ...prev,
+                            bank: { ...prev.bank, bank_name: e.target.value }
+                          }))}
+                          placeholder="Enter bank name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="indian-account-no">Account Number</Label>
+                        <Input
+                          id="indian-account-no"
+                          value={indianConfig.bank.account_no}
+                          onChange={(e) => setIndianConfig(prev => ({
+                            ...prev,
+                            bank: { ...prev.bank, account_no: e.target.value }
+                          }))}
+                          placeholder="Enter account number"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="indian-ifsc">IFSC Code</Label>
+                        <Input
+                          id="indian-ifsc"
+                          value={indianConfig.bank.ifsc_code}
+                          onChange={(e) => setIndianConfig(prev => ({
+                            ...prev,
+                            bank: { ...prev.bank, ifsc_code: e.target.value }
+                          }))}
+                          placeholder="Enter IFSC code"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="indian-gstin">GSTIN</Label>
+                        <Input
+                          id="indian-gstin"
+                          value={indianConfig.bank.gstin}
+                          onChange={(e) => setIndianConfig(prev => ({
+                            ...prev,
+                            bank: { ...prev.bank, gstin: e.target.value }
+                          }))}
+                          placeholder="Enter GSTIN"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="indian-pan">PAN</Label>
+                        <Input
+                          id="indian-pan"
+                          value={indianConfig.bank.pan}
+                          onChange={(e) => setIndianConfig(prev => ({
+                            ...prev,
+                            bank: { ...prev.bank, pan: e.target.value }
+                          }))}
+                          placeholder="Enter PAN"
+                        />
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <Label htmlFor="indian-registration">Registration Number</Label>
+                        <Input
+                          id="indian-registration"
+                          value={indianConfig.bank.registration_number}
+                          onChange={(e) => setIndianConfig(prev => ({
+                            ...prev,
+                            bank: { ...prev.bank, registration_number: e.target.value }
+                          }))}
+                          placeholder="Enter registration number"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <Switch
-                    id="enablePayroll"
-                    checked={enablePayroll}
-                    onCheckedChange={setEnablePayroll}
-                  />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="enableBilling">Enable Billing</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Enable billing and invoicing features
-                    </p>
+
+                  <Separator />
+
+                  {/* Email */}
+                  <div className="space-y-2">
+                    <Label htmlFor="indian-email">Email Address</Label>
+                    <Input
+                      id="indian-email"
+                      type="email"
+                      value={indianConfig.email}
+                      onChange={(e) => setIndianConfig(prev => ({
+                        ...prev,
+                        email: e.target.value
+                      }))}
+                      placeholder="Enter email address"
+                    />
                   </div>
-                  <Switch
-                    id="enableBilling"
-                    checked={enableBilling}
-                    onCheckedChange={setEnableBilling}
-                  />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="financeApprovalRequired">Require Finance Approval</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Financial transactions require approval
-                    </p>
+
+                  <div className="flex justify-end">
+                    <Button 
+                      onClick={handleSaveIndianConfig}
+                      disabled={updateIndianDeets.isPending}
+                    >
+                      {updateIndianDeets.isPending ? (
+                        <>
+                          <LoadingSpinner size="sm" className="mr-2" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-4 w-4 mr-2" />
+                          Save Indian Details
+                        </>
+                      )}
+                    </Button>
                   </div>
-                  <Switch
-                    id="financeApprovalRequired"
-                    checked={financeApprovalRequired}
-                    onCheckedChange={setFinanceApprovalRequired}
-                  />
                 </div>
-              </div>
-              <div className="flex justify-end">
-                <Button onClick={() => handleSave('Finance Module')}>
-                  <Save className="h-4 w-4 mr-2" />
-                  Save Changes
-                </Button>
-              </div>
+              )}
             </CardContent>
           </Card>
+
+          {/* LLC Details Configuration */}
+          <Card>
+            <CardHeader>
+              <CardTitle>LLC Entity Configuration</CardTitle>
+              <CardDescription>
+                Configure ACH, wire transfer details and contact information for LLC operations.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {configLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <LoadingSpinner size="md" />
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* ACH Details */}
+                  <div className="space-y-4">
+                    <Label className="text-base font-semibold">ACH Details</Label>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="llc-ach-bank-name">Bank Name</Label>
+                        <Input
+                          id="llc-ach-bank-name"
+                          value={llcConfig.ach.bank_name}
+                          onChange={(e) => setLLCConfig(prev => ({
+                            ...prev,
+                            ach: { ...prev.ach, bank_name: e.target.value }
+                          }))}
+                          placeholder="Enter bank name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="llc-ach-account-name">Account Name</Label>
+                        <Input
+                          id="llc-ach-account-name"
+                          value={llcConfig.ach.account_name}
+                          onChange={(e) => setLLCConfig(prev => ({
+                            ...prev,
+                            ach: { ...prev.ach, account_name: e.target.value }
+                          }))}
+                          placeholder="Enter account name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="llc-ach-routing">ACH Routing Number</Label>
+                        <Input
+                          id="llc-ach-routing"
+                          value={llcConfig.ach.ach_routing_number}
+                          onChange={(e) => setLLCConfig(prev => ({
+                            ...prev,
+                            ach: { ...prev.ach, ach_routing_number: e.target.value }
+                          }))}
+                          placeholder="Enter ACH routing number"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="llc-ach-account">Account Number</Label>
+                        <Input
+                          id="llc-ach-account"
+                          value={llcConfig.ach.account_number}
+                          onChange={(e) => setLLCConfig(prev => ({
+                            ...prev,
+                            ach: { ...prev.ach, account_number: e.target.value }
+                          }))}
+                          placeholder="Enter account number"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Wire Details */}
+                  <div className="space-y-4">
+                    <Label className="text-base font-semibold">Wire Transfer Details</Label>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="llc-wire-bank-name">Bank Name</Label>
+                        <Input
+                          id="llc-wire-bank-name"
+                          value={llcConfig.wire.bank_name}
+                          onChange={(e) => setLLCConfig(prev => ({
+                            ...prev,
+                            wire: { ...prev.wire, bank_name: e.target.value }
+                          }))}
+                          placeholder="Enter bank name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="llc-wire-account-name">Account Name</Label>
+                        <Input
+                          id="llc-wire-account-name"
+                          value={llcConfig.wire.account_name}
+                          onChange={(e) => setLLCConfig(prev => ({
+                            ...prev,
+                            wire: { ...prev.wire, account_name: e.target.value }
+                          }))}
+                          placeholder="Enter account name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="llc-wire-routing">Wire Routing Number</Label>
+                        <Input
+                          id="llc-wire-routing"
+                          value={llcConfig.wire.wire_routing_number}
+                          onChange={(e) => setLLCConfig(prev => ({
+                            ...prev,
+                            wire: { ...prev.wire, wire_routing_number: e.target.value }
+                          }))}
+                          placeholder="Enter wire routing number"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="llc-wire-account">Account Number</Label>
+                        <Input
+                          id="llc-wire-account"
+                          value={llcConfig.wire.account_number}
+                          onChange={(e) => setLLCConfig(prev => ({
+                            ...prev,
+                            wire: { ...prev.wire, account_number: e.target.value }
+                          }))}
+                          placeholder="Enter account number"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="llc-domestic-swift">Domestic SWIFT Code</Label>
+                        <Input
+                          id="llc-domestic-swift"
+                          value={llcConfig.wire.domestic_swift_code}
+                          onChange={(e) => setLLCConfig(prev => ({
+                            ...prev,
+                            wire: { ...prev.wire, domestic_swift_code: e.target.value }
+                          }))}
+                          placeholder="Enter domestic SWIFT code"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="llc-foreign-swift">Foreign SWIFT Code</Label>
+                        <Input
+                          id="llc-foreign-swift"
+                          value={llcConfig.wire.foreign_swift_code}
+                          onChange={(e) => setLLCConfig(prev => ({
+                            ...prev,
+                            wire: { ...prev.wire, foreign_swift_code: e.target.value }
+                          }))}
+                          placeholder="Enter foreign SWIFT code"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Email */}
+                  <div className="space-y-2">
+                    <Label htmlFor="llc-email">Email Address</Label>
+                    <Input
+                      id="llc-email"
+                      type="email"
+                      value={llcConfig.email}
+                      onChange={(e) => setLLCConfig(prev => ({
+                        ...prev,
+                        email: e.target.value
+                      }))}
+                      placeholder="Enter email address"
+                    />
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Button 
+                      onClick={handleSaveLLCConfig}
+                      disabled={updateLLCDeets.isPending}
+                    >
+                      {updateLLCDeets.isPending ? (
+                        <>
+                          <LoadingSpinner size="sm" className="mr-2" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-4 w-4 mr-2" />
+                          Save LLC Details
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Finance Permissions Configuration */}
+          <FinancePermissionsCard />
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+// Finance Permissions Management Component
+function FinancePermissionsCard() {
+  const queryClient = useQueryClient();
+  const [permissions, setPermissions] = useState<any>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Fetch current permissions
+  useEffect(() => {
+    const fetchPermissions = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('app_config')
+          .select('permissions')
+          .eq('id', 1)
+          .single();
+        
+        if (error) throw error;
+        setPermissions(data?.permissions || {});
+      } catch (error) {
+        console.error('Error fetching permissions:', error);
+        toast.error('Failed to load permissions');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchPermissions();
+  }, []);
+
+  const updatePermission = (module: string, feature: string, permission: string, value: boolean) => {
+    setPermissions((prev: any) => ({
+      ...prev,
+      [module]: {
+        ...prev[module],
+        [feature]: {
+          ...prev[module]?.[feature],
+          [permission]: value
+        }
+      }
+    }));
+  };
+
+  const handleSavePermissions = async () => {
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('app_config')
+        .update({ permissions })
+        .eq('id', 1);
+
+      if (error) throw error;
+
+      // Invalidate permissions cache
+      queryClient.invalidateQueries({ queryKey: ['app-permissions'] });
+      toast.success('Permissions updated successfully');
+    } catch (error) {
+      console.error('Error saving permissions:', error);
+      toast.error('Failed to save permissions');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center py-8">
+          <LoadingSpinner size="md" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Shield className="h-5 w-5" />
+          Invoice Permissions
+        </CardTitle>
+        <CardDescription>
+          Control whether users can edit or delete invoices. When disabled, the corresponding buttons will be hidden.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Invoice Edit Permission */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Label className="text-base font-semibold">Allow Invoice Editing</Label>
+              <p className="text-sm text-muted-foreground">
+                Controls the edit buttons in the invoices table and view dialogs
+              </p>
+            </div>
+            <Switch
+              id="invoice-edit"
+              checked={permissions.finance?.invoices?.edit ?? true}
+              onCheckedChange={(checked) => updatePermission('finance', 'invoices', 'edit', checked)}
+            />
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Invoice Delete Permission */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Label className="text-base font-semibold">Allow Invoice Deletion</Label>
+              <p className="text-sm text-muted-foreground">
+                Controls the delete buttons in the invoices table
+              </p>
+            </div>
+            <Switch
+              id="invoice-delete"
+              checked={permissions.finance?.invoices?.delete ?? true}
+              onCheckedChange={(checked) => updatePermission('finance', 'invoices', 'delete', checked)}
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end pt-4">
+          <Button onClick={handleSavePermissions} disabled={isSaving}>
+            <Save className="h-4 w-4 mr-2" />
+            {isSaving ? 'Saving...' : 'Save Permissions'}
+          </Button>
+        </div>
+
+        <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+          <div className="flex items-start gap-2">
+            <Info className="h-4 w-4 text-blue-600 mt-0.5" />
+            <div className="text-sm text-blue-800">
+              <p className="font-medium">Permission Effects:</p>
+              <ul className="mt-1 space-y-1 text-xs">
+                <li>• <strong>Edit Disabled:</strong> Edit buttons will be grayed out with "Edit disabled by admin" tooltip</li>
+                <li>• <strong>Delete Disabled:</strong> Delete buttons will be grayed out with "Delete disabled by admin" tooltip</li>
+                <li>• <strong>Unaffected:</strong> Generate Invoice and View Invoice features remain fully functional</li>
+                <li>• <strong>Independent:</strong> Edit and delete permissions work independently of each other</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

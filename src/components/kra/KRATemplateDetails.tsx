@@ -12,6 +12,7 @@ import {
 import { formatDateForDisplay } from '@/utils/dateUtils';
 
 import type { KRATemplate } from '@/hooks/useKRA';
+import { CollapsibleGoalView } from './CollapsibleGoalView';
 
 interface KRATemplateDetailsProps {
   template: KRATemplate;
@@ -93,87 +94,13 @@ export function KRATemplateDetails({ template, onClose }: KRATemplateDetailsProp
             KRA Goals ({sortedGoals.length})
           </h3>
           
-          {sortedGoals.map((goal) => (
-            <Card key={goal.id} className="w-full max-w-full overflow-hidden">
-              <CardHeader className="w-full max-w-full">
-                <div className="flex items-start justify-between gap-4 w-full min-w-0">
-                  <div className="flex-1 min-w-0">
-                    <CardTitle className="text-lg flex items-start gap-2 flex-wrap">
-                      <Badge variant="outline" className="flex-shrink-0">{goal.goal_id}</Badge>
-                      <span 
-                        className="flex-1 font-medium min-w-0 block" 
-                        style={{ wordBreak: 'normal', overflowWrap: 'anywhere', whiteSpace: 'normal', lineHeight: '1.5' }}
-                      >
-                        {goal.strategic_goal_title}
-                      </span>
-                    </CardTitle>
-                    {goal.category && (
-                      <Badge variant="secondary" className="mt-2">
-                        {goal.category.name}
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className="font-medium">{goal.weight}%</div>
-                    <div className="text-xs text-muted-foreground">Weight</div>
-                  </div>
-                </div>
-              </CardHeader>
-              
-              <CardContent className="space-y-4 w-full max-w-full overflow-x-hidden">
-                <div>
-                  <h4 className="font-medium mb-2">SMART Goal</h4>
-                  <p className="text-sm p-3 bg-muted rounded-lg whitespace-pre-line break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>{goal.smart_goal}</p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <h4 className="font-medium mb-2">Target</h4>
-                    <p className="text-sm p-3 bg-muted rounded-lg break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>{goal.target}</p>
-                  </div>
-                  {goal.dependencies && (
-                    <div>
-                      <h4 className="font-medium mb-2">Dependencies</h4>
-                      <p className="text-sm p-3 bg-muted rounded-lg break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>{goal.dependencies}</p>
-                    </div>
-                  )}
-                </div>
-
-                {goal.manager_comments && (
-                  <div>
-                    <h4 className="font-medium mb-2">Manager Comments</h4>
-                    <p className="text-sm p-3 bg-blue-50 border border-blue-200 rounded-lg break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>
-                      {goal.manager_comments}
-                    </p>
-                  </div>
-                )}
-
-                <Separator />
-
-                {/* Evaluation Levels */}
-                <div>
-                  <h4 className="font-medium mb-3">Evaluation Levels</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-                    {[1, 2, 3, 4, 5].map(level => {
-                      const marks = goal[`level_${level}_marks` as keyof typeof goal] as string || '';
-                      const points = goal[`level_${level}_points` as keyof typeof goal] as number || 0;
-                      const rating = goal[`level_${level}_rating` as keyof typeof goal] as string || '';
-
-                      return (
-                        <div key={level} className="p-3 border rounded-lg text-center">
-                          <div className="font-medium">Level {level}</div>
-                          <div className="text-xs text-muted-foreground">{rating}</div>
-                          <div className="text-sm">
-                            <div className="whitespace-pre-line text-start break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>{marks}</div>
-                            <div className="text-end mt-2">{points} points</div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+          {sortedGoals.map((goal, index) => (
+            <CollapsibleGoalView
+              key={goal.id}
+              goal={goal}
+              index={index}
+              defaultOpen={false}
+            />
           ))}
         </div>
       ) : (

@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import type { KRAAssignment } from '@/hooks/useKRA';
 import { useKRAAssignmentDetails, useUpdateKRAEvaluation, triggerKRAEmail } from '@/hooks/useKRA';
 import { supabase } from '@/services/supabase';
+import { Collapsible } from '@/components/ui/collapsible';
 
 interface KRAEmployeeFormProps {
   assignment: KRAAssignment;
@@ -276,44 +277,39 @@ export function KRAEmployeeForm({ assignment, isReadOnly = false, onClose }: KRA
         {sortedGoals.map((goal) => {
           const evaluation = evaluations[goal.id] || {};
           const isGoalComplete = evaluation.employee_comments?.trim();
+          const goalTitle = goal.strategic_goal_title || 'Untitled Goal';
+          const goalId = goal.goal_id || 'Goal';
+          const goalWeight = goal.weight || 0;
           
           return (
-            <Card key={goal.id} className={`w-full max-w-full overflow-hidden ${
-              isGoalComplete ? 'border-green-200 bg-green-50' : 
-              isOverdue ? 'border-red-200' : ''
-            }`}>
-              <CardHeader className="w-full max-w-full">
-                <div className="flex items-start justify-between gap-4 w-full min-w-0">
-                  <div className="flex-1 min-w-0">
-                    <CardTitle className="text-lg flex items-start gap-2 flex-wrap">
-                      <Badge variant="outline" className="flex-shrink-0">{goal.goal_id}</Badge>
-                      <span 
-                        className="flex-1 font-medium min-w-0 block" 
-                        style={{ wordBreak: 'normal', overflowWrap: 'anywhere', whiteSpace: 'normal', lineHeight: '1.5' }}
-                      >
-                        {goal.strategic_goal_title}
-                      </span>
-                      {isGoalComplete && <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />}
-                    </CardTitle>
-                    {goal.category && (
-                      <Badge variant="secondary" className="mt-2">
-                        {goal.category.name}
+            <div key={goal.id} className="w-full max-w-full">
+              <Collapsible
+                defaultOpen={false}
+                trigger={
+                  <div className={`flex items-start gap-3 w-full min-w-0 p-4 rounded-lg border ${
+                    isGoalComplete ? 'border-green-200 bg-green-50' : 
+                    isOverdue ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white'
+                  } hover:bg-gray-50 transition-colors`} style={{ flexWrap: 'nowrap' }}>
+                    <Badge variant="outline" className="flex-shrink-0">
+                      {goalId}
+                    </Badge>
+                    <span className="flex-1 font-medium min-w-0 block" style={{ wordBreak: 'normal', overflowWrap: 'anywhere', whiteSpace: 'normal', lineHeight: '1.5' }}>
+                      {goalTitle}
+                    </span>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <Badge variant="secondary" className="flex-shrink-0">
+                        {goalWeight}%
                       </Badge>
-                    )}
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                      <Weight className="h-4 w-4" />
-                      <span>{goal.weight}% weight</span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      Max Score: {goal.max_score}
+                      {isGoalComplete && <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />}
                     </div>
                   </div>
-                </div>
-              </CardHeader>
-              
-              <CardContent className="space-y-6 w-full max-w-full overflow-x-hidden">
+                }
+              >
+                <Card className={`w-full max-w-full overflow-hidden mt-2 ${
+                  isGoalComplete ? 'border-green-200 bg-green-50' : 
+                  isOverdue ? 'border-red-200' : ''
+                }`}>
+                  <CardContent className="space-y-6 w-full max-w-full overflow-x-hidden pt-6">
                 {/* Goal Details */}
                 <div className="space-y-4">
                   <div>
@@ -339,7 +335,7 @@ export function KRAEmployeeForm({ assignment, isReadOnly = false, onClose }: KRA
                   {goal.manager_comments && (
                     <div>
                       <Label className="text-sm font-medium">Manager Comments</Label>
-                      <p className="text-sm mt-1 p-3 bg-blue-50 border border-blue-200 rounded-lg break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>
+                      <p className="text-sm mt-1 p-3 bg-blue-50 border border-blue-200 rounded-lg break-words whitespace-pre-wrap" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>
                         {goal.manager_comments}
                       </p>
                     </div>
@@ -427,13 +423,15 @@ export function KRAEmployeeForm({ assignment, isReadOnly = false, onClose }: KRA
                 {isCompleted && detailedAssignment.evaluations?.find(e => e.goal_id === goal.id)?.manager_evaluation_comments && (
                   <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                     <Label className="text-sm font-medium text-blue-800">Manager Evaluation</Label>
-                    <p className="text-sm mt-1 text-blue-700">
+                    <p className="text-sm mt-1 text-blue-700 whitespace-pre-wrap">
                       {detailedAssignment.evaluations.find(e => e.goal_id === goal.id)?.manager_evaluation_comments}
                     </p>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
+              </Collapsible>
+            </div>
           );
         })}
       </div>

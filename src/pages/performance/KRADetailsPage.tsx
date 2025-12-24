@@ -32,6 +32,7 @@ import { useKRAAssignmentDetails, useUpdateKRAEvaluation } from '@/hooks/useKRA'
 import { supabase } from '@/services/supabase';
 import { QuarterlySettingsManager } from '@/components/kra/QuarterlySettingsManager';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { Collapsible } from '@/components/ui/collapsible';
 
 interface EvaluationFormData {
   [goalId: string]: {
@@ -397,42 +398,89 @@ export function KRADetailsPage() {
                         <h4 className="font-medium">Goals & Evaluations</h4>
                         {sortedGoals.map((goal) => {
                           const evaluation = quarterEvaluations.find(e => e.goal_id === goal.id);
+                          const hasEvaluation = evaluation && (evaluation.employee_comments || evaluation.manager_evaluation_comments);
+                          const goalTitle = goal.strategic_goal_title || 'Untitled Goal';
+                          const goalId = goal.goal_id || 'Goal';
+                          const goalWeight = goal.weight || 0;
                           
                           return (
-                            <Card key={goal.id} className="border-l-4 border-l-blue-500">
-                              <CardHeader className="pb-3">
-                                <div className="flex items-start justify-between">
-                                  <div className="flex-1">
-                                    <CardTitle className="text-base">{goal.goal_id}: {goal.strategic_goal_title}</CardTitle>
-                                    <CardDescription className="mt-1">
-                                      Weight: {goal.weight}% | Max Score: {goal.max_score}
-                                    </CardDescription>
-                                  </div>
-                                  {evaluation?.selected_level && (
-                                    <Badge variant="outline">
-                                      Level {evaluation.selected_level}
+                            <div key={goal.id} className="w-full max-w-full">
+                              <Collapsible
+                                defaultOpen={false}
+                                trigger={
+                                  <div className={`flex items-start gap-3 w-full min-w-0 p-4 rounded-lg border ${
+                                    hasEvaluation ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-white'
+                                  } hover:bg-gray-50 transition-colors`} style={{ flexWrap: 'nowrap' }}>
+                                    <Badge variant="outline" className="flex-shrink-0">
+                                      {goalId}
                                     </Badge>
-                                  )}
-                                </div>
-                              </CardHeader>
-                              <CardContent className="space-y-4">
-                                <div>
-                                  <Label className="text-sm font-medium">SMART Goal</Label>
-                                  <div className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap" style={{ whiteSpace: 'pre-wrap' }}>
-                                    {goal.smart_goal}
+                                    <span className="flex-1 font-medium min-w-0 block" style={{ wordBreak: 'normal', overflowWrap: 'anywhere', whiteSpace: 'normal', lineHeight: '1.5' }}>
+                                      {goalTitle}
+                                    </span>
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                      <Badge variant="secondary" className="flex-shrink-0">
+                                        {goalWeight}%
+                                      </Badge>
+                                      {evaluation?.selected_level && (
+                                        <Badge variant="outline" className="flex-shrink-0">
+                                          Level {evaluation.selected_level}
+                                        </Badge>
+                                      )}
+                                      {hasEvaluation && <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />}
+                                    </div>
                                   </div>
-                                </div>
-                                
-                                <div>
-                                  <Label className="text-sm font-medium">Target</Label>
-                                  <p className="text-sm text-muted-foreground mt-1">{goal.target}</p>
-                                </div>
+                                }
+                              >
+                                <Card className="w-full max-w-full overflow-hidden mt-2 border-l-4 border-l-blue-500">
+                                  <CardContent className="space-y-4 pt-6">
+                                    {/* Goal Details */}
+                                    <div className="space-y-3">
+                                      <div>
+                                        <Label className="text-sm font-medium">SMART Goal</Label>
+                                        <div className="text-sm mt-1 p-3 bg-muted rounded-lg whitespace-pre-wrap break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
+                                          {goal.smart_goal}
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                          <Label className="text-sm font-medium">Target</Label>
+                                          <p className="text-sm mt-1 p-3 bg-muted rounded-lg break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>{goal.target}</p>
+                                        </div>
+                                        {goal.dependencies && (
+                                          <div>
+                                            <Label className="text-sm font-medium">Dependencies</Label>
+                                            <p className="text-sm mt-1 p-3 bg-muted rounded-lg break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>{goal.dependencies}</p>
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                          <Label className="text-sm font-medium">Max Score</Label>
+                                          <p className="text-sm mt-1 p-3 bg-muted rounded-lg">{goal.max_score}</p>
+                                        </div>
+                                        <div>
+                                          <Label className="text-sm font-medium">Weight</Label>
+                                          <p className="text-sm mt-1 p-3 bg-muted rounded-lg">{goal.weight}%</p>
+                                        </div>
+                                      </div>
+
+                                      {goal.manager_comments && (
+                                        <div>
+                                          <Label className="text-sm font-medium">Manager Comments</Label>
+                                          <p className="text-sm mt-1 p-3 bg-blue-50 border border-blue-200 rounded-lg break-words whitespace-pre-wrap" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>
+                                            {goal.manager_comments}
+                                          </p>
+                                        </div>
+                                      )}
+                                    </div>
 
                                 {evaluation?.employee_comments && (
                                   <div>
                                     <Label className="text-sm font-medium">Employee Evidence</Label>
                                     <div className="mt-1 p-3 bg-blue-50 rounded-lg">
-                                      <p className="text-sm">{evaluation.employee_comments}</p>
+                                      <p className="text-sm whitespace-pre-wrap">{evaluation.employee_comments}</p>
                                     </div>
                                   </div>
                                 )}
@@ -441,7 +489,7 @@ export function KRADetailsPage() {
                                   <div>
                                     <Label className="text-sm font-medium">Manager Evaluation</Label>
                                     <div className="mt-1 p-3 bg-green-50 rounded-lg">
-                                      <p className="text-sm">{evaluation.manager_evaluation_comments}</p>
+                                      <p className="text-sm whitespace-pre-wrap">{evaluation.manager_evaluation_comments}</p>
                                       {evaluation.awarded_marks !== undefined && (
                                         <div className="mt-2 text-sm font-medium">
                                           Score: {evaluation.awarded_marks}/{goal.max_score} 
@@ -458,8 +506,10 @@ export function KRADetailsPage() {
                                     <p className="text-sm">No evidence submitted for this goal yet.</p>
                                   </div>
                                 )}
-                              </CardContent>
-                            </Card>
+                                  </CardContent>
+                                </Card>
+                              </Collapsible>
+                            </div>
                           );
                         })}
                       </div>

@@ -33,6 +33,7 @@ import { useKRAAssignmentDetails, useUpdateKRAEvaluation, useKRAAssignments, tri
 import { supabase } from '@/services/supabase';
 import { QuarterlySettingsManager } from '@/components/kra/QuarterlySettingsManager';
 import { getEvidenceFiles, getEvidenceFileUrl } from '@/services/evidenceService';
+import { Collapsible } from '@/components/ui/collapsible';
 
 interface EvaluationFormData {
   [goalId: string]: {
@@ -724,41 +725,89 @@ export function ManagerKRAPage() {
             const existingEvaluation = currentAssignment.evaluations?.find(
               (evaluation) => evaluation.goal_id === goal.id && evaluation.quarter === selectedQuarter
             );
+            const isEvaluated = existingEvaluation && existingEvaluation.manager_evaluated_at;
+            const goalTitle = goal.strategic_goal_title || 'Untitled Goal';
+            const goalId = goal.goal_id || `Goal ${index + 1}`;
+            const goalWeight = goal.weight || 0;
 
             return (
-              <Card key={goal.id}>
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <CardTitle className="text-lg">
-                        Goal {index + 1}: {goal.strategic_goal_title}
-                      </CardTitle>
-                      <div className="text-sm text-muted-foreground mt-2 whitespace-pre-wrap" style={{ whiteSpace: 'pre-wrap' }}>
-                        {goal.smart_goal}
-                      </div>
-                      <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
-                        <span>Weight: {goal.weight}%</span>
-                        <span>Max Score: {goal.max_score}</span>
-                        {existingEvaluation?.awarded_marks && (
-                          <span>Awarded: {existingEvaluation.awarded_marks}</span>
+              <div key={goal.id} className="w-full max-w-full">
+                <Collapsible
+                  defaultOpen={false}
+                  trigger={
+                    <div className={`flex items-start gap-3 w-full min-w-0 p-4 rounded-lg border ${
+                      isEvaluated ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-white'
+                    } hover:bg-gray-50 transition-colors`} style={{ flexWrap: 'nowrap' }}>
+                      <Badge variant="outline" className="flex-shrink-0">
+                        {goalId}
+                      </Badge>
+                      <span className="flex-1 font-medium min-w-0 block" style={{ wordBreak: 'normal', overflowWrap: 'anywhere', whiteSpace: 'normal', lineHeight: '1.5' }}>
+                        {goalTitle}
+                      </span>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Badge variant="secondary" className="flex-shrink-0">
+                          {goalWeight}%
+                        </Badge>
+                        {isEvaluated && (
+                          <Badge variant="outline" className="bg-green-50 text-green-700 flex-shrink-0">
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            Evaluated
+                          </Badge>
                         )}
                       </div>
                     </div>
-                    {existingEvaluation && existingEvaluation.manager_evaluated_at && (
-                      <Badge variant="outline" className="bg-green-50 text-green-700">
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                        Evaluated
-                      </Badge>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-6">
+                  }
+                >
+                  <Card className="w-full max-w-full overflow-hidden mt-2">
+                    <CardContent className="space-y-6 pt-6">
+                      {/* Goal Details */}
+                      <div className="space-y-3">
+                        <div>
+                          <Label className="text-sm font-medium">SMART Goal</Label>
+                          <div className="text-sm mt-1 p-3 bg-muted rounded-lg whitespace-pre-wrap break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
+                            {goal.smart_goal}
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label className="text-sm font-medium">Target</Label>
+                            <p className="text-sm mt-1 p-3 bg-muted rounded-lg break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>{goal.target}</p>
+                          </div>
+                          {goal.dependencies && (
+                            <div>
+                              <Label className="text-sm font-medium">Dependencies</Label>
+                              <p className="text-sm mt-1 p-3 bg-muted rounded-lg break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>{goal.dependencies}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label className="text-sm font-medium">Max Score</Label>
+                            <p className="text-sm mt-1 p-3 bg-muted rounded-lg">{goal.max_score}</p>
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium">Weight</Label>
+                            <p className="text-sm mt-1 p-3 bg-muted rounded-lg">{goal.weight}%</p>
+                          </div>
+                        </div>
+
+                        {goal.manager_comments && (
+                          <div>
+                            <Label className="text-sm font-medium">Manager Comments</Label>
+                            <p className="text-sm mt-1 p-3 bg-blue-50 border border-blue-200 rounded-lg break-words whitespace-pre-wrap" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>
+                              {goal.manager_comments}
+                            </p>
+                          </div>
+                        )}
+                      </div>
                   {/* Employee Comments (Read-only) */}
                   {existingEvaluation?.employee_comments && (
                     <div>
                       <Label className="text-sm font-medium">Employee Evidence & Comments</Label>
                       <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p className="text-sm">{existingEvaluation.employee_comments}</p>
+                        <p className="text-sm whitespace-pre-wrap">{existingEvaluation.employee_comments}</p>
                         {existingEvaluation.employee_submitted_at && (
                           <p className="text-xs text-muted-foreground mt-2">
                             Submitted on {formatDateForDisplay(existingEvaluation.employee_submitted_at, 'MMM dd, yyyy')}
@@ -899,8 +948,10 @@ export function ManagerKRAPage() {
                       }
                     </div>
                   )}
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </Collapsible>
+            </div>
             );
           })}
         </div>

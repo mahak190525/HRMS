@@ -32,6 +32,7 @@ import {
   useUpdateIncident,
   useDeleteIncident,
   useUploadIncidentAttachment,
+  useUploadIncidentAttachments,
   useRemoveIncidentAttachment
 } from '@/hooks/useEmployeeIncidents';
 import { getRoleDisplayName } from '@/constants/index';
@@ -201,6 +202,7 @@ export function EmployeeDetailsModal({
   const updateIncidentMutation = useUpdateIncident();
   const deleteIncidentMutation = useDeleteIncident();
   const uploadIncidentAttachmentMutation = useUploadIncidentAttachment();
+  const uploadIncidentAttachmentsMutation = useUploadIncidentAttachments();
   const removeIncidentAttachmentMutation = useRemoveIncidentAttachment();
 
   // Fetch employee's additional roles from database
@@ -821,6 +823,7 @@ export function EmployeeDetailsModal({
             updateIncident={updateIncidentMutation}
             deleteIncident={deleteIncidentMutation}
             uploadIncidentAttachment={uploadIncidentAttachmentMutation}
+            uploadIncidentAttachments={uploadIncidentAttachmentsMutation}
             removeIncidentAttachment={removeIncidentAttachmentMutation}
           />
         ) : (
@@ -862,6 +865,7 @@ export function EmployeeDetailsModal({
             updateIncident={updateIncidentMutation}
             deleteIncident={deleteIncidentMutation}
             uploadIncidentAttachment={uploadIncidentAttachmentMutation}
+            uploadIncidentAttachments={uploadIncidentAttachmentsMutation}
             removeIncidentAttachment={removeIncidentAttachmentMutation}
             originalFormValues={originalFormValues}
           />
@@ -904,6 +908,7 @@ function ViewMode({
   updateIncident,
   deleteIncident,
   uploadIncidentAttachment,
+  uploadIncidentAttachments,
   removeIncidentAttachment
 }: any) {
   return (
@@ -1003,6 +1008,7 @@ function ViewMode({
               updateIncident={updateIncident}
               deleteIncident={deleteIncident}
               uploadIncidentAttachment={uploadIncidentAttachment}
+              uploadIncidentAttachments={uploadIncidentAttachments}
               removeIncidentAttachment={removeIncidentAttachment}
               permissions={permissions}
               mode={mode}
@@ -1079,6 +1085,7 @@ function EditMode({
   updateIncident,
   deleteIncident,
   uploadIncidentAttachment,
+  uploadIncidentAttachments,
   removeIncidentAttachment,
   originalFormValues
 }: any) {
@@ -1239,6 +1246,7 @@ function EditMode({
                 updateIncident={updateIncident}
                 deleteIncident={deleteIncident}
                 uploadIncidentAttachment={uploadIncidentAttachment}
+                uploadIncidentAttachments={uploadIncidentAttachments}
                 removeIncidentAttachment={removeIncidentAttachment}
                 permissions={permissions}
                 mode={'edit'}

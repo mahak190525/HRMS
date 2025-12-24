@@ -121,7 +121,7 @@ export function useAssetManagementPermissions(): AssetManagementPermissions {
       canCreateAssets: false,
       canEditAssets: false,
       canDeleteAssets: false,
-      canAssignAssets: false,
+      canAssignAssets: isITHelpdesk, // IT Helpdesk CAN assign VMs (which are assets)
       canManageVMs: isITHelpdesk,
       canViewVMDetails: isITHelpdesk,
       canCreateVMs: isITHelpdesk,

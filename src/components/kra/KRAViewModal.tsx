@@ -29,6 +29,7 @@ import type { KRAPermissions } from '@/hooks/useKRAPermissions';
 import { useKRAAssignmentDetails, useUpdateKRAEvaluation, triggerKRAEmail } from '@/hooks/useKRA';
 import { supabase } from '@/services/supabase';
 import { QuarterlySettingsManager } from './QuarterlySettingsManager';
+import { CollapsibleGoalView } from './CollapsibleGoalView';
 
 interface KRAModalProps {
   isOpen: boolean;
@@ -614,230 +615,185 @@ export function KRAModal({
           {sortedGoals.length > 0 && (
             <div className="space-y-4 w-full max-w-full">
               <h3 className="text-lg font-semibold">KRA Goals</h3>
-              {sortedGoals.map((goal) => {
+              {sortedGoals.map((goal, index) => {
                 const evaluation = currentAssignment.evaluations?.find(e => e.goal_id === goal.id);
                 
                 return (
-                  <Card key={goal.id} className="w-full max-w-full overflow-hidden">
-                    <CardHeader className="w-full max-w-full">
-                      <div className="flex items-start justify-between gap-4 w-full min-w-0">
-                        <div className="flex-1 min-w-0">
-                          <CardTitle className="text-lg flex items-start gap-2 flex-wrap">
-                            <Badge variant="outline" className="flex-shrink-0">{goal.goal_id}</Badge>
-                            <span 
-                              className="flex-1 font-medium min-w-0 block" 
-                              style={{ wordBreak: 'normal', overflowWrap: 'anywhere', whiteSpace: 'normal', lineHeight: '1.5' }}
+                  <CollapsibleGoalView
+                    key={goal.id}
+                    goal={goal}
+                    index={index}
+                    defaultOpen={false}
+                  >
+                    {/* Performance Level Selection/Display */}
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium flex items-center gap-2">
+                        <Target className="h-4 w-4" />
+                        Performance Level Evaluation
+                        {editCapabilities.canEditManager && <span className="text-red-500">*</span>}
+                      </Label>
+                      {editCapabilities.canEditManager && (
+                        <p className="text-xs text-muted-foreground">
+                          Select the performance level that best matches the employee's evidence and achievement for this goal.
+                        </p>
+                      )}
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+                        {[1, 2, 3, 4, 5].map(level => {
+                          const marks = goal[`level_${level}_marks` as keyof typeof goal] as string || '';
+                          const points = goal[`level_${level}_points` as keyof typeof goal] as number || 0;
+                          const rating = goal[`level_${level}_rating` as keyof typeof goal] as string || '';
+                          const isSelected = evaluations[goal.id]?.selected_level === level;
+
+                          return (
+                            <div
+                              key={level}
+                              onClick={() => editCapabilities.canEditManager && handleLevelSelection(goal.id, level, goal)}
+                              className={`p-3 border rounded-lg transition-all ${
+                                isSelected 
+                                  ? 'border-green-500 bg-green-50 shadow-md' 
+                                  : editCapabilities.canEditManager
+                                  ? 'border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50 cursor-pointer'
+                                  : 'border-gray-200 bg-white'
+                              } ${!editCapabilities.canEditManager ? 'cursor-default' : ''}`}
                             >
-                              {goal.strategic_goal_title}
-                            </span>
-                          </CardTitle>
-                          {goal.category && (
-                            <Badge variant="secondary" className="mt-2">
-                              {goal.category.name}
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          <div className="font-medium">{goal.weight}%</div>
-                          <div className="text-xs text-muted-foreground">Weight</div>
-                        </div>
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-sm">Level {level} - {rating}</div>
+                                  <div className="text-xs text-muted-foreground mt-1 whitespace-pre-line break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>{marks}</div>
+                                </div>
+                                <div className="text-right flex-shrink-0 ml-2">
+                                  <div className="font-medium text-blue-600">{points} points</div>
+                                  {isSelected && (
+                                    <div className="text-green-600 font-medium text-xs mt-1">
+                                      ✓ Selected
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    </CardHeader>
-                    
-                    <CardContent className="space-y-4 w-full max-w-full overflow-x-hidden">
-                      {/* Goal Details */}
-                      <div className="space-y-3">
-                        <div>
-                          <Label className="text-sm font-medium">SMART Goal</Label>
-                          <div className="text-sm mt-1 p-3 bg-muted rounded-lg whitespace-pre-wrap break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
-                            {goal.smart_goal}
+                      
+                      {evaluations[goal.id]?.selected_level && (
+                        <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <div className="text-sm font-medium text-green-800 flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4" />
+                            Selected: Level {evaluations[goal.id].selected_level} - {evaluations[goal.id].final_rating}
+                          </div>
+                          <div className="text-xs text-green-600">
+                            Awarded: {evaluations[goal.id].awarded_marks} marks • {evaluations[goal.id].awarded_points} points
                           </div>
                         </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      )}
+                    </div>
+
+                    {/* Employee Evidence Section */}
+                    {editCapabilities.showEmployeeSection && (
+                      <>
+                        <Separator />
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium flex items-center gap-2">
+                            <MessageSquare className="h-4 w-4" />
+                            Employee Evidence & Comments
+                            {editCapabilities.canEditEmployee && <span className="text-red-500">*</span>}
+                          </Label>
+                          {editCapabilities.canEditEmployee ? (
+                            <Textarea
+                              value={evaluations[goal.id]?.employee_comments || ''}
+                              onChange={(e) => handleEvaluationChange(goal.id, 'employee_comments', e.target.value)}
+                              placeholder="Provide detailed evidence of your performance for this goal. Include specific achievements, metrics, examples, and any challenges faced..."
+                              rows={4}
+                              className="min-h-[100px]"
+                            />
+                          ) : evaluation?.employee_comments ? (
+                            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                              <p className="text-sm whitespace-pre-wrap">{evaluation.employee_comments}</p>
+                              {evaluation.employee_submitted_at && (
+                                <p className="text-xs text-green-600 mt-2">
+                                  Submitted on {formatDateForDisplay(evaluation.employee_submitted_at, 'MMM dd, yyyy')}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                              <p className="text-sm text-muted-foreground italic">No employee evidence provided yet.</p>
+                            </div>
+                          )}
+                          {editCapabilities.canEditEmployee && (
+                            <p className="text-xs text-muted-foreground">
+                              Provide specific evidence of your performance and achievements for this goal.
+                            </p>
+                          )}
+                        </div>
+                      </>
+                    )}
+
+                    {/* Manager Evaluation Section */}
+                    {editCapabilities.showManagerSection && (
+                      <>
+                        <Separator />
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium flex items-center gap-2">
+                            <Edit className="h-4 w-4" />
+                            Manager Evaluation Comments
+                            {editCapabilities.canEditManager && <span className="text-red-500">*</span>}
+                          </Label>
+                          {editCapabilities.canEditManager ? (
+                            <Textarea
+                              value={evaluations[goal.id]?.manager_evaluation_comments || ''}
+                              onChange={(e) => handleEvaluationChange(goal.id, 'manager_evaluation_comments', e.target.value)}
+                              placeholder="Provide your detailed assessment of the employee's performance. Include feedback on their evidence, specific achievements, areas for improvement, and justification for the selected performance level..."
+                              rows={4}
+                              className="min-h-[100px]"
+                            />
+                          ) : evaluation?.manager_evaluation_comments ? (
+                            <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                              <p className="text-sm whitespace-pre-wrap">{evaluation.manager_evaluation_comments}</p>
+                              {evaluation.manager_evaluated_at && (
+                                <p className="text-xs text-purple-600 mt-2">
+                                  Evaluated on {formatDateForDisplay(evaluation.manager_evaluated_at, 'MMM dd, yyyy')}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                              <p className="text-sm text-muted-foreground italic">No manager evaluation provided yet.</p>
+                            </div>
+                          )}
+                          {editCapabilities.canEditManager && (
+                            <p className="text-xs text-muted-foreground">
+                              Provide specific feedback on the employee's performance and evidence provided.
+                            </p>
+                          )}
+                        </div>
+                      </>
+                    )}
+
+                    {/* Performance Summary */}
+                    {evaluation && (evaluation.selected_level || evaluation.final_rating) && (
+                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-center justify-between">
                           <div>
-                            <Label className="text-sm font-medium">Target</Label>
-                            <p className="text-sm mt-1 p-3 bg-muted rounded-lg break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>{goal.target}</p>
+                            <div className="text-sm font-medium text-blue-800">Performance Summary</div>
+                            {evaluation.selected_level && (
+                              <div className="text-xs text-blue-600">
+                                Level {evaluation.selected_level}: {evaluation.final_rating}
+                              </div>
+                            )}
                           </div>
-                          {goal.dependencies && (
-                            <div>
-                              <Label className="text-sm font-medium">Dependencies</Label>
-                              <p className="text-sm mt-1 p-3 bg-muted rounded-lg break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>{goal.dependencies}</p>
-                            </div>
-                          )}
+                          <div className="text-right">
+                            {evaluation.awarded_marks && (
+                              <div className="text-sm font-medium text-blue-600">
+                                {evaluation.awarded_marks} points
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
-
-                      {/* Performance Level Selection/Display */}
-                      <div className="space-y-3">
-                        <Label className="text-sm font-medium flex items-center gap-2">
-                          <Target className="h-4 w-4" />
-                          Performance Level Evaluation
-                          {editCapabilities.canEditManager && <span className="text-red-500">*</span>}
-                        </Label>
-                        {editCapabilities.canEditManager && (
-                          <p className="text-xs text-muted-foreground">
-                            Select the performance level that best matches the employee's evidence and achievement for this goal.
-                          </p>
-                        )}
-                        
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-                          {[1, 2, 3, 4, 5].map(level => {
-                            const marks = goal[`level_${level}_marks` as keyof typeof goal] as string || '';
-                            const points = goal[`level_${level}_points` as keyof typeof goal] as number || 0;
-                            const rating = goal[`level_${level}_rating` as keyof typeof goal] as string || '';
-                            const isSelected = evaluations[goal.id]?.selected_level === level;
-
-                            return (
-                              <div
-                                key={level}
-                                onClick={() => editCapabilities.canEditManager && handleLevelSelection(goal.id, level, goal)}
-                                className={`p-3 border rounded-lg transition-all ${
-                                  isSelected 
-                                    ? 'border-green-500 bg-green-50 shadow-md' 
-                                    : editCapabilities.canEditManager
-                                    ? 'border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50 cursor-pointer'
-                                    : 'border-gray-200 bg-white'
-                                } ${!editCapabilities.canEditManager ? 'cursor-default' : ''}`}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="font-medium text-sm">Level {level} - {rating}</div>
-                                    <div className="text-xs text-muted-foreground mt-1 whitespace-pre-line break-words" style={{ wordBreak: 'normal', overflowWrap: 'anywhere' }}>{marks}</div>
-                                  </div>
-                                  <div className="text-right flex-shrink-0 ml-2">
-                                    <div className="font-medium text-blue-600">{points} points</div>
-                                    {isSelected && (
-                                      <div className="text-green-600 font-medium text-xs mt-1">
-                                        ✓ Selected
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                        
-                        {evaluations[goal.id]?.selected_level && (
-                          <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                            <div className="text-sm font-medium text-green-800 flex items-center gap-2">
-                              <CheckCircle className="h-4 w-4" />
-                              Selected: Level {evaluations[goal.id].selected_level} - {evaluations[goal.id].final_rating}
-                            </div>
-                            <div className="text-xs text-green-600">
-                              Awarded: {evaluations[goal.id].awarded_marks} marks • {evaluations[goal.id].awarded_points} points
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Employee Evidence Section */}
-                      {editCapabilities.showEmployeeSection && (
-                        <>
-                          <Separator />
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium flex items-center gap-2">
-                              <MessageSquare className="h-4 w-4" />
-                              Employee Evidence & Comments
-                              {editCapabilities.canEditEmployee && <span className="text-red-500">*</span>}
-                            </Label>
-                            {editCapabilities.canEditEmployee ? (
-                              <Textarea
-                                value={evaluations[goal.id]?.employee_comments || ''}
-                                onChange={(e) => handleEvaluationChange(goal.id, 'employee_comments', e.target.value)}
-                                placeholder="Provide detailed evidence of your performance for this goal. Include specific achievements, metrics, examples, and any challenges faced..."
-                                rows={4}
-                                className="min-h-[100px]"
-                              />
-                            ) : evaluation?.employee_comments ? (
-                              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                                <p className="text-sm whitespace-pre-wrap">{evaluation.employee_comments}</p>
-                                {evaluation.employee_submitted_at && (
-                                  <p className="text-xs text-green-600 mt-2">
-                                    Submitted on {formatDateForDisplay(evaluation.employee_submitted_at, 'MMM dd, yyyy')}
-                                  </p>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                                <p className="text-sm text-muted-foreground italic">No employee evidence provided yet.</p>
-                              </div>
-                            )}
-                            {editCapabilities.canEditEmployee && (
-                              <p className="text-xs text-muted-foreground">
-                                Provide specific evidence of your performance and achievements for this goal.
-                              </p>
-                            )}
-                          </div>
-                        </>
-                      )}
-
-                      {/* Manager Evaluation Section */}
-                      {editCapabilities.showManagerSection && (
-                        <>
-                          <Separator />
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium flex items-center gap-2">
-                              <Edit className="h-4 w-4" />
-                              Manager Evaluation Comments
-                              {editCapabilities.canEditManager && <span className="text-red-500">*</span>}
-                            </Label>
-                            {editCapabilities.canEditManager ? (
-                              <Textarea
-                                value={evaluations[goal.id]?.manager_evaluation_comments || ''}
-                                onChange={(e) => handleEvaluationChange(goal.id, 'manager_evaluation_comments', e.target.value)}
-                                placeholder="Provide your detailed assessment of the employee's performance. Include feedback on their evidence, specific achievements, areas for improvement, and justification for the selected performance level..."
-                                rows={4}
-                                className="min-h-[100px]"
-                              />
-                            ) : evaluation?.manager_evaluation_comments ? (
-                              <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                                <p className="text-sm whitespace-pre-wrap">{evaluation.manager_evaluation_comments}</p>
-                                {evaluation.manager_evaluated_at && (
-                                  <p className="text-xs text-purple-600 mt-2">
-                                    Evaluated on {formatDateForDisplay(evaluation.manager_evaluated_at, 'MMM dd, yyyy')}
-                                  </p>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                                <p className="text-sm text-muted-foreground italic">No manager evaluation provided yet.</p>
-                              </div>
-                            )}
-                            {editCapabilities.canEditManager && (
-                              <p className="text-xs text-muted-foreground">
-                                Provide specific feedback on the employee's performance and evidence provided.
-                              </p>
-                            )}
-                          </div>
-                        </>
-                      )}
-
-                      {/* Performance Summary */}
-                      {evaluation && (evaluation.selected_level || evaluation.final_rating) && (
-                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="text-sm font-medium text-blue-800">Performance Summary</div>
-                              {evaluation.selected_level && (
-                                <div className="text-xs text-blue-600">
-                                  Level {evaluation.selected_level}: {evaluation.final_rating}
-                                </div>
-                              )}
-                            </div>
-                            <div className="text-right">
-                              {evaluation.awarded_marks && (
-                                <div className="text-sm font-medium text-blue-600">
-                                  {evaluation.awarded_marks} points
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                    )}
+                  </CollapsibleGoalView>
                 );
               })}
             </div>

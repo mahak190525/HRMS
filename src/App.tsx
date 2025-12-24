@@ -44,6 +44,7 @@ const BillingLogs = lazy(() => import('@/pages/bd/BillingLogs').then(m => ({ def
 const FinanceDashboard = lazy(() => import('@/pages/finance/FinanceDashboard').then(m => ({ default: m.FinanceDashboard })));
 const AllPayroll = lazy(() => import('@/pages/finance/AllPayroll').then(m => ({ default: m.AllPayroll })));
 const AllBilling = lazy(() => import('@/pages/finance/AllBilling').then(m => ({ default: m.AllBilling })));
+const InvoiceLogs = lazy(() => import('@/pages/finance/InvoiceLogs').then(m => ({ default: m.InvoiceLogs })));
 const PayrollLogs = lazy(() => import('@/pages/finance/PayrollLogs').then(m => ({ default: m.PayrollLogs })));
 const ATSDashboard = lazy(() => import('@/pages/ats/ATSDashboard').then(m => ({ default: m.ATSDashboard })));
 const CandidatesList = lazy(() => import('@/pages/ats/CandidatesList').then(m => ({ default: m.CandidatesList })));
@@ -310,6 +311,11 @@ function AppRoutes() {
         <Route path="finance/billing" element={
           <Suspense fallback={<LoadingSpinner size="lg" />}>
             <AllBilling />
+          </Suspense>
+        } />
+        <Route path="finance/invoice-logs" element={
+          <Suspense fallback={<LoadingSpinner size="lg" />}>
+            <InvoiceLogs />
           </Suspense>
         } />
         <Route path="finance/logs" element={
