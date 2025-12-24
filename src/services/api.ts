@@ -551,6 +551,128 @@ export const leaveApi = {
     return data;
   },
 
+  async getEmployeeApprovedLeaves(employeeId: string, startDate: string, endDate: string) {
+    const { data, error } = await supabase
+      .from('leave_applications')
+      .select(`
+        id,
+        start_date,
+        end_date,
+        is_half_day,
+        half_day_period,
+        leave_type:leave_types!leave_type_id(name, description)
+      `)
+      .eq('user_id', employeeId)
+      .eq('status', 'approved')
+      .or(`and(start_date.lte.${endDate},end_date.gte.${startDate})`) // Show overlapping leave periods
+      .order('start_date', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Function to enrich attendance data with leave information
+  async enrichAttendanceWithLeaveData(attendanceReports: any[]) {
+    try {
+      // Get all unique employee IDs and date ranges from the reports
+      const employeeIds = [...new Set(attendanceReports.map(r => r.user_id))];
+      
+      // Get the overall date range
+      const years = [...new Set(attendanceReports.map(r => r.year))];
+      const minYear = Math.min(...years);
+      const maxYear = Math.max(...years);
+      
+      // For each employee, get their leave data
+      const leaveDataMap = new Map();
+      
+      for (const employeeId of employeeIds) {
+        const startDate = `${minYear}-01-01`;
+        const endDate = `${maxYear}-12-31`;
+        
+        const leaves = await this.getEmployeeApprovedLeaves(employeeId, startDate, endDate);
+        leaveDataMap.set(employeeId, leaves);
+      }
+      
+      // Enrich each attendance report with leave data
+      return attendanceReports.map(report => {
+        const employeeLeaves = leaveDataMap.get(report.user_id) || [];
+        
+        // Calculate leave days for this specific month
+        const monthStart = new Date(report.year, report.month - 1, 1);
+        const monthEnd = new Date(report.year, report.month, 0);
+        
+        let leaveDays = 0;
+        let halfDayLeavesCount = 0;
+        
+        // Count leave days in this month
+        for (let day = 1; day <= monthEnd.getDate(); day++) {
+          const currentDate = new Date(report.year, report.month - 1, day);
+          const dayOfWeek = currentDate.getDay();
+          const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+          
+          // Only count working days
+          if (!isWeekend) {
+            const dateStr = currentDate.toISOString().split('T')[0];
+            
+            // Check if this date falls within any approved leave
+            const leaveApplication = employeeLeaves.find(leave => 
+              dateStr >= leave.start_date && dateStr <= leave.end_date
+            );
+            
+            if (leaveApplication) {
+              if (leaveApplication.is_half_day) {
+                // Half-day leave: count as 0.5
+                leaveDays += 0.5;
+                halfDayLeavesCount += 0.5;
+              } else {
+                // Full-day leave: count as 1.0
+                leaveDays += 1;
+              }
+            }
+          }
+        }
+        
+        // For half-day leaves: The daywise calculation correctly shows 0.5 days present for each half-day leave
+        // The issue: In main summary, if employee worked the other half, days_present counts it as 1.0 (from time entries)
+        // But it should be 0.5. If they didn't work, days_present is 0, but should be 0.5.
+        //
+        // The correct logic:
+        // - If they worked on half-day leave days: days_present includes those days as 1.0 each, but should be 0.5 each
+        //   So: days_present - (halfDayLeavesCount) + (halfDayLeavesCount * 0.5) = days_present - (halfDayLeavesCount * 0.5)
+        // - If they didn't work on half-day leave days: days_present doesn't include those days (0.0), but should be 0.5 each
+        //   So: days_present + (halfDayLeavesCount * 0.5)
+        //
+        // Since we can't check which days have entries, we'll use a heuristic:
+        // If days_present >= halfDayLeavesCount, assume they worked on those days, so subtract 0.5 for each
+        // If days_present < halfDayLeavesCount, assume they didn't work, so add 0.5 for each
+        let updatedDaysPresent;
+        if (report.days_present >= halfDayLeavesCount && halfDayLeavesCount > 0) {
+          // They likely worked on half-day leave days
+          // We counted those days as 1.0 each in days_present, but they should be 0.5 each
+          // halfDayLeavesCount is already the total (e.g., 0.5 for 1 leave)
+          // So: subtract the full count (1.0 per leave) and add back 0.5 per leave
+          // = days_present - (halfDayLeavesCount * 2) + halfDayLeavesCount = days_present - halfDayLeavesCount
+          updatedDaysPresent = report.days_present - halfDayLeavesCount;
+        } else {
+          // They likely didn't work on half-day leave days, so add 0.5 for each
+          updatedDaysPresent = report.days_present + halfDayLeavesCount;
+        }
+        
+        return {
+          ...report,
+          days_present: Math.max(0, updatedDaysPresent),
+          days_on_leave: leaveDays,
+          days_absent: Math.max(0, report.total_working_days - Math.max(0, updatedDaysPresent) - leaveDays)
+        };
+      });
+      
+    } catch (error) {
+      console.error('Error enriching attendance with leave data:', error);
+      // Return original data if enrichment fails
+      return attendanceReports;
+    }
+  },
+
   async previewSandwichLeaveCalculation(
     userId: string,
     startDate: string,
@@ -1582,9 +1704,10 @@ export const employeeApi = {
       const startDate = month
         ? new Date(year, month - 1, 1)
         : new Date(year, 0, 1);
+      // Set endDate to the end of the last day (23:59:59.999) to include all entries starting on the last day
       const endDate = month
-        ? new Date(year, month, 0) // Last day of the month
-        : new Date(year, 11, 31); // Last day of the year
+        ? new Date(year, month, 0, 23, 59, 59, 999) // Last day of the month at end of day
+        : new Date(year, 11, 31, 23, 59, 59, 999); // Last day of the year at end of day
 
       const attendanceReports = [];
 
@@ -1604,9 +1727,9 @@ export const employeeApi = {
                 user_id: employee.id,
                 year,
                 month,
-                total_working_days: this.getWorkingDaysInMonth(year, month, holidays),
+                total_working_days: employeeApi.getWorkingDaysInMonth(year, month, holidays),
                 days_present: 0,
-                days_absent: this.getWorkingDaysInMonth(year, month, holidays),
+                days_absent: employeeApi.getWorkingDaysInMonth(year, month, holidays),
                 days_on_leave: 0,
                 total_hours_worked: 0,
                 overtime_hours: 0,
@@ -1623,9 +1746,9 @@ export const employeeApi = {
                   user_id: employee.id,
                   year,
                   month: m,
-                  total_working_days: this.getWorkingDaysInMonth(year, m, holidays),
+                  total_working_days: employeeApi.getWorkingDaysInMonth(year, m, holidays),
                   days_present: 0,
-                  days_absent: this.getWorkingDaysInMonth(year, m, holidays),
+                  days_absent: employeeApi.getWorkingDaysInMonth(year, m, holidays),
                   days_on_leave: 0,
                   total_hours_worked: 0,
                   overtime_hours: 0,
@@ -1691,7 +1814,7 @@ export const employeeApi = {
             // Single month report
             const key = `${year}-${month}`;
             const monthData = monthlyData.get(key);
-            const workingDays = this.getWorkingDaysInMonth(year, month, holidays);
+            const workingDays = employeeApi.getWorkingDaysInMonth(year, month, holidays);
             const daysPresent = monthData ? monthData.daysWorked.size : 0;
             const totalHours = monthData ? monthData.totalHours : 0;
 
@@ -1702,9 +1825,9 @@ export const employeeApi = {
               total_working_days: workingDays,
               days_present: daysPresent,
               days_absent: Math.max(0, workingDays - daysPresent),
-              days_on_leave: 0, // We don't have leave data in time tracking
-              total_hours_worked: Math.round(totalHours * 100) / 100,
-              overtime_hours: Math.max(0, Math.round((totalHours - (daysPresent * 8)) * 100) / 100),
+              days_on_leave: 0, // Will be calculated separately
+              total_hours_worked: totalHours,
+              overtime_hours: Math.max(0, totalHours - (daysPresent * 8)),
               user: {
                 full_name: employee.full_name,
                 employee_id: employee.employee_id,
@@ -1716,7 +1839,7 @@ export const employeeApi = {
             for (let m = 1; m <= 12; m++) {
               const key = `${year}-${m}`;
               const monthData = monthlyData.get(key);
-              const workingDays = this.getWorkingDaysInMonth(year, m, holidays);
+              const workingDays = employeeApi.getWorkingDaysInMonth(year, m, holidays);
               const daysPresent = monthData ? monthData.daysWorked.size : 0;
               const totalHours = monthData ? monthData.totalHours : 0;
 
@@ -1727,9 +1850,9 @@ export const employeeApi = {
                 total_working_days: workingDays,
                 days_present: daysPresent,
                 days_absent: Math.max(0, workingDays - daysPresent),
-                days_on_leave: 0,
-                total_hours_worked: Math.round(totalHours * 100) / 100,
-                overtime_hours: Math.max(0, Math.round((totalHours - (daysPresent * 8)) * 100) / 100),
+                days_on_leave: 0, // Will be calculated separately
+                total_hours_worked: totalHours,
+                overtime_hours: Math.max(0, totalHours - (daysPresent * 8)),
                 user: {
                   full_name: employee.full_name,
                   employee_id: employee.employee_id,
@@ -1744,11 +1867,14 @@ export const employeeApi = {
         }
       }
 
-      return attendanceReports.sort((a, b) => {
+      const sortedReports = attendanceReports.sort((a, b) => {
         if (a.year !== b.year) return a.year - b.year;
         if (a.month !== b.month) return a.month - b.month;
         return (a.user?.full_name || '').localeCompare(b.user?.full_name || '');
       });
+
+      // Enrich with leave data
+      return await leaveApi.enrichAttendanceWithLeaveData(sortedReports);
 
     } catch (error) {
       console.error('Error in getAllEmployeesAttendanceFromSecondDB:', error);
@@ -1765,7 +1891,7 @@ export const employeeApi = {
     for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
       const dayOfWeek = date.getDay();
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6; // Sunday (0) or Saturday (6)
-      const { isHoliday } = this.isHoliday(date, holidays);
+      const { isHoliday } = employeeApi.isHoliday(date, holidays);
 
       if (!isWeekend && !isHoliday) {
         workingDays++;
@@ -1773,6 +1899,27 @@ export const employeeApi = {
     }
 
     return workingDays;
+  },
+
+  // Helper function to calculate leave days in a month (only counting working days)
+  calculateLeaveDaysInMonth(year: number, month: number, holidays: any[] = [], approvedLeaves: any[] = []): number {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0);
+    let leaveDays = 0;
+
+    for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+      const dayOfWeek = date.getDay();
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6; // Sunday (0) or Saturday (6)
+      const { isHoliday } = employeeApi.isHoliday(date, holidays);
+      const { isOnLeave } = employeeApi.isOnLeave(date, approvedLeaves);
+
+      // Only count leave days on working days (not weekends or holidays)
+      if (!isWeekend && !isHoliday && isOnLeave) {
+        leaveDays++;
+      }
+    }
+
+    return leaveDays;
   },
 
   async getEmployeeDaywiseAttendance(employeeId: string, year: number, month: number) {
@@ -1801,17 +1948,32 @@ export const employeeApi = {
         const daysInMonth = new Date(year, month, 0).getDate();
         const daywiseData = [];
 
+        // Get approved leaves for this employee for the month even if not in second DB
+        const monthStartDate = new Date(year, month - 1, 1);
+        const monthEndDate = new Date(year, month, 0, 23, 59, 59, 999);
+        // Get approved leaves for this employee for the month
+        const approvedLeaves = await leaveApi.getEmployeeApprovedLeaves(
+          employeeId,
+          monthStartDate.toISOString().split('T')[0],
+          monthEndDate.toISOString().split('T')[0]
+        );
+
         for (let day = 1; day <= daysInMonth; day++) {
           const date = new Date(year, month - 1, day);
           const dayOfWeek = date.getDay();
           const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-          const { isHoliday, holiday } = this.isHoliday(date, holidays);
+          const { isHoliday, holiday } = employeeApi.isHoliday(date, holidays);
+          const { isOnLeave, leaveApplication } = employeeApi.isOnLeave(date, approvedLeaves);
 
           let status = 'Absent';
           if (isWeekend) {
             status = 'Weekend';
           } else if (isHoliday) {
             status = 'Holiday';
+          } else if (isOnLeave && leaveApplication?.is_half_day) {
+            status = 'Half Day Leave';
+          } else if (isOnLeave) {
+            status = 'On Leave';
           }
 
           const isWorkingDay = !isWeekend && !isHoliday;
@@ -1823,12 +1985,20 @@ export const employeeApi = {
             isWeekend,
             isHoliday,
             holiday: holiday || null,
+            isOnLeave,
+            leaveApplication: leaveApplication || null,
             isWorkingDay,
             status,
             hoursWorked: 0,
             timeEntries: []
           });
         }
+
+        const workingDays = daywiseData.filter(d => d.isWorkingDay).length;
+        const fullLeaveDays = daywiseData.filter(d => d.isWorkingDay && d.status === 'On Leave').length;
+        const halfLeaveDays = daywiseData.filter(d => d.isWorkingDay && d.status === 'Half Day Leave').length;
+        const totalLeaveDays = fullLeaveDays + (halfLeaveDays * 0.5);
+        const daysPresent = halfLeaveDays * 0.5; // Only half-day leaves count as partial presence
 
         return {
           employee: {
@@ -1843,9 +2013,10 @@ export const employeeApi = {
           monthName: new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'long' }),
           daywiseData,
           summary: {
-            totalWorkingDays: daywiseData.filter(d => d.isWorkingDay).length,
-            daysPresent: 0,
-            daysAbsent: daywiseData.filter(d => d.isWorkingDay).length,
+            totalWorkingDays: workingDays,
+            daysPresent,
+            daysAbsent: Math.round((workingDays - daysPresent - totalLeaveDays) * 100) / 100,
+            daysOnLeave: Math.round(totalLeaveDays * 100) / 100,
             totalHours: 0,
             averageHoursPerDay: 0
           }
@@ -1856,7 +2027,16 @@ export const employeeApi = {
 
       // Get time entries for the specific month
       const startDate = new Date(year, month - 1, 1);
-      const endDate = new Date(year, month, 0);
+      // Set endDate to the end of the last day (23:59:59.999) to include all entries starting on the last day
+      // This ensures entries that start on the last day of the month are included in that month's attendance
+      const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+
+      // Get approved leaves for this employee for the month
+      const approvedLeaves = await leaveApi.getEmployeeApprovedLeaves(
+        employeeId,
+        startDate.toISOString().split('T')[0],
+        endDate.toISOString().split('T')[0]
+      );
 
       const { data: timeEntries, error: timeError } = await secondSupabase
         .from('time_entries')
@@ -1923,16 +2103,26 @@ export const employeeApi = {
         totalHours += dayHours;
 
         // Check if this date is a holiday
-        const { isHoliday, holiday } = this.isHoliday(date, holidays);
+        const { isHoliday, holiday } = employeeApi.isHoliday(date, holidays);
+        
+        // Check if this date is a leave day
+        const { isOnLeave, leaveApplication } = employeeApi.isOnLeave(date, approvedLeaves);
 
         let status = 'Absent';
         if (isWeekend) {
           status = 'Weekend';
         } else if (isHoliday) {
           status = 'Holiday';
+        } else if (isOnLeave && leaveApplication?.is_half_day) {
+          // Half-day leave takes priority over presence
+          status = 'Half Day Leave';
+          // Increment daysPresent by 0.5 for half-day leaves
+          daysPresent += 0.5;
         } else if (dayEntries.length > 0) {
           status = 'Present';
           daysPresent++;
+        } else if (isOnLeave) {
+          status = 'On Leave';
         }
 
         const isWorkingDay = !isWeekend && !isHoliday;
@@ -1944,6 +2134,8 @@ export const employeeApi = {
           isWeekend,
           isHoliday,
           holiday: holiday || null,
+          isOnLeave,
+          leaveApplication: leaveApplication || null,
           isWorkingDay,
           status,
           hoursWorked: Math.round(dayHours * 100) / 100,
@@ -1952,12 +2144,15 @@ export const employeeApi = {
             startTime: entry.start_time,
             duration: entry.duration,
             durationHours: Math.round((entry.duration / 3600) * 100) / 100,
-            formattedDuration: this.formatDurationFromSeconds(entry.duration || 0)
+            formattedDuration: employeeApi.formatDurationFromSeconds(entry.duration || 0)
           }))
         });
       }
 
       const workingDays = daywiseData.filter(d => d.isWorkingDay).length;
+      const fullLeaveDays = daywiseData.filter(d => d.isWorkingDay && d.status === 'On Leave').length;
+      const halfLeaveDays = daywiseData.filter(d => d.isWorkingDay && d.status === 'Half Day Leave').length;
+      const totalLeaveDays = fullLeaveDays + (halfLeaveDays * 0.5);
 
       return {
         employee: {
@@ -1974,7 +2169,8 @@ export const employeeApi = {
         summary: {
           totalWorkingDays: workingDays,
           daysPresent,
-          daysAbsent: workingDays - daysPresent,
+          daysAbsent: Math.round((workingDays - daysPresent - totalLeaveDays) * 100) / 100,
+          daysOnLeave: Math.round(totalLeaveDays * 100) / 100,
           totalHours: Math.round(totalHours * 100) / 100,
           averageHoursPerDay: daysPresent > 0 ? Math.round((totalHours / daysPresent) * 100) / 100 : 0
         }
@@ -2015,6 +2211,24 @@ export const employeeApi = {
     return {
       isHoliday: !!holiday,
       holiday
+    };
+  },
+
+  // Helper function to check if a date is a leave day
+  isOnLeave(date: Date, approvedLeaves: any[]): { isOnLeave: boolean; leaveApplication?: any } {
+    // Use local date formatting to avoid timezone issues
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+
+    const leaveApplication = approvedLeaves.find(leave => {
+      return dateStr >= leave.start_date && dateStr <= leave.end_date;
+    });
+
+    return {
+      isOnLeave: !!leaveApplication,
+      leaveApplication
     };
   }
 };

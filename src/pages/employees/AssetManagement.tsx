@@ -218,6 +218,7 @@ export function AssetManagement() {
   const { user } = useAuth();
   const permissions = useEmployeePermissions();
   const assetPermissions = useAssetManagementPermissions();
+
   const { data: assets } = useAssets();
   const { data: assignments, isLoading: assignmentsLoading } = useAssetAssignments();
   const { data: allAssignments } = useAllAssetAssignments(); // New: includes all assignments (active + returned)
@@ -249,7 +250,7 @@ export function AssetManagement() {
 
   // Check if user is a view-only manager (can view but not assign)
   // This is used throughout to determine if user should see filtered data
-  const isViewOnlyManager = permissions.canManageAssets && !assetPermissions.canAssignAssets;
+  const isViewOnlyManager = (permissions.canAccessAssetManagement || permissions.canManageAssets) && !assetPermissions.canAssignAssets;
   
   // Choose the appropriate data source based on user permissions
   // ROLE-CENTERED: Office Admin and IT Helpdesk see ALL requests of their allowed asset type
@@ -293,7 +294,7 @@ export function AssetManagement() {
   // Filter employees based on permissions
   // Office Admin and IT Helpdesk can assign to ANY employee
   // Other managers can only assign to their team members
-  const filteredEmployees = (permissions.canViewAllEmployees || assetPermissions.canAccessAssetManagement)
+  const filteredEmployees = (permissions.canViewAllEmployees || permissions.canAccessAssetManagement || assetPermissions.canAccessAssetManagement)
     ? employees 
     : employees?.filter((emp: any) => emp.manager_id === user?.id);
 
@@ -345,7 +346,7 @@ export function AssetManagement() {
   } else {
     // User-centered filtering: Managers (BDM, QAM, SDM, Finance Manager) see only their team's assignments
     // Check if user can view team employees (managers) or all employees (finance/admin)
-    if (permissions.canViewAllEmployees && !permissions.canAccessAssetManagement) {
+    if (permissions.canViewAllEmployees && !permissions.canAccessAssetManagement && !assetPermissions.canAccessAssetManagement) {
       // Finance Manager or other roles with canViewAllEmployees but not role-centered access
       // For asset management, they should see only their team's assignments
       assignmentsData = (allAssignments || []).filter(assignment => assignment.user?.manager_id === user?.id);
@@ -391,7 +392,7 @@ export function AssetManagement() {
     // User-centered filtering: Managers (BDM, QAM, SDM, Finance Manager) see ONLY assets assigned to their team members
     // They should NOT see available/unassigned assets
     // Check if user can view team employees (managers) or all employees (finance/admin)
-    if (permissions.canViewAllEmployees && !permissions.canAccessAssetManagement) {
+    if (permissions.canViewAllEmployees && !permissions.canAccessAssetManagement && !assetPermissions.canAccessAssetManagement) {
       // Finance Manager or other roles with canViewAllEmployees but not role-centered access
       // For asset management, they should see ONLY assets assigned to their team members
       roleBasedFilteredAssets = (assets || []).filter(asset => {
@@ -475,6 +476,7 @@ export function AssetManagement() {
     canManageAssets: permissions.canManageAssets,
     canAssignAssets: assetPermissions.canAssignAssets,
     canAccessAssetManagement: assetPermissions.canAccessAssetManagement,
+    permissionsCanAccessAssetManagement: permissions.canAccessAssetManagement,
     managerAssetRequestsCount: managerAssetRequests?.length || 0,
     allAssetRequestsCount: allAssetRequests?.length || 0,
     assetRequestsDataCount: assetRequestsData?.length || 0,
@@ -1509,7 +1511,8 @@ export function AssetManagement() {
   }
   
   // Check if user has permission to access asset management
-  if (!permissions.canManageAssets) {
+  // Use the specific asset management permission OR the general asset management permission
+  if (!permissions.canAccessAssetManagement && !permissions.canManageAssets) {
     return (
       <div className="flex items-center justify-center py-8">
         <div className="text-center">
@@ -1742,12 +1745,6 @@ export function AssetManagement() {
             </DialogContent>
           </Dialog>
           <Dialog open={isCreateVMDialogOpen} onOpenChange={setIsCreateVMDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Server className="h-4 w-4 mr-2" />
-                Create VM
-              </Button>
-            </DialogTrigger>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create New Virtual Machine</DialogTitle>
@@ -3059,14 +3056,24 @@ export function AssetManagement() {
       {/* Main Asset Management Tabs */}
       <Tabs defaultValue="assignments" className="w-full">
         <TabsList className={`grid w-full ${
-          // View-only managers (can view but not assign) should not see "All Assets" and "Archived Assets" tabs
-          (permissions.canManageAssets && !assetPermissions.canAssignAssets) 
-            ? 'grid-cols-4' 
-            : 'grid-cols-6'
+          // Calculate grid columns based on user permissions
+          assetPermissions.isITHelpdesk 
+            ? 'grid-cols-5'  // IT Helpdesk: Assignments, VMs, Requests, Maintenance, History
+            : ((permissions.canAccessAssetManagement || permissions.canManageAssets) && !assetPermissions.canAssignAssets) 
+              ? 'grid-cols-4' 
+              : 'grid-cols-6'
         }`}>
-          <TabsTrigger value="assignments" className="cursor-pointer">Asset Assignments</TabsTrigger>
-          {/* Hide "All Assets" and "Archived Assets" tabs for view-only managers */}
-          {!(permissions.canManageAssets && !assetPermissions.canAssignAssets) && (
+          <TabsTrigger value="assignments" className="cursor-pointer">
+            {assetPermissions.isITHelpdesk ? 'VM Assignments' : 'Asset Assignments'}
+          </TabsTrigger>
+          
+          {/* IT Helpdesk gets a dedicated VM tab at main level */}
+          {assetPermissions.isITHelpdesk && (
+            <TabsTrigger value="virtual-machines" className="cursor-pointer">Virtual Machines</TabsTrigger>
+          )}
+          
+          {/* Hide "All Assets" and "Archived Assets" tabs for view-only managers and IT Helpdesk */}
+          {!assetPermissions.isITHelpdesk && !(((permissions.canAccessAssetManagement || permissions.canManageAssets) && !assetPermissions.canAssignAssets)) && (
             <>
               <TabsTrigger value="assets" className="cursor-pointer">All Assets</TabsTrigger>
               <TabsTrigger value="archived" className="cursor-pointer">Archived Assets</TabsTrigger>
@@ -3520,6 +3527,207 @@ export function AssetManagement() {
           </Card>
         </TabsContent>
         
+        {/* Main-level Virtual Machines tab for IT Helpdesk */}
+        <TabsContent value="virtual-machines">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Virtual Machines</CardTitle>
+                  <CardDescription>
+                    All Virtual Machine assets and their configurations
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  {assetPermissions.canCreateVMs && (
+                    <Button
+                      onClick={() => setIsCreateVMDialogOpen(true)}
+                    >
+                      <Server className="h-4 w-4 mr-2" />
+                      Create VM
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleExportVMs('excel')}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Excel
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleExportVMs('pdf')}
+                  >
+                    <FileDown className="h-4 w-4 mr-2" />
+                    PDF
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {/* Filters */}
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6 p-4 bg-muted/50 rounded-lg">
+                <div>
+                  <Label htmlFor="filter-vm-number-main" className='mb-2'>VM Number</Label>
+                  <Input
+                    id="filter-vm-number-main"
+                    placeholder="Filter by VM number"
+                    value={vmFilters.vm_number}
+                    onChange={(e) => setVMFilters(prev => ({ ...prev, vm_number: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="filter-vm-location-main" className='mb-2'>Location</Label>
+                  <Input
+                    id="filter-vm-location-main"
+                    placeholder="Filter by location"
+                    value={vmFilters.vm_location}
+                    onChange={(e) => setVMFilters(prev => ({ ...prev, vm_location: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="filter-vm-project-main" className='mb-2'>Project</Label>
+                  <Input
+                    id="filter-vm-project-main"
+                    placeholder="Filter by project"
+                    value={vmFilters.project_name}
+                    onChange={(e) => setVMFilters(prev => ({ ...prev, project_name: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="filter-vm-provider-main" className='mb-2'>Cloud Provider</Label>
+                  <Select
+                    value={vmFilters.cloud_provider}
+                    onValueChange={(value) => setVMFilters(prev => ({ ...prev, cloud_provider: value }))}
+                  >
+                    <SelectTrigger >
+                      <SelectValue placeholder="All Providers" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Providers</SelectItem>
+                      <SelectItem value="aws">AWS</SelectItem>
+                      <SelectItem value="azure">Microsoft Azure</SelectItem>
+                      <SelectItem value="gcp">Google Cloud Platform</SelectItem>
+                      <SelectItem value="on_prem">On-Premises</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="filter-vm-audit-main" className='mb-2'>Audit Status</Label>
+                  <Select
+                    value={vmFilters.audit_status}
+                    onValueChange={(value) => setVMFilters(prev => ({ ...prev, audit_status: value }))}
+                  >
+                    <SelectTrigger >
+                      <SelectValue placeholder="All Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="compliant">Compliant</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="non_compliant">Non-Compliant</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => setVMFilters({
+                      vm_number: '',
+                      vm_location: '',
+                      project_name: '',
+                      cloud_provider: 'all',
+                      audit_status: 'all',
+                      purpose: ''
+                    })}
+                  >
+                    <FilterIcon className="h-4 w-4 mr-2" />
+                    Clear
+                  </Button>
+                </div>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>VM Number</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Project</TableHead>
+                    <TableHead>Cloud Provider</TableHead>
+                    <TableHead>Audit Status</TableHead>
+                    <TableHead>IP Address</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredVMs?.map((vm: any) => (
+                    <TableRow key={vm.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Server className="h-5 w-5 text-muted-foreground" />
+                          <div className="font-medium">VM-{vm.vm_number || 'N/A'}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4 text-muted-foreground" />
+                          {vm.vm_location || 'N/A'}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">{vm.project_name || 'N/A'}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {vm.cloud_provider || 'N/A'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={
+                          vm.audit_status === 'passed' ? 'default' : 
+                          vm.audit_status === 'pending' ? 'secondary' : 
+                          vm.audit_status === 'failed' ? 'destructive' : 'outline'
+                        }>
+                          {vm.audit_status || 'N/A'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <code className="text-sm bg-muted px-2 py-1 rounded">
+                          {vm.ip_address || 'N/A'}
+                        </code>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          {assetPermissions.canViewVMDetails && (
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => handleViewVMDirect(vm)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          )}
+                          
+                          {assetPermissions.canEditVMs && (
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => handleEditVMDirect(vm)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
         <TabsContent value="assets">
           {/* Sub-tabs for Assets */}
           <Tabs 
@@ -3799,6 +4007,14 @@ export function AssetManagement() {
                       </CardDescription>
                     </div>
                     <div className="flex gap-2">
+                      {assetPermissions.canCreateVMs && (
+                        <Button
+                          onClick={() => setIsCreateVMDialogOpen(true)}
+                        >
+                          <Server className="h-4 w-4 mr-2" />
+                          Create VM
+                        </Button>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"
@@ -3951,21 +4167,25 @@ export function AssetManagement() {
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-2">
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                onClick={() => handleViewVMDirect(vm)}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
+                              {assetPermissions.canViewVMDetails && (
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={() => handleViewVMDirect(vm)}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              )}
                               
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                onClick={() => handleEditVMDirect(vm)}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
+                              {assetPermissions.canEditVMs && (
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={() => handleEditVMDirect(vm)}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>

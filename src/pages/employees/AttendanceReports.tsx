@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { formatDateForDisplay, getCurrentISTDate } from '@/utils/dateUtils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { employeeApi } from '@/services/api';
 
 export function AttendanceReports() {
   const [attendanceYear, setAttendanceYear] = useState(getCurrentISTDate().getFullYear());
@@ -33,6 +34,11 @@ export function AttendanceReports() {
     selectedEmployee?.year || attendanceYear,
     selectedEmployee?.month || 1
   );
+
+  // Helper function to format numbers with decimals (up to 2 places) only when needed
+  const formatNumber = (value: number): string => {
+    return value % 1 === 0 ? value.toString() : value.toFixed(2);
+  };
 
   const handleGenerateReport = () => {
     console.log('Generating attendance report for:', { year: attendanceYear, month: attendanceMonth });
@@ -86,6 +92,73 @@ export function AttendanceReports() {
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadEmployeeDetailedReport = async (userId: string, employeeName: string, month: number, year: number) => {
+    try {
+      console.log(`Downloading detailed report for ${employeeName} (${userId}) for ${month}/${year}`);
+      
+      // Find the employee record to get the employee ID for display
+      const employeeRecord = attendanceData?.find(record => record.user_id === userId);
+      const displayEmployeeId = employeeRecord?.user?.employee_id || userId;
+      
+      // Fetch the daywise data directly using the API
+      const employeeDaywiseData = await employeeApi.getEmployeeDaywiseAttendance(userId, year, month);
+      
+      if (!employeeDaywiseData || !employeeDaywiseData.daywiseData) {
+        console.error('No daywise data available for download');
+        alert('No daywise data available for this employee and period.');
+        return;
+      }
+
+      // Create detailed CSV content
+      const headers = [
+        'Employee ID', 
+        'Employee Name', 
+        'Date', 
+        'Day', 
+        'Status', 
+        'Hours Worked', 
+        'Time Entries',
+        'Holiday Name',
+        'Leave Type'
+      ];
+      
+      const csvContent = [
+        headers.join(','),
+        ...employeeDaywiseData.daywiseData.map(day => [
+          `"${displayEmployeeId}"`,
+          `"${employeeName}"`,
+          `"${formatDateForDisplay(new Date(day.date), 'yyyy-MM-dd')}"`,
+          `"${day.dayName}"`,
+          `"${day.status}"`,
+          day.hoursWorked,
+          `"${day.timeEntries.map((entry: any) => `Started: ${formatDateForDisplay(new Date(entry.startTime), 'HH:mm')} - ${entry.formattedDuration}`).join('; ')}"`,
+          `"${day.holiday?.name || ''}"`,
+          `"${day.leaveApplication?.leave_type?.name || ''}"`
+        ].join(','))
+      ].join('\n');
+
+      // Download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      
+      // Create descriptive filename
+      const monthName = formatDateForDisplay(new Date(year, month - 1, 1), 'MMMM');
+      a.download = `${employeeName.replace(/[^a-zA-Z0-9]/g, '_')}_detailed_report_${monthName}_${year}.csv`;
+      
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      console.log('Download completed successfully');
+    } catch (error) {
+      console.error('Error downloading detailed report:', error);
+      alert('Failed to download the report. Please try again.');
+    }
   };
 
   return (
@@ -159,7 +232,7 @@ export function AttendanceReports() {
           ) : attendanceData && attendanceData.length > 0 ? (
             <div className="space-y-6">
               {/* Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              `<div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                 <Card>
                   <CardContent className="p-4">
                     <div className="text-2xl font-bold">{attendanceData.length}</div>
@@ -169,7 +242,7 @@ export function AttendanceReports() {
                 <Card>
                   <CardContent className="p-4">
                     <div className="text-2xl font-bold text-green-600">
-                      {attendanceData.reduce((sum, record) => sum + record.days_present, 0)}
+                      {formatNumber(attendanceData.reduce((sum, record) => sum + record.days_present, 0))}
                     </div>
                     <div className="text-sm text-muted-foreground">Total Present Days</div>
                   </CardContent>
@@ -177,15 +250,23 @@ export function AttendanceReports() {
                 <Card>
                   <CardContent className="p-4">
                     <div className="text-2xl font-bold text-red-600">
-                      {attendanceData.reduce((sum, record) => sum + record.days_absent, 0)}
+                      {formatNumber(attendanceData.reduce((sum, record) => sum + record.days_absent, 0))}
                     </div>
                     <div className="text-sm text-muted-foreground">Total Absent Days</div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4">
+                    <div className="text-2xl font-bold text-purple-600">
+                      {formatNumber(attendanceData.reduce((sum, record) => sum + (record.days_on_leave || 0), 0))}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Total Leave Days</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
                     <div className="text-2xl font-bold text-blue-600">
-                      {Math.round(attendanceData.reduce((sum, record) => sum + record.total_hours_worked, 0))}h
+                      {formatNumber(attendanceData.reduce((sum, record) => sum + record.total_hours_worked, 0))}h
                     </div>
                     <div className="text-sm text-muted-foreground">Total Hours Worked</div>
                   </CardContent>
@@ -193,11 +274,11 @@ export function AttendanceReports() {
                 <Card>
                   <CardContent className="p-4">
                     <div className="text-2xl font-bold text-orange-600">
-                      {Math.round(attendanceData.reduce((sum, record) => sum + record.overtime_hours, 0))}h
+                      {formatNumber(attendanceData.reduce((sum, record) => sum + record.overtime_hours, 0))}h
                     </div>
                     <div className="text-sm text-muted-foreground">Total Overtime</div>
                   </CardContent>
-                </Card>
+                </Card>`
               </div>
 
               {/* Attendance Table */}
@@ -230,36 +311,52 @@ export function AttendanceReports() {
                     <TableCell>{record.total_working_days}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-green-600">
-                        {record.days_present}
+                        {formatNumber(record.days_present)}
                       </Badge>
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-red-600">
-                        {record.days_absent}
+                        {formatNumber(record.days_absent)}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="text-blue-600">
-                        {record.days_on_leave}
+                      <Badge variant="outline" className="text-purple-600">
+                        {formatNumber(record.days_on_leave || 0)}
                       </Badge>
                     </TableCell>
-                    <TableCell>{record.total_hours_worked}h</TableCell>
-                    <TableCell>{record.overtime_hours}h</TableCell>
+                    <TableCell>{formatNumber(record.total_hours_worked)}h</TableCell>
+                    <TableCell>{formatNumber(record.overtime_hours)}h</TableCell>
                     <TableCell>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleViewDaywise(
-                          record.user_id,
-                          record.user?.full_name || 'Unknown',
-                          record.month,
-                          record.year
-                        )}
-                        className="h-8 w-8 p-0"
-                        title="View daywise attendance details"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleViewDaywise(
+                            record.user_id,
+                            record.user?.full_name || 'Unknown',
+                            record.month,
+                            record.year
+                          )}
+                          className="h-8 w-8 p-0"
+                          title="View daywise attendance details"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDownloadEmployeeDetailedReport(
+                            record.user_id,
+                            record.user?.full_name || 'Unknown',
+                            record.month,
+                            record.year
+                          )}
+                          className="h-8 w-8 p-0"
+                          title="Download detailed attendance report"
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -288,13 +385,13 @@ export function AttendanceReports() {
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
               <span>Daywise Attendance - {selectedEmployee?.name}</span>
-              <Button
+              {/* <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setIsDaywiseModalOpen(false)}
               >
                 Close
-              </Button>
+              </Button> */}
             </DialogTitle>
             <DialogDescription>
               Daily attendance details for {selectedEmployee && daywiseData ? `${daywiseData.monthName} ${daywiseData.year}` : ''}
@@ -313,22 +410,34 @@ export function AttendanceReports() {
           ) : daywiseData ? (
             <div className="space-y-6">
               {/* Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
                 <Card>
                   <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-green-600">{daywiseData.summary.daysPresent}</div>
+                    <div className="text-2xl font-bold text-green-600">{daywiseData.summary.daysPresent % 1 === 0 ? daywiseData.summary.daysPresent : daywiseData.summary.daysPresent.toFixed(1)}</div>
                     <div className="text-sm text-muted-foreground">Days Present</div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-red-600">{daywiseData.summary.daysAbsent}</div>
+                    <div className="text-2xl font-bold text-red-600">{daywiseData.summary.daysAbsent % 1 === 0 ? daywiseData.summary.daysAbsent : daywiseData.summary.daysAbsent.toFixed(1)}</div>
                     <div className="text-sm text-muted-foreground">Days Absent</div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-purple-600">{daywiseData.daywiseData.filter(d => d.status === 'Holiday').length}</div>
+                    <div className="text-2xl font-bold text-purple-600">{(daywiseData.summary.daysOnLeave || 0) % 1 === 0 ? (daywiseData.summary.daysOnLeave || 0) : (daywiseData.summary.daysOnLeave || 0).toFixed(1)}</div>
+                    <div className="text-sm text-muted-foreground">Days On Leave</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="text-2xl font-bold text-orange-600">{daywiseData.daywiseData.filter(d => d.status === 'Half Day Leave').length}</div>
+                    <div className="text-sm text-muted-foreground">Half Day Leaves</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="text-2xl font-bold text-indigo-600">{daywiseData.daywiseData.filter(d => d.status === 'Holiday').length}</div>
                     <div className="text-sm text-muted-foreground">Holidays</div>
                   </CardContent>
                 </Card>
@@ -340,7 +449,7 @@ export function AttendanceReports() {
                 </Card>
                 <Card>
                   <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-orange-600">{daywiseData.summary.averageHoursPerDay}h</div>
+                    <div className="text-2xl font-bold text-teal-600">{daywiseData.summary.averageHoursPerDay}h</div>
                     <div className="text-sm text-muted-foreground">Avg Hours/Day</div>
                   </CardContent>
                 </Card>
@@ -374,10 +483,17 @@ export function AttendanceReports() {
                           className={
                             day.status === 'Present' ? 'text-green-600 border-green-200' :
                             day.status === 'Absent' ? 'text-red-600 border-red-200' :
-                            day.status === 'Holiday' ? 'text-purple-600 border-purple-200' :
+                            day.status === 'On Leave' ? 'text-purple-600 border-purple-200' :
+                            day.status === 'Half Day Leave' ? 'text-orange-600 border-orange-200' :
+                            day.status === 'Holiday' ? 'text-indigo-600 border-indigo-200' :
                             'text-gray-600 border-gray-200'
                           }
-                          title={day.status === 'Holiday' && day.holiday ? day.holiday.name : undefined}
+                          title={
+                            day.status === 'Holiday' && day.holiday ? day.holiday.name :
+                            day.status === 'On Leave' && day.leaveApplication ? `${day.leaveApplication.leave_type?.name || 'Leave'}` :
+                            day.status === 'Half Day Leave' && day.leaveApplication ? `${day.leaveApplication.leave_type?.name || 'Half Day Leave'} (${day.leaveApplication.half_day_period || 'Half Day'})` :
+                            undefined
+                          }
                         >
                           {day.status}
                         </Badge>

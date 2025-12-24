@@ -13,7 +13,12 @@ import {
   Download,
   Trash2,
   Plus,
-  Eye
+  Eye,
+  Upload,
+  X,
+  FileText,
+  Image,
+  File
 } from 'lucide-react';
 
 interface IncidentsViewProps {
@@ -23,6 +28,7 @@ interface IncidentsViewProps {
   updateIncident: any;
   deleteIncident: any;
   uploadIncidentAttachment: any;
+  uploadIncidentAttachments?: any;
   removeIncidentAttachment: any;
   permissions: any;
   mode: 'view' | 'edit';
@@ -35,6 +41,7 @@ export function IncidentsView({
   updateIncident,
   deleteIncident,
   uploadIncidentAttachment,
+  uploadIncidentAttachments,
   removeIncidentAttachment,
   permissions,
   mode
@@ -48,6 +55,7 @@ export function IncidentsView({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingData, setEditingData] = useState<Record<string, any>>({});
   const [uploadingFiles, setUploadingFiles] = useState<Record<string, boolean>>({});
+  const [selectedFiles, setSelectedFiles] = useState<Record<string, File[]>>({});
 
   const handleAddIncident = async () => {
     if (!newIncident.title.trim() || !newIncident.incident_date) {
@@ -107,35 +115,115 @@ export function IncidentsView({
     }
   };
 
-  const handleFileUpload = async (incidentId: string, file: File, incidentTitle: string) => {
+  const handleFileSelect = (incidentId: string, files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    const fileArray = Array.from(files);
+    const existingAttachments = employeeIncidents.find(inc => inc.id === incidentId)?.attachments?.length || 0;
+    const currentSelected = selectedFiles[incidentId]?.length || 0;
+    const totalFiles = existingAttachments + currentSelected + fileArray.length;
+
+    if (totalFiles > 10) {
+      toast.error(`Cannot select ${fileArray.length} files. Maximum 10 attachments per incident (${existingAttachments + currentSelected} already selected/uploaded)`);
+      return;
+    }
+
+    // Validate file sizes (10MB limit per file)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    for (const file of fileArray) {
+      if (file.size > maxSize) {
+        toast.error(`File "${file.name}" is too large. Maximum size is 10MB`);
+        return;
+      }
+    }
+
+    setSelectedFiles(prev => ({
+      ...prev,
+      [incidentId]: [...(prev[incidentId] || []), ...fileArray]
+    }));
+  };
+
+  const handleRemoveSelectedFile = (incidentId: string, fileIndex: number) => {
+    setSelectedFiles(prev => ({
+      ...prev,
+      [incidentId]: prev[incidentId]?.filter((_, index) => index !== fileIndex) || []
+    }));
+  };
+
+  const handleFileUpload = async (incidentId: string, incidentTitle: string) => {
+    const files = selectedFiles[incidentId];
+    if (!files || files.length === 0) {
+      toast.error('Please select files to upload');
+      return;
+    }
+
+    if (!user) {
+      toast.error('User not authenticated');
+      return;
+    }
+
     setUploadingFiles(prev => ({ ...prev, [incidentId]: true }));
     try {
-      await uploadIncidentAttachment.mutateAsync({
-        incidentId,
-        file,
-        employeeId: employee.id,
-        incidentTitle
-      });
+      if (uploadIncidentAttachments) {
+        await uploadIncidentAttachments.mutateAsync({
+          incidentId,
+          files,
+          employeeId: employee.id,
+          incidentTitle,
+          uploadedBy: user.id
+        });
+      } else {
+        // Fallback to single file upload for backward compatibility
+        for (const file of files) {
+          await uploadIncidentAttachment.mutateAsync({
+            incidentId,
+            file,
+            employeeId: employee.id,
+            incidentTitle,
+            uploadedBy: user.id
+          });
+        }
+      }
+      // Clear selected files after successful upload
+      setSelectedFiles(prev => ({ ...prev, [incidentId]: [] }));
     } catch (error) {
-      console.error('Failed to upload attachment:', error);
+      console.error('Failed to upload attachments:', error);
     } finally {
       setUploadingFiles(prev => ({ ...prev, [incidentId]: false }));
     }
   };
 
-  const handleRemoveAttachment = async (incidentId: string) => {
+  const handleRemoveAttachment = async (attachmentId: string) => {
     if (!confirm('Are you sure you want to remove this attachment?')) {
       return;
     }
 
     try {
       await removeIncidentAttachment.mutateAsync({
-        incidentId,
+        attachmentId,
         employeeId: employee.id
       });
     } catch (error) {
       console.error('Failed to remove attachment:', error);
     }
+  };
+
+  const getFileIcon = (mimeType: string) => {
+    if (mimeType.startsWith('image/')) {
+      return <Image className="h-4 w-4" />;
+    } else if (mimeType === 'application/pdf') {
+      return <FileText className="h-4 w-4" />;
+    } else {
+      return <File className="h-4 w-4" />;
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   return (
@@ -266,8 +354,135 @@ export function IncidentsView({
 
                   {/* File Upload/Management */}
                   <div>
-                    <p className="text-sm font-medium text-gray-700 mb-2">Attachment:</p>
-                    {incident.attachment_file_url ? (
+                    <p className="text-sm font-medium text-gray-700 mb-2">
+                      Attachments ({(incident.attachments?.length || 0) + (selectedFiles[incident.id]?.length || 0)}/10):
+                    </p>
+                    
+                    {/* Existing Attachments */}
+                    {incident.attachments && incident.attachments.length > 0 && (
+                      <div className="space-y-2 mb-3">
+                        {incident.attachments.map((attachment: any) => (
+                          <div key={attachment.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                            <div className="flex items-center gap-2">
+                              {getFileIcon(attachment.mime_type)}
+                              <span className="text-sm font-medium truncate max-w-xs">
+                                {attachment.file_name.replace(/^incident_\d+_\d+_/, '')}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                ({formatFileSize(attachment.file_size)})
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => window.open(attachment.file_url, '_blank')}
+                                className="h-8 w-8 p-0"
+                                title="View"
+                              >
+                                <Eye className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const link = document.createElement('a');
+                                  link.href = attachment.file_url;
+                                  link.download = attachment.file_name;
+                                  link.click();
+                                }}
+                                className="h-8 w-8 p-0"
+                                title="Download"
+                              >
+                                <Download className="h-3 w-3" />
+                              </Button>
+                              {permissions.canManageAccess && mode === 'edit' && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleRemoveAttachment(attachment.id)}
+                                  className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                                  title="Remove"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Selected Files Preview */}
+                    {selectedFiles[incident.id] && selectedFiles[incident.id].length > 0 && (
+                      <div className="space-y-2 mb-3">
+                        <p className="text-xs text-gray-600">Selected files:</p>
+                        {selectedFiles[incident.id].map((file, index) => (
+                          <div key={index} className="flex items-center justify-between p-2 bg-blue-50 rounded-lg">
+                            <div className="flex items-center gap-2">
+                              {getFileIcon(file.type)}
+                              <span className="text-sm font-medium truncate max-w-xs">
+                                {file.name}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                ({formatFileSize(file.size)})
+                              </span>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveSelectedFile(incident.id, index)}
+                              className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                              title="Remove"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* File Upload Controls */}
+                    {permissions.canManageAccess && mode === 'edit' && (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="file"
+                            multiple
+                            onChange={(e) => handleFileSelect(incident.id, e.target.files)}
+                            disabled={uploadingFiles[incident.id]}
+                            className="max-w-xs"
+                            title="Select multiple files (Max 10MB each, 10 files total)"
+                          />
+                          {selectedFiles[incident.id] && selectedFiles[incident.id].length > 0 && (
+                            <Button
+                              onClick={() => handleFileUpload(incident.id, incident.title)}
+                              disabled={uploadingFiles[incident.id]}
+                              size="sm"
+                              className="flex items-center gap-2"
+                            >
+                              {uploadingFiles[incident.id] ? (
+                                <>
+                                  <LoadingSpinner size="sm" />
+                                  Uploading...
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="h-3 w-3" />
+                                  Upload ({selectedFiles[incident.id].length})
+                                </>
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          Select up to {10 - (incident.attachments?.length || 0)} more files (any type, max 10MB each)
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Legacy single attachment support */}
+                    {incident.attachment_file_url && !incident.attachments && (
                       <div className="flex items-center gap-2">
                         <Button
                           variant="outline"
@@ -292,43 +507,12 @@ export function IncidentsView({
                           <Download className="h-3 w-3" />
                           Download
                         </Button>
-                        {permissions.canManageAccess && mode === 'edit' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleRemoveAttachment(incident.id)}
-                            className="flex items-center gap-2 text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                            Remove
-                          </Button>
-                        )}
                         {incident.attachment_file_size && (
                           <span className="text-xs text-gray-500">
                             ({(incident.attachment_file_size / 1024 / 1024).toFixed(2)} MB)
                           </span>
                         )}
                       </div>
-                    ) : (
-                      permissions.canManageAccess && mode === 'edit' && (
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="file"
-                            accept=".pdf"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                handleFileUpload(incident.id, file, incident.title);
-                              }
-                            }}
-                            disabled={uploadingFiles[incident.id]}
-                            className="max-w-xs"
-                          />
-                          {uploadingFiles[incident.id] && (
-                            <LoadingSpinner />
-                          )}
-                        </div>
-                      )
                     )}
                   </div>
 

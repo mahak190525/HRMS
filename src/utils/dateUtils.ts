@@ -106,8 +106,17 @@ export function isPastDate(date: Date | string): boolean {
  * Format date for display in IST timezone
  * This ensures all displayed dates are consistently in IST
  */
-export function formatDateForDisplay(date: Date | string, formatStr?: string): string {
+export function formatDateForDisplay(date: Date | string | null | undefined, formatStr?: string): string {
+  if (!date) {
+    return 'N/A';
+  }
+  
   const dateObj = typeof date === 'string' ? new Date(date) : date;
+  
+  // Check if the date is valid
+  if (isNaN(dateObj.getTime())) {
+    return 'Invalid Date';
+  }
   
   // Convert to IST for consistent display
   const istDate = convertToIST(dateObj);

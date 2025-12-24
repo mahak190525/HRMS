@@ -107,7 +107,44 @@ export function useDeleteIncident() {
   });
 }
 
-// Hook to upload attachment
+// Hook to upload multiple attachments
+export function useUploadIncidentAttachments() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ 
+      incidentId, 
+      files, 
+      employeeId, 
+      incidentTitle,
+      uploadedBy 
+    }: { 
+      incidentId: string; 
+      files: File[]; 
+      employeeId: string; 
+      incidentTitle: string;
+      uploadedBy: string;
+    }) => IncidentService.uploadAttachments(incidentId, files, employeeId, incidentTitle, uploadedBy),
+    onSuccess: (result, variables) => {
+      if (result.success) {
+        // Invalidate and refetch incidents for this employee
+        queryClient.invalidateQueries({ 
+          queryKey: ['employee-incidents', variables.employeeId] 
+        });
+        const count = result.uploadedCount || variables.files.length;
+        toast.success(`${count} attachment${count > 1 ? 's' : ''} uploaded successfully!`);
+      } else {
+        toast.error(result.error || 'Upload failed');
+      }
+    },
+    onError: (error: any) => {
+      console.error('Upload attachments error:', error);
+      toast.error(`Failed to upload attachments: ${error.message || 'Unknown error'}`);
+    },
+  });
+}
+
+// Hook to upload single attachment (backward compatibility)
 export function useUploadIncidentAttachment() {
   const queryClient = useQueryClient();
 
@@ -116,13 +153,15 @@ export function useUploadIncidentAttachment() {
       incidentId, 
       file, 
       employeeId, 
-      incidentTitle 
+      incidentTitle,
+      uploadedBy 
     }: { 
       incidentId: string; 
       file: File; 
       employeeId: string; 
-      incidentTitle: string; 
-    }) => IncidentService.uploadAttachment(incidentId, file, employeeId, incidentTitle),
+      incidentTitle: string;
+      uploadedBy?: string;
+    }) => IncidentService.uploadAttachment(incidentId, file, employeeId, incidentTitle, uploadedBy),
     onSuccess: (result, variables) => {
       if (result.success) {
         // Invalidate and refetch incidents for this employee
@@ -141,18 +180,18 @@ export function useUploadIncidentAttachment() {
   });
 }
 
-// Hook to remove attachment
+// Hook to remove specific attachment
 export function useRemoveIncidentAttachment() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ 
-      incidentId, 
+      attachmentId, 
       employeeId 
     }: { 
-      incidentId: string; 
+      attachmentId: string; 
       employeeId: string; 
-    }) => IncidentService.removeAttachment(incidentId),
+    }) => IncidentService.removeAttachment(attachmentId),
     onSuccess: (result, variables) => {
       if (result.success) {
         // Invalidate and refetch incidents for this employee
@@ -167,6 +206,36 @@ export function useRemoveIncidentAttachment() {
     onError: (error: any) => {
       console.error('Remove attachment error:', error);
       toast.error(`Failed to remove attachment: ${error.message || 'Unknown error'}`);
+    },
+  });
+}
+
+// Hook to remove all attachments from an incident
+export function useRemoveAllIncidentAttachments() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ 
+      incidentId, 
+      employeeId 
+    }: { 
+      incidentId: string; 
+      employeeId: string; 
+    }) => IncidentService.removeAllAttachments(incidentId),
+    onSuccess: (result, variables) => {
+      if (result.success) {
+        // Invalidate and refetch incidents for this employee
+        queryClient.invalidateQueries({ 
+          queryKey: ['employee-incidents', variables.employeeId] 
+        });
+        toast.success('All attachments removed successfully!');
+      } else {
+        toast.error(result.error || 'Removal failed');
+      }
+    },
+    onError: (error: any) => {
+      console.error('Remove all attachments error:', error);
+      toast.error(`Failed to remove attachments: ${error.message || 'Unknown error'}`);
     },
   });
 }
