@@ -65,6 +65,52 @@ export interface User {
   tenure_mechlin?: string; // interval type from PostgreSQL
   isSA?: boolean;
   comp_off_balance?: number; // Compensatory off balance
+  
+  // Salary Annexure fields
+  pf_applicable?: boolean;
+  esi_applicable?: boolean;
+  monthly_ctc?: string;
+  monthly_basic_pay?: string;
+  hra?: string;
+  night_allowance?: string;
+  special_allowance?: string;
+  monthly_gross?: string;
+  employer_pf?: string;
+  employer_esi?: string;
+  monthly_gratuity_provision?: string;
+  monthly_bonus_provision?: string;
+  group_medical_insurance?: string;
+  pf_employee?: string;
+  esi_employee?: string;
+  tds?: string;
+  professional_tax?: string;
+  total_deductions?: string;
+  net_pay?: string;
+  monthly_take_home_salary?: string;
+  
+  // Loyalty Bonus fields
+  loyalty_bonus_enrollment_date?: string;
+  loyalty_bonus_specific_condition?: string;
+  loyalty_bonus_tenure_period?: string;
+  loyalty_bonus_amount?: string;
+  loyalty_bonus_installment_1_amount?: string;
+  loyalty_bonus_installment_2_amount?: string;
+  loyalty_bonus_installment_3_amount?: string;
+  loyalty_bonus_installment_4_amount?: string;
+  loyalty_bonus_installment_5_amount?: string;
+  loyalty_bonus_installment_6_amount?: string;
+  loyalty_bonus_installment_1_date?: string;
+  loyalty_bonus_installment_2_date?: string;
+  loyalty_bonus_installment_3_date?: string;
+  loyalty_bonus_installment_4_date?: string;
+  loyalty_bonus_installment_5_date?: string;
+  loyalty_bonus_installment_6_date?: string;
+  loyalty_bonus_installment_1_disbursed?: boolean;
+  loyalty_bonus_installment_2_disbursed?: boolean;
+  loyalty_bonus_installment_3_disbursed?: boolean;
+  loyalty_bonus_installment_4_disbursed?: boolean;
+  loyalty_bonus_installment_5_disbursed?: boolean;
+  loyalty_bonus_installment_6_disbursed?: boolean;
 }
 
 export interface DashboardPermissions {

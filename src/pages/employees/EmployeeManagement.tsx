@@ -135,7 +135,7 @@ export function EmployeeManagement() {
     const matchesRole = !roleFilter || roleFilter === 'all' || emp.role_id === roleFilter;
     
     return matchesSearch && matchesDepartment && matchesRole;
-  });
+  })?.sort((a, b) => a.full_name.localeCompare(b.full_name));
 
   const handleViewEmployee = (employee: Employee) => {
     setSelectedEmployee(employee);

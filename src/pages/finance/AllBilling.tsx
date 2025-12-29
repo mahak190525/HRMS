@@ -32,7 +32,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -274,6 +274,8 @@ export function AllBilling() {
   const watchedInvoiceType = invoiceForm.watch('invoice_type');
   const watchedStatus = invoiceForm.watch('status');
   const watchedClientName = invoiceForm.watch('client_name');
+  const watchedAmountReceived = invoiceForm.watch('amount_received');
+  const watchedInvoiceAmount = invoiceForm.watch('invoice_amount');
   
   // Watch for client name changes to auto-fill details
   React.useEffect(() => {
@@ -281,6 +283,14 @@ export function AllBilling() {
       handleClientSelection(watchedClientName);
     }
   }, [watchedClientName, clientMaster]);
+
+  // Calculate pending_amount dynamically based on invoice_amount and amount_received
+  React.useEffect(() => {
+    const invoiceAmount = watchedInvoiceAmount || 0;
+    const amountReceived = watchedAmountReceived || 0;
+    const pendingAmount = Math.max(0, invoiceAmount - amountReceived);
+    invoiceForm.setValue('pending_amount', pendingAmount);
+  }, [watchedInvoiceAmount, watchedAmountReceived, invoiceForm]);
   
   // Auto-generate invoice number based on INVOICE DATE and COMPANY TYPE
   // Format: PREFIX/MMMXXX (e.g., MT/DEC001 for Indian, MECH/DEC001 for LLC)
@@ -3187,16 +3197,21 @@ export function AllBilling() {
                       name="pending_amount"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Any Pending Amount</FormLabel>
+                          <FormLabel>Pending Amount (Calculated)</FormLabel>
                           <FormControl>
                             <Input 
                               type="number" 
                               step="0.01"
                               placeholder="0.00" 
                               {...field}
-                              onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                              value={field.value || 0}
+                              disabled
+                              className="bg-muted cursor-not-allowed"
                             />
                           </FormControl>
+                          <FormDescription className="text-xs">
+                            Calculated as: Invoice Amount - Amount Received
+                          </FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}

@@ -135,6 +135,50 @@ const employeeSchema = z.object({
   remarks: z.string().optional(),
   uan_number: z.string().optional(),
   is_experienced: z.enum(['Yes', 'No']).optional(),
+  // Salary Annexure fields
+  pf_applicable: z.boolean().optional(),
+  esi_applicable: z.boolean().optional(),
+  monthly_ctc: z.string().optional(),
+  monthly_basic_pay: z.string().optional(),
+  hra: z.string().optional(),
+  night_allowance: z.string().optional(),
+  special_allowance: z.string().optional(),
+  monthly_gross: z.string().optional(),
+  employer_pf: z.string().optional(),
+  employer_esi: z.string().optional(),
+  monthly_gratuity_provision: z.string().optional(),
+  monthly_bonus_provision: z.string().optional(),
+  group_medical_insurance: z.string().optional(),
+  pf_employee: z.string().optional(),
+  esi_employee: z.string().optional(),
+  tds: z.string().optional(),
+  professional_tax: z.string().optional(),
+  total_deductions: z.string().optional(),
+  net_pay: z.string().optional(),
+  monthly_take_home_salary: z.string().optional(),
+  // Loyalty Bonus fields
+  loyalty_bonus_enrollment_date: z.string().optional(),
+  loyalty_bonus_specific_condition: z.string().optional(),
+  loyalty_bonus_tenure_period: z.string().optional(),
+  loyalty_bonus_amount: z.string().optional(),
+  loyalty_bonus_installment_1_amount: z.string().optional(),
+  loyalty_bonus_installment_2_amount: z.string().optional(),
+  loyalty_bonus_installment_3_amount: z.string().optional(),
+  loyalty_bonus_installment_4_amount: z.string().optional(),
+  loyalty_bonus_installment_5_amount: z.string().optional(),
+  loyalty_bonus_installment_6_amount: z.string().optional(),
+  loyalty_bonus_installment_1_date: z.string().optional(),
+  loyalty_bonus_installment_2_date: z.string().optional(),
+  loyalty_bonus_installment_3_date: z.string().optional(),
+  loyalty_bonus_installment_4_date: z.string().optional(),
+  loyalty_bonus_installment_5_date: z.string().optional(),
+  loyalty_bonus_installment_6_date: z.string().optional(),
+  loyalty_bonus_installment_1_disbursed: z.boolean().optional(),
+  loyalty_bonus_installment_2_disbursed: z.boolean().optional(),
+  loyalty_bonus_installment_3_disbursed: z.boolean().optional(),
+  loyalty_bonus_installment_4_disbursed: z.boolean().optional(),
+  loyalty_bonus_installment_5_disbursed: z.boolean().optional(),
+  loyalty_bonus_installment_6_disbursed: z.boolean().optional(),
 });
 
 type EmployeeFormData = z.infer<typeof employeeSchema>;
@@ -205,75 +249,109 @@ export function EmployeeDetailsModal({
   const uploadIncidentAttachmentsMutation = useUploadIncidentAttachments();
   const removeIncidentAttachmentMutation = useRemoveIncidentAttachment();
 
-  // Fetch employee's additional roles from database
-  const { data: additionalRolesData, isLoading: isLoadingAdditionalRoles } = useQuery({
-    queryKey: ['employee-additional-roles', employee?.id],
+  // Fetch employee's complete data including CTC fields from database
+  const { data: completeEmployeeData, isLoading: isLoadingCompleteData } = useQuery({
+    queryKey: ['employee-complete-data', employee?.id],
     queryFn: async () => {
       if (!employee?.id) {
-        return { additional_role_ids: [], additional_roles: [] };
+        return null;
       }
       
-      console.log('🔄 Fetching employee additional roles from database...', {
+      console.log('🔄 Fetching complete employee data from database...', {
         employee_id: employee.id
       });
       
-      // First, get the employee's additional_role_ids from the database
+      // Fetch complete employee data including all CTC fields
       const { data: userData, error: userError } = await supabase
         .from('users')
-        .select('additional_role_ids')
+        .select(`
+          *,
+          department:departments!users_department_id_fkey(id, name),
+          role:roles!users_role_id_fkey(id, name)
+        `)
         .eq('id', employee.id)
         .single();
 
       if (userError) {
-        console.error('Failed to fetch user additional role IDs:', userError);
+        console.error('Failed to fetch complete employee data:', userError);
         throw userError;
       }
 
-      console.log('📋 User additional role IDs from DB:', userData?.additional_role_ids);
+      console.log('📋 Complete employee data from DB:', {
+        id: userData.id,
+        name: userData.full_name,
+        monthly_ctc: userData.monthly_ctc,
+        pf_applicable: userData.pf_applicable,
+        esi_applicable: userData.esi_applicable,
+        monthly_basic_pay: userData.monthly_basic_pay,
+        total_deductions: userData.total_deductions
+      });
 
-      // If no additional role IDs, return empty
-      if (!userData?.additional_role_ids || userData.additional_role_ids.length === 0) {
-        return { additional_role_ids: [], additional_roles: [] };
+      // If user has additional role IDs, fetch the role details
+      let additionalRoles: any[] = [];
+      if (userData.additional_role_ids && userData.additional_role_ids.length > 0) {
+        const { data: rolesData, error: rolesError } = await supabase
+          .from('roles')
+          .select('id, name, description')
+          .in('id', userData.additional_role_ids);
+
+        if (rolesError) {
+          console.error('Failed to fetch role details:', rolesError);
+        } else {
+          additionalRoles = rolesData || [];
+          console.log('✅ Additional roles fetched:', rolesData?.map((r: any) => r.name));
+        }
       }
-      
-      // Fetch the role details
-      const { data: rolesData, error: rolesError } = await supabase
-        .from('roles')
-        .select('id, name, description')
-        .in('id', userData.additional_role_ids);
-
-      if (rolesError) {
-        console.error('Failed to fetch additional roles:', rolesError);
-        throw rolesError;
-      }
-
-      console.log('✅ Additional roles fetched:', rolesData?.map(r => r.name));
 
       return {
-        additional_role_ids: userData.additional_role_ids,
-        additional_roles: rolesData || []
+        ...userData,
+        additional_roles: additionalRoles
       };
     },
-    enabled: !!employee?.id && isOpen && mode === 'edit',
+    enabled: !!employee?.id && isOpen,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
     refetchOnMount: false,
     refetchOnWindowFocus: false,
   });
 
-  // Merge employee data with additional roles data
-  const employeeData = React.useMemo(() => {
-    if (!employee) return null;
-    
-    // If we have additional roles data, merge it with employee data
-    if (additionalRolesData) {
-      return {
-        ...employee,
-        additional_role_ids: additionalRolesData.additional_role_ids,
-        additional_roles: additionalRolesData.additional_roles
-      };
+  // For backward compatibility, also provide the additional roles data separately
+  const additionalRolesData = React.useMemo(() => {
+    if (!completeEmployeeData) {
+      return { additional_role_ids: [], additional_roles: [] };
     }
     
-    return employee;
-  }, [employee, additionalRolesData]);
+    return {
+      additional_role_ids: completeEmployeeData.additional_role_ids || [],
+      additional_roles: completeEmployeeData.additional_roles || []
+    };
+  }, [completeEmployeeData]);
+
+  const isLoadingAdditionalRoles = isLoadingCompleteData;
+
+  // Use complete employee data from database, fallback to prop data
+  const employeeData = React.useMemo(() => {
+    // If we have complete data from database, use it (includes all CTC fields)
+    if (completeEmployeeData) {
+      console.log('✅ Using complete employee data from database');
+      return completeEmployeeData;
+    }
+    
+    // Fallback to the employee prop (may be missing CTC fields)
+    if (employee) {
+      console.log('⚠️ Using employee prop data (may be missing CTC fields)');
+      // If we have additional roles data, merge it with employee data
+      if (additionalRolesData) {
+        return {
+          ...employee,
+          additional_role_ids: additionalRolesData.additional_role_ids,
+          additional_roles: additionalRolesData.additional_roles
+        };
+      }
+      return employee;
+    }
+    
+    return null;
+  }, [completeEmployeeData, employee, additionalRolesData]);
 
   // Get departments, roles, and users for dropdowns
   const { data: departmentOptions } = useQuery({
@@ -314,6 +392,7 @@ export function EmployeeDetailsModal({
 
   const form = useForm<EmployeeFormData>({
     resolver: zodResolver(employeeSchema),
+    shouldUnregister: false, // Keep field values when components unmount/remount
     defaultValues: {
       id: '',
       full_name: '',
@@ -354,6 +433,50 @@ export function EmployeeDetailsModal({
       ifsc_code: '',
       qualification: '',
       employment_terms: 'full_time',
+      // Salary Annexure fields
+      pf_applicable: false,
+      esi_applicable: false,
+      monthly_ctc: '',
+      monthly_basic_pay: '',
+      hra: '',
+      night_allowance: '2000',
+      special_allowance: '',
+      monthly_gross: '',
+      employer_pf: '',
+      employer_esi: '',
+      monthly_gratuity_provision: '',
+      monthly_bonus_provision: '',
+      group_medical_insurance: '138',
+      pf_employee: '',
+      esi_employee: '',
+      tds: '',
+      professional_tax: '200',
+      total_deductions: '',
+      net_pay: '',
+      monthly_take_home_salary: '',
+      // Loyalty Bonus fields
+      loyalty_bonus_enrollment_date: '',
+      loyalty_bonus_specific_condition: '',
+      loyalty_bonus_tenure_period: '3',
+      loyalty_bonus_amount: '',
+      loyalty_bonus_installment_1_amount: '',
+      loyalty_bonus_installment_2_amount: '',
+      loyalty_bonus_installment_3_amount: '',
+      loyalty_bonus_installment_4_amount: '',
+      loyalty_bonus_installment_5_amount: '',
+      loyalty_bonus_installment_6_amount: '',
+      loyalty_bonus_installment_1_date: '',
+      loyalty_bonus_installment_2_date: '',
+      loyalty_bonus_installment_3_date: '',
+      loyalty_bonus_installment_4_date: '',
+      loyalty_bonus_installment_5_date: '',
+      loyalty_bonus_installment_6_date: '',
+      loyalty_bonus_installment_1_disbursed: false,
+      loyalty_bonus_installment_2_disbursed: false,
+      loyalty_bonus_installment_3_disbursed: false,
+      loyalty_bonus_installment_4_disbursed: false,
+      loyalty_bonus_installment_5_disbursed: false,
+      loyalty_bonus_installment_6_disbursed: false,
     },
   });
 
@@ -364,6 +487,12 @@ export function EmployeeDetailsModal({
   
   // Reset form when switching to edit mode OR when employee changes
   React.useEffect(() => {
+    // Wait for complete employee data to load before initializing form
+    if (isLoadingCompleteData) {
+      console.log('⏳ Waiting for complete employee data to load...');
+      return;
+    }
+
     const currentEmployeeData = employeeData || employee;
     
     if (currentEmployeeData && mode === 'edit' && (prevModeRef.current !== 'edit' || prevEmployeeRef.current !== currentEmployeeData.id)) {
@@ -373,7 +502,10 @@ export function EmployeeDetailsModal({
         additional_role_ids: currentEmployeeData.additional_role_ids,
         additional_roles: currentEmployeeData.additional_roles?.map((r: any) => r.name),
         employee_prop_has_additional_role_ids: !!employee?.additional_role_ids,
-        employeeData_has_additional_role_ids: !!employeeData?.additional_role_ids
+        employeeData_has_additional_role_ids: !!employeeData?.additional_role_ids,
+        monthly_ctc: currentEmployeeData.monthly_ctc,
+        monthly_basic_pay: currentEmployeeData.monthly_basic_pay,
+        total_deductions: currentEmployeeData.total_deductions
       });
       
       const formData = {
@@ -430,6 +562,51 @@ export function EmployeeDetailsModal({
         remarks: currentEmployeeData.remarks || '',
         uan_number: currentEmployeeData.uan_number || '',
         is_experienced: currentEmployeeData.is_experienced || 'No',
+        // Salary Annexure fields
+        // Preserve existing values from database, use defaults only if null/undefined
+        pf_applicable: currentEmployeeData.pf_applicable ?? false,
+        esi_applicable: currentEmployeeData.esi_applicable ?? false,
+        monthly_ctc: currentEmployeeData.monthly_ctc ?? '',
+        monthly_basic_pay: currentEmployeeData.monthly_basic_pay ?? '',
+        hra: currentEmployeeData.hra ?? '',
+        night_allowance: currentEmployeeData.night_allowance ?? '2000',
+        special_allowance: currentEmployeeData.special_allowance ?? '',
+        monthly_gross: currentEmployeeData.monthly_gross ?? '',
+        employer_pf: currentEmployeeData.employer_pf ?? '',
+        employer_esi: currentEmployeeData.employer_esi ?? '',
+        monthly_gratuity_provision: currentEmployeeData.monthly_gratuity_provision ?? '',
+        monthly_bonus_provision: currentEmployeeData.monthly_bonus_provision ?? '',
+        group_medical_insurance: currentEmployeeData.group_medical_insurance ?? '138',
+        pf_employee: currentEmployeeData.pf_employee ?? '',
+        esi_employee: currentEmployeeData.esi_employee ?? '',
+        tds: currentEmployeeData.tds ?? '',
+        professional_tax: currentEmployeeData.professional_tax ?? '200',
+        total_deductions: currentEmployeeData.total_deductions ?? '',
+        net_pay: currentEmployeeData.net_pay ?? '',
+        monthly_take_home_salary: currentEmployeeData.monthly_take_home_salary ?? '',
+        // Loyalty Bonus fields
+        loyalty_bonus_enrollment_date: currentEmployeeData.loyalty_bonus_enrollment_date || '',
+        loyalty_bonus_specific_condition: currentEmployeeData.loyalty_bonus_specific_condition || '',
+        loyalty_bonus_tenure_period: currentEmployeeData.loyalty_bonus_tenure_period || '3',
+        loyalty_bonus_amount: currentEmployeeData.loyalty_bonus_amount || '',
+        loyalty_bonus_installment_1_amount: currentEmployeeData.loyalty_bonus_installment_1_amount || '',
+        loyalty_bonus_installment_2_amount: currentEmployeeData.loyalty_bonus_installment_2_amount || '',
+        loyalty_bonus_installment_3_amount: currentEmployeeData.loyalty_bonus_installment_3_amount || '',
+        loyalty_bonus_installment_4_amount: currentEmployeeData.loyalty_bonus_installment_4_amount || '',
+        loyalty_bonus_installment_5_amount: currentEmployeeData.loyalty_bonus_installment_5_amount || '',
+        loyalty_bonus_installment_6_amount: currentEmployeeData.loyalty_bonus_installment_6_amount || '',
+        loyalty_bonus_installment_1_date: currentEmployeeData.loyalty_bonus_installment_1_date || '',
+        loyalty_bonus_installment_2_date: currentEmployeeData.loyalty_bonus_installment_2_date || '',
+        loyalty_bonus_installment_3_date: currentEmployeeData.loyalty_bonus_installment_3_date || '',
+        loyalty_bonus_installment_4_date: currentEmployeeData.loyalty_bonus_installment_4_date || '',
+        loyalty_bonus_installment_5_date: currentEmployeeData.loyalty_bonus_installment_5_date || '',
+        loyalty_bonus_installment_6_date: currentEmployeeData.loyalty_bonus_installment_6_date || '',
+        loyalty_bonus_installment_1_disbursed: currentEmployeeData.loyalty_bonus_installment_1_disbursed || false,
+        loyalty_bonus_installment_2_disbursed: currentEmployeeData.loyalty_bonus_installment_2_disbursed || false,
+        loyalty_bonus_installment_3_disbursed: currentEmployeeData.loyalty_bonus_installment_3_disbursed || false,
+        loyalty_bonus_installment_4_disbursed: currentEmployeeData.loyalty_bonus_installment_4_disbursed || false,
+        loyalty_bonus_installment_5_disbursed: currentEmployeeData.loyalty_bonus_installment_5_disbursed || false,
+        loyalty_bonus_installment_6_disbursed: currentEmployeeData.loyalty_bonus_installment_6_disbursed || false,
       };
       
       // Store original values for comparison (deep clone)
@@ -442,7 +619,7 @@ export function EmployeeDetailsModal({
     // Update the previous references
     prevModeRef.current = mode;
     prevEmployeeRef.current = currentEmployeeData?.id;
-  }, [employeeData, employee, mode, form]);
+  }, [isLoadingCompleteData, employeeData, employee, mode, form]);
 
   // Update form when additional roles data becomes available
   React.useEffect(() => {
@@ -529,6 +706,50 @@ export function EmployeeDetailsModal({
       remarks: data.remarks || null,
       uan_number: data.uan_number || null,
       is_experienced: data.is_experienced || 'No',
+      // Salary Annexure fields
+      pf_applicable: data.pf_applicable || false,
+      esi_applicable: data.esi_applicable || false,
+      monthly_ctc: data.monthly_ctc || null,
+      monthly_basic_pay: data.monthly_basic_pay || null,
+      hra: data.hra || null,
+      night_allowance: data.night_allowance || '2000',
+      special_allowance: data.special_allowance || null,
+      monthly_gross: data.monthly_gross || null,
+      employer_pf: data.employer_pf || null,
+      employer_esi: data.employer_esi || null,
+      monthly_gratuity_provision: data.monthly_gratuity_provision || null,
+      monthly_bonus_provision: data.monthly_bonus_provision || null,
+      group_medical_insurance: data.group_medical_insurance || '138',
+      pf_employee: data.pf_employee || null,
+      esi_employee: data.esi_employee || null,
+      tds: data.tds || null,
+      professional_tax: data.professional_tax || '200',
+      total_deductions: data.total_deductions || null,
+      net_pay: data.net_pay || null,
+      monthly_take_home_salary: data.monthly_take_home_salary || null,
+      // Loyalty Bonus fields
+      loyalty_bonus_enrollment_date: data.loyalty_bonus_enrollment_date || null,
+      loyalty_bonus_specific_condition: data.loyalty_bonus_specific_condition || null,
+      loyalty_bonus_tenure_period: data.loyalty_bonus_tenure_period || '3',
+      loyalty_bonus_amount: data.loyalty_bonus_amount || null,
+      loyalty_bonus_installment_1_amount: data.loyalty_bonus_installment_1_amount || null,
+      loyalty_bonus_installment_2_amount: data.loyalty_bonus_installment_2_amount || null,
+      loyalty_bonus_installment_3_amount: data.loyalty_bonus_installment_3_amount || null,
+      loyalty_bonus_installment_4_amount: data.loyalty_bonus_installment_4_amount || null,
+      loyalty_bonus_installment_5_amount: data.loyalty_bonus_installment_5_amount || null,
+      loyalty_bonus_installment_6_amount: data.loyalty_bonus_installment_6_amount || null,
+      loyalty_bonus_installment_1_date: data.loyalty_bonus_installment_1_date || null,
+      loyalty_bonus_installment_2_date: data.loyalty_bonus_installment_2_date || null,
+      loyalty_bonus_installment_3_date: data.loyalty_bonus_installment_3_date || null,
+      loyalty_bonus_installment_4_date: data.loyalty_bonus_installment_4_date || null,
+      loyalty_bonus_installment_5_date: data.loyalty_bonus_installment_5_date || null,
+      loyalty_bonus_installment_6_date: data.loyalty_bonus_installment_6_date || null,
+      loyalty_bonus_installment_1_disbursed: data.loyalty_bonus_installment_1_disbursed || false,
+      loyalty_bonus_installment_2_disbursed: data.loyalty_bonus_installment_2_disbursed || false,
+      loyalty_bonus_installment_3_disbursed: data.loyalty_bonus_installment_3_disbursed || false,
+      loyalty_bonus_installment_4_disbursed: data.loyalty_bonus_installment_4_disbursed || false,
+      loyalty_bonus_installment_5_disbursed: data.loyalty_bonus_installment_5_disbursed || false,
+      loyalty_bonus_installment_6_disbursed: data.loyalty_bonus_installment_6_disbursed || false,
     };
 
     // Debug: Log the data being sent to the API
@@ -911,6 +1132,15 @@ function ViewMode({
   uploadIncidentAttachments,
   removeIncidentAttachment
 }: any) {
+  console.log('🏗️ ViewMode employee data:', {
+    id: employee?.id,
+    name: employee?.full_name,
+    monthly_ctc: employee?.monthly_ctc,
+    monthly_basic_pay: employee?.monthly_basic_pay,
+    total_deductions: employee?.total_deductions,
+    hasAllFields: !!(employee?.monthly_ctc && employee?.monthly_basic_pay)
+  });
+
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <div className="flex items-center gap-4 flex-shrink-0 mb-6">
@@ -941,7 +1171,7 @@ function ViewMode({
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-7 gap-1 flex-shrink-0">
+        <TabsList className="grid w-full grid-cols-4 sm:grid-cols-8 gap-1 flex-shrink-0">
           <TabsTrigger value="basic" className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
             <Users className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Basic Info</span>
@@ -961,6 +1191,11 @@ function ViewMode({
             <Building className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Work Details</span>
             <span className="sm:hidden">Work</span>
+          </TabsTrigger>
+          <TabsTrigger value="ctc" className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
+            <IndianRupee className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">CTC & Salary</span>
+            <span className="sm:hidden">CTC</span>
           </TabsTrigger>
           <TabsTrigger value="onboarding" className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
             <UserCheck className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -994,6 +1229,10 @@ function ViewMode({
 
           <TabsContent value="work" className="space-y-4">
             <WorkInfoView employee={employee} getStatusBadge={getStatusBadge} />
+          </TabsContent>
+
+          <TabsContent value="ctc" className="space-y-4">
+            <CTCView employee={employee} />
           </TabsContent>
 
           <TabsContent value="onboarding" className="space-y-4">
@@ -1171,7 +1410,7 @@ function EditMode({
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onEmployeeSubmit)} className="flex flex-col flex-1 min-h-0">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-7 gap-2 flex-shrink-0">
+          <TabsList className="grid w-full grid-cols-4 sm:grid-cols-8 gap-2 flex-shrink-0">
             <TabsTrigger value="basic" className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
               <Users className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">Basic Info</span>
@@ -1191,6 +1430,11 @@ function EditMode({
               <Building className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">Work Details</span>
               <span className="sm:hidden">Work</span>
+            </TabsTrigger>
+            <TabsTrigger value="ctc" className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
+              <IndianRupee className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">CTC & Salary</span>
+              <span className="sm:hidden">CTC</span>
             </TabsTrigger>
             <TabsTrigger value="onboarding" className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
               <UserCheck className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -1232,6 +1476,10 @@ function EditMode({
                 permissions={permissions}
                 isLoadingAdditionalRoles={isLoadingAdditionalRoles}
               />
+            </TabsContent>
+
+            <TabsContent value="ctc" className="space-y-6 h-full">
+              <CTCEdit form={form} />
             </TabsContent>
 
             <TabsContent value="onboarding" className="space-y-6 h-full">
@@ -1634,18 +1882,6 @@ function WorkInfoView({ employee, getStatusBadge }: { employee: Employee; getSta
         )}
       </div>
 
-      {employee.salary && (
-        <div className="p-4 bg-green-50 rounded-lg mt-4">
-          <div className="flex items-center gap-2 mb-2">
-            <IndianRupee className="h-4 w-4 text-green-600" />
-            <span className="font-medium">Salary Information</span>
-          </div>
-          <p className="text-2xl font-bold text-green-600">
-            ₹ {employee.salary.toLocaleString()}
-          </p>
-          <p className="text-sm text-muted-foreground">Annual salary</p>
-        </div>
-      )}
       
       {employee.comp_off_balance !== undefined && (
         <div className="p-4 bg-blue-50 rounded-lg mt-4">
@@ -2677,25 +2913,6 @@ function WorkInfoEdit({ form, departmentOptions, roleOptions, userOptions, emplo
         />
         <FormField
           control={form.control}
-          name="salary"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-sm font-medium text-gray-700">Annual Salary</FormLabel>
-              <FormControl>
-                <Input 
-                  type="number" 
-                  placeholder="Enter salary" 
-                  {...field}
-                  onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                  className="mt-1"
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
           name="comp_off_balance"
           render={({ field }) => (
             <FormItem>
@@ -3483,6 +3700,1221 @@ function WorkExperienceEdit({ employee }: { employee: Employee }) {
             <p className="text-sm text-gray-600">No work experience records found. Add one above.</p>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function CTCView({ employee }: { employee: Employee }) {
+  console.log('🏗️ CTCView employee data:', {
+    id: employee?.id,
+    name: employee?.full_name,
+    salary: employee?.salary,
+    monthly_ctc: employee?.monthly_ctc,
+    monthly_basic_pay: employee?.monthly_basic_pay,
+    total_deductions: employee?.total_deductions,
+    net_pay: employee?.net_pay,
+    pf_applicable: employee?.pf_applicable,
+    esi_applicable: employee?.esi_applicable,
+    hasCompleteData: !!(employee?.monthly_ctc || employee?.pf_applicable !== undefined)
+  });
+
+  // Calculate values from Annual Salary (same logic as edit mode)
+  const calculateSalaryComponents = () => {
+    if (!employee.salary || employee.salary <= 0) {
+      return {
+        monthly_ctc: 0,
+        monthly_basic_pay: 0,
+        hra: 0,
+        night_allowance: 2000,
+        special_allowance: 0,
+        monthly_gross: 0,
+        employer_pf: 0,
+        employer_esi: 0,
+        monthly_gratuity_provision: 0,
+        monthly_bonus_provision: 0,
+        group_medical_insurance: 138,
+        pf_employee: 0,
+        esi_employee: 0,
+        tds: 0,
+        professional_tax: 200,
+        total_deductions: 0,
+        net_pay: 0,
+        monthly_take_home_salary: 0
+      };
+    }
+
+    // Calculate ALL values from original unrounded values first
+    const monthlyCTCValue = employee.salary / 12;
+    const monthlyBasicValue = monthlyCTCValue * 0.51;
+    const hraValue = monthlyBasicValue * 0.40;
+    const nightAllowanceValue = parseFloat(employee.night_allowance?.toString() || '2000');
+    const groupInsuranceValue = parseFloat(employee.group_medical_insurance?.toString() || '138');
+    
+    // Calculate employer contributions from original values
+    const employerPFValue = employee.pf_applicable ? monthlyBasicValue * 0.12 : 0;
+    const gratuityValue = ((monthlyBasicValue * 15) / 26) / 12;
+    const bonusValue = monthlyBasicValue < 21000 ? monthlyBasicValue * 0.0833 : 0;
+    
+    // Calculate initial monthly gross (without special allowance) from original values for ESI calculation
+    const initialMonthlyGrossValue = monthlyBasicValue + hraValue + nightAllowanceValue;
+    const employerESIValue = (employee.esi_applicable && initialMonthlyGrossValue < 21000) ? initialMonthlyGrossValue * 0.0325 : 0;
+    
+    // Calculate special allowance from original values (balancing figure)
+    const specialAllowanceValue = monthlyCTCValue - (monthlyBasicValue + hraValue + nightAllowanceValue + employerPFValue + employerESIValue + gratuityValue + bonusValue + groupInsuranceValue);
+    
+    // Calculate monthly gross from original values
+    const monthlyGrossValue = monthlyBasicValue + hraValue + nightAllowanceValue + specialAllowanceValue;
+
+    // Calculate employee deductions from original values
+    const employeePFValue = employee.pf_applicable ? monthlyBasicValue * 0.12 : 0;
+    const employeeESIValue = employee.esi_applicable ? monthlyBasicValue * 0.0075 : 0;
+    const tdsValue = parseFloat(employee.tds?.toString() || '0');
+    const professionalTaxValue = parseFloat(employee.professional_tax?.toString() || '200');
+    
+    // Calculate totals from original values
+    const totalDeductionsValue = employeePFValue + employeeESIValue + tdsValue + professionalTaxValue;
+    const netPayValue = monthlyGrossValue - totalDeductionsValue;
+    const takeHomeValue = netPayValue + bonusValue;
+
+    // Apply ceiling to each final result independently
+    return {
+      monthly_ctc: Math.ceil(monthlyCTCValue),
+      monthly_basic_pay: Math.ceil(monthlyBasicValue),
+      hra: Math.ceil(hraValue),
+      night_allowance: Math.ceil(nightAllowanceValue),
+      special_allowance: Math.ceil(specialAllowanceValue),
+      monthly_gross: Math.ceil(monthlyGrossValue),
+      employer_pf: Math.ceil(employerPFValue),
+      employer_esi: Math.ceil(employerESIValue),
+      monthly_gratuity_provision: Math.ceil(gratuityValue),
+      monthly_bonus_provision: Math.ceil(bonusValue),
+      group_medical_insurance: Math.ceil(groupInsuranceValue),
+      pf_employee: Math.ceil(employeePFValue),
+      esi_employee: Math.ceil(employeeESIValue),
+      tds: Math.ceil(tdsValue),
+      professional_tax: Math.ceil(professionalTaxValue),
+      total_deductions: Math.ceil(totalDeductionsValue),
+      net_pay: Math.ceil(netPayValue),
+      monthly_take_home_salary: Math.ceil(takeHomeValue)
+    };
+  };
+
+  // Use database values when available, fallback to calculated values
+  const getDisplayValue = (dbValue: any, calculatedValue: number, fallbackValue: number = 0) => {
+    // If database value exists and is not null/undefined/empty string, use it
+    if (dbValue !== null && dbValue !== undefined && dbValue !== '') {
+      return parseFloat(dbValue.toString()) || fallbackValue;
+    }
+    // Otherwise use calculated value
+    return calculatedValue;
+  };
+
+  const calculated = calculateSalaryComponents();
+  
+  // Determine if we have database values or need to show calculated ones
+  const hasDbValues = !!(employee?.monthly_ctc || employee?.monthly_basic_pay || employee?.total_deductions);
+  
+  console.log('💰 CTC Display Values:', {
+    hasDbValues,
+    db_monthly_ctc: employee?.monthly_ctc,
+    calc_monthly_ctc: calculated.monthly_ctc,
+    db_pf_applicable: employee?.pf_applicable,
+    db_total_deductions: employee?.total_deductions
+  });
+
+  return (
+    <div className="pb-4 space-y-6">
+      {/* Annual CTC Section */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Annual CTC</h3>
+        <div className="p-4 bg-green-50 rounded-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <IndianRupee className="h-4 w-4 text-green-600" />
+            <span className="font-medium">Annual CTC</span>
+          </div>
+          <p className="text-2xl font-bold text-green-600">
+            ₹ {employee.salary ? employee.salary.toLocaleString() : 'Not specified'}
+          </p>
+          <p className="text-sm text-muted-foreground">Annual Cost to Company</p>
+        </div>
+      </div>
+
+      {/* Salary Annexure Section */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Salary Annexure</h3>
+        
+        {/* Applicability Flags */}
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="p-3 bg-blue-50 rounded-lg">
+            <p className="font-medium text-sm">PF Applicable</p>
+            <p className="text-lg font-semibold text-blue-600">
+              {employee.pf_applicable ? 'Yes' : 'No'}
+            </p>
+          </div>
+          <div className="p-3 bg-purple-50 rounded-lg">
+            <p className="font-medium text-sm">ESI Applicable</p>
+            <p className="text-lg font-semibold text-purple-600">
+              {employee.esi_applicable ? 'Yes' : 'No'}
+            </p>
+          </div>
+        </div>
+
+        {/* Core Salary Components */}
+        <div className="grid grid-cols-2 gap-4 text-sm mb-6">
+          <div>
+            <p className="font-medium">Monthly CTC:</p>
+            <p className="text-muted-foreground">₹ {getDisplayValue(employee?.monthly_ctc, calculated.monthly_ctc).toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="font-medium">Monthly Basic Pay:</p>
+            <p className="text-muted-foreground">₹ {getDisplayValue(employee?.monthly_basic_pay, calculated.monthly_basic_pay).toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="font-medium">HRA:</p>
+            <p className="text-muted-foreground">₹ {getDisplayValue(employee?.hra, calculated.hra).toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="font-medium">Night Allowance:</p>
+            <p className="text-muted-foreground">₹ {getDisplayValue(employee?.night_allowance, calculated.night_allowance, 2000).toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="font-medium">Special Allowance:</p>
+            <p className="text-muted-foreground">₹ {getDisplayValue(employee?.special_allowance, calculated.special_allowance).toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="font-medium">Monthly Gross:</p>
+            <p className="text-muted-foreground">₹ {getDisplayValue(employee?.monthly_gross, calculated.monthly_gross).toLocaleString()}</p>
+          </div>
+        </div>
+
+        {/* Employer Contributions */}
+        <div className="mb-6">
+          <h4 className="font-medium mb-3">Employer Contributions</h4>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <p className="font-medium">Employer PF:</p>
+              <p className="text-muted-foreground">₹ {getDisplayValue(employee?.employer_pf, calculated.employer_pf).toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="font-medium">Employer ESI:</p>
+              <p className="text-muted-foreground">₹ {getDisplayValue(employee?.employer_esi, calculated.employer_esi).toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="font-medium">Monthly Gratuity (Provision):</p>
+              <p className="text-muted-foreground">₹ {getDisplayValue(employee?.monthly_gratuity_provision, calculated.monthly_gratuity_provision).toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="font-medium">Monthly Bonus (Provision):</p>
+              <p className="text-muted-foreground">₹ {getDisplayValue(employee?.monthly_bonus_provision, calculated.monthly_bonus_provision).toLocaleString()}</p>
+            </div>
+            <div className="col-span-2">
+              <p className="font-medium">Group Medical Insurance:</p>
+              <p className="text-muted-foreground">₹ {getDisplayValue(employee?.group_medical_insurance, calculated.group_medical_insurance, 138).toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Employee Deductions */}
+        <div className="mb-6">
+          <h4 className="font-medium mb-3">Employee Deductions</h4>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <p className="font-medium">PF Employee:</p>
+              <p className="text-muted-foreground">₹ {getDisplayValue(employee?.pf_employee, calculated.pf_employee).toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="font-medium">ESI Employee:</p>
+              <p className="text-muted-foreground">₹ {getDisplayValue(employee?.esi_employee, calculated.esi_employee).toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="font-medium">TDS:</p>
+              <p className="text-muted-foreground">₹ {getDisplayValue(employee?.tds, calculated.tds).toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="font-medium">Professional Tax:</p>
+              <p className="text-muted-foreground">₹ {getDisplayValue(employee?.professional_tax, calculated.professional_tax, 200).toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Final Calculations */}
+        <div className="grid grid-cols-3 gap-4">
+          <div className="p-3 bg-red-50 rounded-lg">
+            <p className="font-medium text-sm">Total Deductions</p>
+            <p className="text-lg font-semibold text-red-600">
+              ₹ {getDisplayValue(employee?.total_deductions, calculated.total_deductions).toLocaleString()}
+            </p>
+          </div>
+          <div className="p-3 bg-green-50 rounded-lg">
+            <p className="font-medium text-sm">Net Pay</p>
+            <p className="text-lg font-semibold text-green-600">
+              ₹ {getDisplayValue(employee?.net_pay, calculated.net_pay).toLocaleString()}
+            </p>
+          </div>
+          <div className="p-3 bg-blue-50 rounded-lg">
+            <p className="font-medium text-sm">Monthly Take Home</p>
+            <p className="text-lg font-semibold text-blue-600">
+              ₹ {getDisplayValue(employee?.monthly_take_home_salary, calculated.monthly_take_home_salary).toLocaleString()}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Loyalty Bonus Section */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Loyalty Bonus</h3>
+        
+        {/* Basic Loyalty Info */}
+        <div className="grid grid-cols-2 gap-4 text-sm mb-6">
+          <div>
+            <p className="font-medium">Enrollment Date:</p>
+            <p className="text-muted-foreground">
+              {employee.loyalty_bonus_enrollment_date ? formatDateForDisplay(employee.loyalty_bonus_enrollment_date, 'MMM dd, yyyy') : 'Not set'}
+            </p>
+          </div>
+          <div>
+            <p className="font-medium">Tenure Period:</p>
+            <p className="text-muted-foreground">{employee.loyalty_bonus_tenure_period || '3'} years</p>
+          </div>
+          <div className="col-span-2">
+            <p className="font-medium">Total Loyalty Bonus Amount:</p>
+            <p className="text-muted-foreground">₹ {employee.loyalty_bonus_amount || 'Not specified'}</p>
+          </div>
+          {employee.loyalty_bonus_specific_condition && (
+            <div className="col-span-2">
+              <p className="font-medium">Specific Conditions:</p>
+              <p className="text-muted-foreground">{employee.loyalty_bonus_specific_condition}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Installments */}
+        <div>
+          <h4 className="font-medium mb-3">Installment Schedule</h4>
+          <div className="space-y-3">
+            {[1, 2, 3, 4, 5, 6].map((installment) => {
+              const amountKey = `loyalty_bonus_installment_${installment}_amount` as keyof Employee;
+              const dateKey = `loyalty_bonus_installment_${installment}_date` as keyof Employee;
+              const disbursedKey = `loyalty_bonus_installment_${installment}_disbursed` as keyof Employee;
+              
+              const amount = employee[amountKey] as string;
+              const date = employee[dateKey] as string;
+              const disbursed = employee[disbursedKey] as boolean;
+              
+              if (!amount && !date) return null;
+              
+              return (
+                <div key={installment} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">Installment {installment}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Amount: ₹ {amount || 'Not calculated'} | 
+                      Date: {date ? formatDateForDisplay(date, 'MMM dd, yyyy') : 'Not set'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={disbursed ? 'default' : 'secondary'}>
+                      {disbursed ? 'Disbursed' : 'Pending'}
+                    </Badge>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CTCEdit({ form }: { form: any }) {
+  console.log('🏗️ CTCEdit rendering', { 
+    monthly_ctc: form.getValues('monthly_ctc'),
+    total_deductions: form.getValues('total_deductions')
+  });
+
+  // State to track if form is ready (to prevent premature auto-calculation)
+  const [isFormReady, setIsFormReady] = React.useState(false);
+
+  // Watch for changes in salary and recalculate
+  const watchedSalary = form.watch('salary');
+  const watchedPFApplicable = form.watch('pf_applicable');
+  const watchedESIApplicable = form.watch('esi_applicable');
+  const watchedNightAllowance = form.watch('night_allowance');
+  const watchedGroupInsurance = form.watch('group_medical_insurance');
+  const watchedTDS = form.watch('tds');
+  const watchedProfessionalTax = form.watch('professional_tax');
+
+  // Effect to mark form as ready after a short delay
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsFormReady(true);
+      console.log('📋 CTCEdit form marked as ready, current values:', {
+        monthly_ctc: form.getValues('monthly_ctc'),
+        monthly_basic_pay: form.getValues('monthly_basic_pay'),
+        total_deductions: form.getValues('total_deductions'),
+        pf_applicable: form.getValues('pf_applicable'),
+        esi_applicable: form.getValues('esi_applicable')
+      });
+    }, 200); // Increased delay to allow form initialization
+
+    return () => clearTimeout(timer);
+  }, [form]);
+
+  // Track previous values to detect actual changes
+  const prevValuesRef = React.useRef({
+    salary: watchedSalary,
+    pf_applicable: watchedPFApplicable,
+    esi_applicable: watchedESIApplicable,
+    night_allowance: watchedNightAllowance,
+    group_medical_insurance: watchedGroupInsurance,
+    tds: watchedTDS,
+    professional_tax: watchedProfessionalTax
+  });
+
+  // Auto-calculate fields when dependencies change (rounding to ceiling values)
+  React.useEffect(() => {
+    // Skip if form is not ready yet (prevents overwriting database values during initialization)
+    if (!isFormReady) {
+      console.log('⏳ Skipping calculation - form not ready yet');
+      return;
+    }
+
+    // Skip if no salary value
+    if (!watchedSalary || watchedSalary <= 0) {
+      return;
+    }
+
+    // Check if monthly_ctc exists in database - if so, NEVER auto-calculate
+    const existingMonthlyCTC = form.getValues('monthly_ctc');
+    const existingBasicPay = form.getValues('monthly_basic_pay');
+    const existingTotalDeductions = form.getValues('total_deductions');
+    
+    // More robust check - if ANY of the key CTC fields have values, skip auto-calculation
+    const hasExistingCTCData = (existingMonthlyCTC && existingMonthlyCTC !== '') || 
+                               (existingBasicPay && existingBasicPay !== '') ||
+                               (existingTotalDeductions && existingTotalDeductions !== '');
+
+    // If CTC data exists in database, completely disable auto-calculation
+    if (hasExistingCTCData) {
+      console.log('✅ Skipping calculation - DB values exist', {
+        monthly_ctc: existingMonthlyCTC,
+        monthly_basic_pay: existingBasicPay,
+        total_deductions: existingTotalDeductions
+      });
+      // Update refs to prevent future calculations
+      prevValuesRef.current = {
+        salary: watchedSalary,
+        pf_applicable: watchedPFApplicable,
+        esi_applicable: watchedESIApplicable,
+        night_allowance: watchedNightAllowance,
+        group_medical_insurance: watchedGroupInsurance,
+        tds: watchedTDS,
+        professional_tax: watchedProfessionalTax
+      };
+      return;
+    }
+
+    // Check if any dependency actually changed
+    const hasChanged = 
+      prevValuesRef.current.salary !== watchedSalary ||
+      prevValuesRef.current.pf_applicable !== watchedPFApplicable ||
+      prevValuesRef.current.esi_applicable !== watchedESIApplicable ||
+      prevValuesRef.current.night_allowance !== watchedNightAllowance ||
+      prevValuesRef.current.group_medical_insurance !== watchedGroupInsurance ||
+      prevValuesRef.current.tds !== watchedTDS ||
+      prevValuesRef.current.professional_tax !== watchedProfessionalTax;
+
+    // Only recalculate if dependencies changed
+    if (!hasChanged) {
+      return;
+    }
+
+    console.log('🧮 Running auto-calculation for new employee or changed values');
+
+    // Update refs with current values
+    prevValuesRef.current = {
+      salary: watchedSalary,
+      pf_applicable: watchedPFApplicable,
+      esi_applicable: watchedESIApplicable,
+      night_allowance: watchedNightAllowance,
+      group_medical_insurance: watchedGroupInsurance,
+      tds: watchedTDS,
+      professional_tax: watchedProfessionalTax
+    };
+
+    if (watchedSalary && watchedSalary > 0) {
+      // Calculate ALL values from original unrounded values first
+      const monthlyCTCValue = watchedSalary / 12;
+      const monthlyBasicValue = monthlyCTCValue * 0.51;
+      const hraValue = monthlyBasicValue * 0.40;
+      const nightAllowanceValue = parseFloat(watchedNightAllowance || '2000');
+      const groupInsuranceValue = parseFloat(watchedGroupInsurance || '138');
+      
+      // Calculate employer contributions from original values
+      const employerPFValue = watchedPFApplicable ? monthlyBasicValue * 0.12 : 0;
+      const gratuityValue = ((monthlyBasicValue * 15) / 26) / 12;
+      const bonusValue = monthlyBasicValue < 21000 ? monthlyBasicValue * 0.0833 : 0;
+      
+      // Calculate initial monthly gross (without special allowance) from original values for ESI calculation
+      const initialMonthlyGrossValue = monthlyBasicValue + hraValue + nightAllowanceValue;
+      const employerESIValue = (watchedESIApplicable && initialMonthlyGrossValue < 21000) ? initialMonthlyGrossValue * 0.0325 : 0;
+      
+      // Calculate special allowance from original values (balancing figure)
+      const specialAllowanceValue = monthlyCTCValue - (monthlyBasicValue + hraValue + nightAllowanceValue + employerPFValue + employerESIValue + gratuityValue + bonusValue + groupInsuranceValue);
+      
+      // Calculate monthly gross from original values
+      // Monthly Gross = Monthly Basic Pay + HRA + Night Allowance + Special Allowance
+      const monthlyGrossValue = monthlyBasicValue + hraValue + nightAllowanceValue + specialAllowanceValue;
+
+      // Calculate employee deductions from original values
+      const employeePFValue = watchedPFApplicable ? monthlyBasicValue * 0.12 : 0;
+      const employeeESIValue = watchedESIApplicable ? monthlyBasicValue * 0.0075 : 0;
+      const tdsValue = parseFloat(watchedTDS || '0');
+      const professionalTaxValue = parseFloat(watchedProfessionalTax || '200');
+      
+      // Calculate totals from original values
+      const totalDeductionsValue = employeePFValue + employeeESIValue + tdsValue + professionalTaxValue;
+      const netPayValue = monthlyGrossValue - totalDeductionsValue;
+      const takeHomeValue = netPayValue + bonusValue;
+
+      // Apply ceiling to each final result independently
+      // Note: nightAllowance, groupInsurance, tds, and professionalTax are user-editable fields,
+      // so we don't set them here - we only use their values in calculations
+      const monthlyCTC = Math.ceil(monthlyCTCValue);
+      const monthlyBasic = Math.ceil(monthlyBasicValue);
+      const hra = Math.ceil(hraValue);
+      const employerPF = Math.ceil(employerPFValue);
+      const gratuity = Math.ceil(gratuityValue);
+      const bonus = Math.ceil(bonusValue);
+      const employerESI = Math.ceil(employerESIValue);
+      const specialAllowance = Math.ceil(specialAllowanceValue);
+      const monthlyGross = Math.ceil(monthlyGrossValue);
+      const employeePF = Math.ceil(employeePFValue);
+      const employeeESI = Math.ceil(employeeESIValue);
+      const totalDeductions = Math.ceil(totalDeductionsValue);
+      const netPay = Math.ceil(netPayValue);
+      const takeHome = Math.ceil(takeHomeValue);
+
+      // Update form values with ceiling rounded values (whole numbers)
+      form.setValue('monthly_ctc', monthlyCTC.toString());
+      form.setValue('monthly_basic_pay', monthlyBasic.toString());
+      form.setValue('hra', hra.toString());
+      form.setValue('special_allowance', specialAllowance.toString());
+      form.setValue('monthly_gross', monthlyGross.toString());
+      form.setValue('employer_pf', employerPF.toString());
+      form.setValue('employer_esi', employerESI.toString());
+      form.setValue('monthly_gratuity_provision', gratuity.toString());
+      form.setValue('monthly_bonus_provision', bonus.toString());
+      form.setValue('pf_employee', employeePF.toString());
+      form.setValue('esi_employee', employeeESI.toString());
+      form.setValue('total_deductions', totalDeductions.toString());
+      form.setValue('net_pay', netPay.toString());
+      form.setValue('monthly_take_home_salary', takeHome.toString());
+    }
+  }, [isFormReady, watchedSalary, watchedPFApplicable, watchedESIApplicable, watchedNightAllowance, watchedGroupInsurance, watchedTDS, watchedProfessionalTax, form]);
+
+  // Loyalty bonus calculation
+  const watchedLoyaltyAmount = form.watch('loyalty_bonus_amount');
+  const watchedTenurePeriod = form.watch('loyalty_bonus_tenure_period');
+  const watchedEnrollmentDate = form.watch('loyalty_bonus_enrollment_date');
+
+  // Track previous loyalty bonus values to detect actual changes
+  const prevLoyaltyRef = React.useRef({
+    loyalty_bonus_amount: watchedLoyaltyAmount,
+    loyalty_bonus_tenure_period: watchedTenurePeriod,
+    loyalty_bonus_enrollment_date: watchedEnrollmentDate
+  });
+
+  React.useEffect(() => {
+    // Skip if form is not ready yet
+    if (!isFormReady) {
+      return;
+    }
+
+    // Skip if required fields are missing
+    if (!watchedLoyaltyAmount || !watchedTenurePeriod || !watchedEnrollmentDate) {
+      return;
+    }
+
+    // Check if installment amounts exist in database - if so, NEVER auto-calculate
+    const existingInstallment1 = form.getValues('loyalty_bonus_installment_1_amount');
+    const hasExistingInstallments = existingInstallment1 && existingInstallment1 !== '';
+
+    // If installment amounts exist in database, completely disable auto-calculation
+    if (hasExistingInstallments) {
+      console.log('✅ Skipping loyalty bonus calculation - DB values exist');
+      // Update refs to prevent future calculations
+      prevLoyaltyRef.current = {
+        loyalty_bonus_amount: watchedLoyaltyAmount,
+        loyalty_bonus_tenure_period: watchedTenurePeriod,
+        loyalty_bonus_enrollment_date: watchedEnrollmentDate
+      };
+      return;
+    }
+
+    // Check if any dependency actually changed
+    const hasChanged = 
+      prevLoyaltyRef.current.loyalty_bonus_amount !== watchedLoyaltyAmount ||
+      prevLoyaltyRef.current.loyalty_bonus_tenure_period !== watchedTenurePeriod ||
+      prevLoyaltyRef.current.loyalty_bonus_enrollment_date !== watchedEnrollmentDate;
+
+    // Only recalculate if dependencies changed
+    if (!hasChanged) {
+      return;
+    }
+
+    console.log('🧮 Running loyalty bonus calculation');
+
+    // Update refs with current values
+    prevLoyaltyRef.current = {
+      loyalty_bonus_amount: watchedLoyaltyAmount,
+      loyalty_bonus_tenure_period: watchedTenurePeriod,
+      loyalty_bonus_enrollment_date: watchedEnrollmentDate
+    };
+
+    if (watchedLoyaltyAmount && watchedTenurePeriod && watchedEnrollmentDate) {
+      const amount = parseFloat(watchedLoyaltyAmount);
+      const tenure = parseFloat(watchedTenurePeriod);
+      const installments = tenure * 2; // 2 installments per year
+      const installmentAmount = Math.ceil(amount / installments).toString();
+      
+      const enrollmentDate = new Date(watchedEnrollmentDate);
+      
+      // Calculate installment amounts and dates
+      for (let i = 1; i <= 6; i++) {
+        if (i <= installments) {
+          form.setValue(`loyalty_bonus_installment_${i}_amount`, installmentAmount);
+          
+          // Calculate date (6 months apart)
+          const installmentDate = new Date(enrollmentDate);
+          installmentDate.setMonth(installmentDate.getMonth() + (i * 6));
+          form.setValue(`loyalty_bonus_installment_${i}_date`, installmentDate.toISOString().split('T')[0]);
+        } else {
+          form.setValue(`loyalty_bonus_installment_${i}_amount`, '');
+          form.setValue(`loyalty_bonus_installment_${i}_date`, '');
+        }
+      }
+    }
+  }, [isFormReady, watchedLoyaltyAmount, watchedTenurePeriod, watchedEnrollmentDate, form]);
+
+  // Show loading state while form is being initialized
+  if (!isFormReady) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <span className="ml-2">Initializing form...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 pb-4">
+      {/* Annual CTC Section */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Annual CTC</h3>
+        <FormField
+          control={form.control}
+          name="salary"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-sm font-medium text-gray-700">Annual CTC *</FormLabel>
+              <FormControl>
+                <Input 
+                  type="number" 
+                  placeholder="Enter annual CTC" 
+                  {...field}
+                  onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                  className="mt-1"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      {/* Salary Annexure Section */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Salary Annexure</h3>
+        
+        {/* Applicability Checkboxes */}
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <FormField
+            control={form.control}
+            name="pf_applicable"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                <FormControl>
+                  <input
+                    type="checkbox"
+                    checked={field.value}
+                    onChange={field.onChange}
+                    className="mt-1"
+                  />
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel className="text-sm font-medium text-gray-700">
+                    PF Applicable
+                  </FormLabel>
+                  <p className="text-xs text-muted-foreground">
+                    Employee discretion at time of joining
+                  </p>
+                </div>
+              </FormItem>
+            )}
+          />
+          
+          <FormField
+            control={form.control}
+            name="esi_applicable"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                <FormControl>
+                  <input
+                    type="checkbox"
+                    checked={field.value}
+                    onChange={field.onChange}
+                    className="mt-1"
+                  />
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel className="text-sm font-medium text-gray-700">
+                    ESI Applicable
+                  </FormLabel>
+                  <p className="text-xs text-muted-foreground">
+                    Triggers only if Monthly Gross &lt; Rs. 21,000
+                  </p>
+                </div>
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* Core Salary Fields */}
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <FormField
+            control={form.control}
+            name="monthly_ctc"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-sm font-medium text-gray-700">Monthly CTC</FormLabel>
+                <FormControl>
+                  <Input 
+                    type="text" 
+                    step="0.01"
+                    {...field}
+                    value={field.value || ''}
+                    placeholder="Auto-calculated" 
+                    onChange={(e) => field.onChange(e.target.value)}
+                    className="mt-1" 
+                  />
+                </FormControl>
+                <p className="text-xs text-muted-foreground">Annual CTC ÷ 12 (editable)</p>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="monthly_basic_pay"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-sm font-medium text-gray-700">Monthly Basic Pay</FormLabel>
+                <FormControl>
+                  <Input 
+                    type="number" 
+                    step="0.01"
+                    {...field}
+                    value={field.value || ''}
+                    placeholder="Auto-calculated"
+                    onChange={(e) => field.onChange(e.target.value)}
+                    className="mt-1" 
+                  />
+                </FormControl>
+                <p className="text-xs text-muted-foreground">51% of Monthly CTC (editable)</p>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="hra"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-sm font-medium text-gray-700">HRA</FormLabel>
+                <FormControl>
+                  <Input 
+                    type="number" 
+                    step="0.01"
+                    {...field}
+                    value={field.value || ''}
+                    placeholder="Auto-calculated" 
+                    onChange={(e) => field.onChange(e.target.value)}
+                    className="mt-1" 
+                  />
+                </FormControl>
+                <p className="text-xs text-muted-foreground">40% of Monthly Basic Pay (editable)</p>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="night_allowance"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-sm font-medium text-gray-700">Night Allowance</FormLabel>
+                <FormControl>
+                  <Input  
+                    type="number" 
+                    step="0.01"
+                    {...field} 
+                    placeholder="2000" 
+                    onChange={(e) => field.onChange(e.target.value)}
+                    className="mt-1" 
+                  />
+                </FormControl>
+                <p className="text-xs text-muted-foreground">Default: Rs. 2000 (editable)</p>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="special_allowance"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-sm font-medium text-gray-700">Special Allowance</FormLabel>
+                <FormControl>
+                  <Input 
+                    type="number" 
+                    step="0.01"
+                    {...field}
+                    value={field.value || ''}
+                    placeholder="Auto-calculated" 
+                    onChange={(e) => field.onChange(e.target.value)}
+                    className="mt-1" 
+                  />
+                </FormControl>
+                <p className="text-xs text-muted-foreground">Monthly CTC - (Basic + HRA + Night + Employer contributions) (editable)</p>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="monthly_gross"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-sm font-medium text-gray-700">Monthly Gross</FormLabel>
+                <FormControl>
+                  <Input 
+                    type="number" 
+                    step="0.01"
+                    {...field}
+                    value={field.value || ''}
+                    placeholder="Auto-calculated" 
+                    onChange={(e) => field.onChange(e.target.value)}
+                    className="mt-1" 
+                  />
+                </FormControl>
+                <p className="text-xs text-muted-foreground">Sum of all allowances (editable)</p>
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* Employer Contributions */}
+        <div className="mb-6">
+          <h4 className="font-medium mb-3">Employer Contributions</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="employer_pf"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium text-gray-700">Employer PF</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="number" 
+                      step="0.01"
+                      {...field} 
+                      placeholder="Auto-calculated" 
+                      onChange={(e) => field.onChange(e.target.value)}
+                      className="mt-1" 
+                    />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">12% of Basic Pay (when PF enabled) (editable)</p>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="employer_esi"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium text-gray-700">Employer ESI</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="number" 
+                      step="0.01"
+                      {...field} 
+                      placeholder="Auto-calculated" 
+                      onChange={(e) => field.onChange(e.target.value)}
+                      className="mt-1" 
+                    />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">3.25% of Monthly Gross (if &lt; Rs. 21,000) (editable)</p>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="monthly_gratuity_provision"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium text-gray-700">Monthly Gratuity (Provision)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="number" 
+                      step="0.01"
+                      {...field} 
+                      placeholder="Auto-calculated" 
+                      onChange={(e) => field.onChange(e.target.value)}
+                      className="mt-1" 
+                    />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">[(Basic × 15) ÷ 26] ÷ 12 (editable)</p>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="monthly_bonus_provision"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium text-gray-700">Monthly Bonus (Provision)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="number" 
+                      step="0.01"
+                      {...field} 
+                      placeholder="Auto-calculated" 
+                      onChange={(e) => field.onChange(e.target.value)}
+                      className="mt-1" 
+                    />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">Basic × 8.33% (if Basic &lt; Rs. 21,000) (editable)</p>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="group_medical_insurance"
+              render={({ field }) => (
+                <FormItem className="col-span-2">
+                  <FormLabel className="text-sm font-medium text-gray-700">Group Medical Insurance</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="number" 
+                      step="0.01"
+                      {...field} 
+                      placeholder="138" 
+                      onChange={(e) => field.onChange(e.target.value)}
+                      className="mt-1" 
+                    />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">Default: Rs. 138 (editable)</p>
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+
+        {/* Employee Deductions */}
+        <div className="mb-6">
+          <h4 className="font-medium mb-3">Employee Deductions</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="pf_employee"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium text-gray-700">PF Employee</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="number" 
+                      step="0.01"
+                      {...field} 
+                      placeholder="Auto-calculated" 
+                      onChange={(e) => field.onChange(e.target.value)}
+                      className="mt-1" 
+                    />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">12% of Basic Pay (editable)</p>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="esi_employee"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium text-gray-700">ESI Employee</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="number" 
+                      step="0.01"
+                      {...field} 
+                      placeholder="Auto-calculated" 
+                      onChange={(e) => field.onChange(e.target.value)}
+                      className="mt-1" 
+                    />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">0.75% of Basic Pay (editable)</p>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="tds"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium text-gray-700">TDS</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="number" 
+                      step="0.01"
+                      {...field} 
+                      placeholder="Enter TDS amount" 
+                      onChange={(e) => field.onChange(e.target.value)}
+                      className="mt-1" 
+                    />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">Manual entry</p>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="professional_tax"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium text-gray-700">Professional Tax</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="number" 
+                      step="0.01"
+                      {...field} 
+                      placeholder="200" 
+                      onChange={(e) => field.onChange(e.target.value)}
+                      className="mt-1" 
+                    />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">Default: Rs. 200 (editable)</p>
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+
+        {/* Final Calculations */}
+        <div className="grid grid-cols-3 gap-4">
+          <FormField
+            control={form.control}
+            name="total_deductions"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-sm font-medium text-gray-700">Total Deductions</FormLabel>
+                <FormControl>
+                  <Input 
+                    type="number" 
+                    step="0.01"
+                    {...field}
+                    value={field.value || ''}
+                    placeholder="Auto-calculated" 
+                    onChange={(e) => field.onChange(e.target.value)}
+                    className="bg-red-50" 
+                  />
+                </FormControl>
+                <p className="text-xs text-muted-foreground">Sum of all deductions (editable)</p>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="net_pay"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-sm font-medium text-gray-700">Net Pay</FormLabel>
+                <FormControl>
+                  <Input 
+                    type="number" 
+                    step="0.01"
+                    {...field}
+                    value={field.value || ''}
+                    placeholder="Auto-calculated" 
+                    onChange={(e) => field.onChange(e.target.value)}
+                    className="bg-green-50" 
+                  />
+                </FormControl>
+                <p className="text-xs text-muted-foreground">Monthly Gross - Total Deductions (editable)</p>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="monthly_take_home_salary"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-sm font-medium text-gray-700">Monthly Take Home</FormLabel>
+                <FormControl>
+                  <Input 
+                    type="number" 
+                    step="0.01"
+                    {...field}
+                    value={field.value || ''}
+                    placeholder="Auto-calculated" 
+                    onChange={(e) => field.onChange(e.target.value)}
+                    className="bg-blue-50" 
+                  />
+                </FormControl>
+                <p className="text-xs text-muted-foreground">Net Pay + Monthly Bonus (editable)</p>
+              </FormItem>
+            )}
+          />
+        </div>
+      </div>
+
+      {/* Loyalty Bonus Section */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Loyalty Bonus</h3>
+        
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <FormField
+            control={form.control}
+            name="loyalty_bonus_enrollment_date"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-sm font-medium text-gray-700">Enrollment Date</FormLabel>
+                <FormControl>
+                  <Input type="date" {...field} className="mt-1" />
+                </FormControl>
+                <p className="text-xs text-muted-foreground">Generally same as date of joining</p>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="loyalty_bonus_tenure_period"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-sm font-medium text-gray-700">Tenure Period (Years)</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="3" className="mt-1" />
+                </FormControl>
+                <p className="text-xs text-muted-foreground">Default: 3 years</p>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="loyalty_bonus_amount"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-sm font-medium text-gray-700">Total Loyalty Bonus Amount</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Enter total bonus amount" className="mt-1" />
+                </FormControl>
+                <p className="text-xs text-muted-foreground">Will be divided into installments</p>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="loyalty_bonus_specific_condition"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-sm font-medium text-gray-700">Specific Conditions</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Enter any specific conditions" className="mt-1" />
+                </FormControl>
+                <p className="text-xs text-muted-foreground">Optional conditions</p>
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* Installment Schedule */}
+        <div>
+          <h4 className="font-medium mb-3">Installment Schedule</h4>
+          <div className="space-y-4">
+            {[1, 2, 3, 4, 5, 6].map((installment) => (
+              <div key={installment} className="grid grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg">
+                <div>
+                  <p className="font-medium text-sm mb-2">Installment {installment}</p>
+                </div>
+                
+                <FormField
+                  control={form.control}
+                  name={`loyalty_bonus_installment_${installment}_amount`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Amount</FormLabel>
+                      <FormControl>
+                        <Input {...field} value={field.value || ''} placeholder="Auto-calculated" readOnly className="bg-white text-sm" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name={`loyalty_bonus_installment_${installment}_date`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Date</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} readOnly className="bg-white text-sm" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name={`loyalty_bonus_installment_${installment}_disbursed`}
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                      <FormControl>
+                        <input
+                          type="checkbox"
+                          checked={field.value}
+                          onChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormLabel className="text-xs">Disbursed</FormLabel>
+                    </FormItem>
+                  )}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

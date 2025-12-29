@@ -1,6 +1,21 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Image, Font } from '@react-pdf/renderer';
 import logo from "@/assets/colourLogo.png";
+
+// Register NotoSans font for Indian Rupee symbol (₹) support
+// Helvetica doesn't include the ₹ symbol, so we need NotoSans for INR invoices
+// Font file is in public/fonts/ folder for @react-pdf/renderer to access it
+try {
+  Font.register({
+    family: 'NotoSans',
+    src: '/fonts/NotoSans.ttf', // Public folder path
+  });
+  console.log('NotoSans font registered successfully for ₹ symbol support');
+} catch (error) {
+  console.warn('NotoSans font registration failed. ₹ symbol may not render correctly.');
+  console.warn('Error:', error);
+  // Component will still work, but ₹ symbol may not render correctly
+}
 
 // Define styles for the PDF
 const styles = StyleSheet.create({
@@ -263,6 +278,10 @@ const styles = StyleSheet.create({
   },
   blackFont: {
     color: '#000000',
+  },
+  notoSansFont: {
+    fontFamily: 'NotoSans',
+    fontWeight: 600,
   }
 });
 
@@ -377,6 +396,10 @@ export const InvoicePDFTemplateIndian: React.FC<InvoicePDFTemplateIndianProps> =
     ? invoice.pending_amount 
     : total - amountPaid;
 
+  const currencySign = invoice.currency === 'USD' ? '$' : invoice.currency === 'INR' ? '₹' : invoice.currency === 'EUR' ? '€' : '£';
+  const isINR = invoice.currency === 'INR';
+  const currencyFontStyle = isINR ? styles.notoSansFont : {};
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
@@ -444,16 +467,16 @@ export const InvoicePDFTemplateIndian: React.FC<InvoicePDFTemplateIndianProps> =
             {/* Summary Section */}
             <View style={styles.summarySection}>
                 <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Total ({invoice.currency || 'USD'}) $:</Text>
-                    <Text style={styles.summaryValue}>{total.toFixed(2)}</Text>
+                    <Text style={styles.summaryLabel}>Total ({invoice.currency || 'USD'}):</Text>
+                    <Text style={[styles.summaryValue, currencyFontStyle]}>{currencySign} {total.toFixed(2)}</Text>
                 </View>
                 <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Amount Paid ({invoice.currency || 'USD'}) $:</Text>
-                    <Text style={styles.summaryValue}>{amountPaid > 0 ? amountPaid.toFixed(2) : '-'}</Text>
+                    <Text style={styles.summaryLabel}>Amount Paid ({invoice.currency || 'USD'}):</Text>
+                    <Text style={[styles.summaryValue, currencyFontStyle]}>{amountPaid > 0 ? `${currencySign} ${amountPaid.toFixed(2)}` : '-'}</Text>
                 </View>
                 <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Balance Due ({invoice.currency || 'USD'}) $:</Text>
-                    <Text style={styles.summaryValue}>{balanceDue.toFixed(2)}</Text>
+                    <Text style={styles.summaryLabel}>Balance Due ({invoice.currency || 'USD'}):</Text>
+                    <Text style={[styles.summaryValue, currencyFontStyle]}>{currencySign} {balanceDue.toFixed(2)}</Text>
                 </View>
             </View>
         </View>
