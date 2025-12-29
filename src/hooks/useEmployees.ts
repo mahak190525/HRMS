@@ -92,7 +92,8 @@ export function useFilteredEmployees() {
           })
         );
         
-        return enhancedUsers;
+        // Sort alphabetically by full_name
+        return enhancedUsers.sort((a, b) => a.full_name.localeCompare(b.full_name));
       }
 
       // Regular employees can only see themselves

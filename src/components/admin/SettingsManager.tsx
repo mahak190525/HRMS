@@ -385,7 +385,7 @@ export function SettingsManager() {
       </div>
 
       <Tabs defaultValue="leave" className="w-full">
-        <TabsList className="grid w-full grid-cols-5 lg:grid-cols-10">
+        <TabsList className="grid w-full grid-cols-6 lg:grid-cols-10">
           {/* <TabsTrigger value="general" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
             <span className="hidden sm:inline">General</span>
@@ -1301,6 +1301,7 @@ export function SettingsManager() {
           </Card>
         </TabsContent>
 
+
         {/* Finance Settings */}
         <TabsContent value="finance" className="space-y-4">
           {/* Indian Details Configuration */}
@@ -1795,4 +1796,5 @@ function FinancePermissionsCard() {
     </Card>
   );
 }
+
 

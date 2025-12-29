@@ -39,6 +39,7 @@ export interface LLCDeets {
   email: string;
 }
 
+
 export interface AppConfig {
   id: number;
   indian_deets: IndianDeets;
@@ -144,3 +145,4 @@ export const useUpdateAppConfig = () => {
     },
   });
 };
+

@@ -75,6 +75,25 @@ export const authApi = {
       'skype_account', 'system_account', 'added_to_mailing_list',
       'added_to_attendance_sheet', 'confluence_info_provided', 'id_card_provided',
       'remarks', 'uan_number', 'is_experienced',
+      // Salary Annexure fields
+      'pf_applicable', 'esi_applicable', 'monthly_ctc', 'monthly_basic_pay',
+      'hra', 'night_allowance', 'special_allowance', 'monthly_gross',
+      'employer_pf', 'employer_esi', 'monthly_gratuity_provision',
+      'monthly_bonus_provision', 'group_medical_insurance', 'pf_employee',
+      'esi_employee', 'tds', 'professional_tax', 'total_deductions',
+      'net_pay', 'monthly_take_home_salary',
+      // Loyalty Bonus fields
+      'loyalty_bonus_enrollment_date', 'loyalty_bonus_specific_condition',
+      'loyalty_bonus_tenure_period', 'loyalty_bonus_amount',
+      'loyalty_bonus_installment_1_amount', 'loyalty_bonus_installment_2_amount',
+      'loyalty_bonus_installment_3_amount', 'loyalty_bonus_installment_4_amount',
+      'loyalty_bonus_installment_5_amount', 'loyalty_bonus_installment_6_amount',
+      'loyalty_bonus_installment_1_date', 'loyalty_bonus_installment_2_date',
+      'loyalty_bonus_installment_3_date', 'loyalty_bonus_installment_4_date',
+      'loyalty_bonus_installment_5_date', 'loyalty_bonus_installment_6_date',
+      'loyalty_bonus_installment_1_disbursed', 'loyalty_bonus_installment_2_disbursed',
+      'loyalty_bonus_installment_3_disbursed', 'loyalty_bonus_installment_4_disbursed',
+      'loyalty_bonus_installment_5_disbursed', 'loyalty_bonus_installment_6_disbursed',
       // System fields
       'isSA'
     ];
@@ -93,7 +112,15 @@ export const authApi = {
     }
 
     // Coerce empty date strings to null to satisfy Postgres date type
-    const dateFields = ['date_of_birth', 'date_of_joining', 'date_of_marriage_anniversary', 'father_dob', 'mother_dob'];
+    const dateFields = [
+      'date_of_birth', 'date_of_joining', 'date_of_marriage_anniversary', 
+      'father_dob', 'mother_dob',
+      // Loyalty bonus date fields
+      'loyalty_bonus_enrollment_date', 'loyalty_bonus_installment_1_date',
+      'loyalty_bonus_installment_2_date', 'loyalty_bonus_installment_3_date',
+      'loyalty_bonus_installment_4_date', 'loyalty_bonus_installment_5_date',
+      'loyalty_bonus_installment_6_date'
+    ];
     dateFields.forEach(field => {
       if (filteredUpdates[field] === '') {
         filteredUpdates[field] = null;
@@ -141,7 +168,19 @@ export const authApi = {
       'permanent_address', 'aadhar_card_no', 'pan_no', 'bank_account_no',
       'ifsc_code', 'qualification', 'employment_terms',
       // New onboarding fields (text fields)
-      'remarks', 'uan_number'
+      'remarks', 'uan_number',
+      // Salary Annexure text fields
+      'monthly_ctc', 'monthly_basic_pay', 'hra', 'night_allowance',
+      'special_allowance', 'monthly_gross', 'employer_pf', 'employer_esi',
+      'monthly_gratuity_provision', 'monthly_bonus_provision',
+      'group_medical_insurance', 'pf_employee', 'esi_employee', 'tds',
+      'professional_tax', 'total_deductions', 'net_pay', 'monthly_take_home_salary',
+      // Loyalty Bonus text fields
+      'loyalty_bonus_specific_condition', 'loyalty_bonus_tenure_period',
+      'loyalty_bonus_amount', 'loyalty_bonus_installment_1_amount',
+      'loyalty_bonus_installment_2_amount', 'loyalty_bonus_installment_3_amount',
+      'loyalty_bonus_installment_4_amount', 'loyalty_bonus_installment_5_amount',
+      'loyalty_bonus_installment_6_amount'
     ];
     optionalTextFields.forEach(field => {
       if (filteredUpdates[field] === '') {
@@ -1419,7 +1458,7 @@ export const employeeApi = {
     );
 
     // Transform the data to match the expected structure
-    return enhancedData?.map((row: any) => ({
+    const transformedData = enhancedData?.map((row: any) => ({
       id: row.id,
       auth_provider: row.auth_provider,
       provider_user_id: row.provider_user_id,
@@ -1496,7 +1535,10 @@ export const employeeApi = {
         email: row.manager_email,
         position: row.manager_position
       } : null
-    })) || [];
+    }));
+
+    // Sort alphabetically by full_name
+    return transformedData?.sort((a, b) => a.full_name.localeCompare(b.full_name)) || [];
   },
 
   async getAllUsersDetails() {
