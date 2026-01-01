@@ -44,6 +44,7 @@ export function AllPayroll() {
   // Removed unused user variable
   const [selectedMonth, setSelectedMonth] = useState(getCurrentISTDate().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(getCurrentISTDate().getFullYear());
+  const [yearInput, setYearInput] = useState<string>(getCurrentISTDate().getFullYear().toString());
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
@@ -246,6 +247,7 @@ export function AllPayroll() {
         <CardContent>
           <div className="flex items-center gap-4 mb-6">
             <div>
+              <label className="text-sm font-medium mb-1 block">Month</label>
               <Select value={selectedMonth.toString()} onValueChange={(value) => {
                 setSelectedMonth(parseInt(value));
                 setShouldFetch(false); // Reset fetch state when month changes
@@ -263,33 +265,52 @@ export function AllPayroll() {
               </Select>
             </div>
             <div>
-              <Select value={selectedYear.toString()} onValueChange={(value) => {
-                setSelectedYear(parseInt(value));
-                setShouldFetch(false); // Reset fetch state when year changes
-              }}>
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="2024">2024</SelectItem>
-                  <SelectItem value="2025">2025</SelectItem>
-                </SelectContent>
-              </Select>
+              <label className="text-sm font-medium mb-1 block">Year</label>
+              <Input
+                type="number"
+                value={yearInput}
+                onChange={(e) => {
+                  const inputValue = e.target.value;
+                  setYearInput(inputValue);
+                  // Update selectedYear if valid
+                  const value = parseInt(inputValue);
+                  if (!isNaN(value) && value >= 2000 && value <= 2100) {
+                    setSelectedYear(value);
+                    setShouldFetch(false); // Reset fetch state when year changes
+                  }
+                }}
+                onBlur={(e) => {
+                  const value = parseInt(e.target.value);
+                  if (isNaN(value) || value < 2000 || value > 2100) {
+                    // Reset to current year if invalid
+                    const currentYear = getCurrentISTDate().getFullYear();
+                    setYearInput(currentYear.toString());
+                    setSelectedYear(currentYear);
+                  } else {
+                    // Ensure input matches the valid year
+                    setYearInput(value.toString());
+                  }
+                }}
+                placeholder="Enter year"
+                className="w-32"
+                min={2000}
+                max={2100}
+              />
             </div>
-            <Button onClick={handleGeneratePayroll} disabled={payrollLoading}>
+            <Button onClick={handleGeneratePayroll} disabled={payrollLoading} className='mt-6'>
               <Calculator className="h-4 w-4 mr-2" />
               {payrollLoading ? 'Generating...' : 'Generate Latest Report'}
             </Button>
             {payrollData && (
               <div className="flex gap-2">
-                <Button onClick={handleDownloadPayroll} variant="outline">
+                <Button onClick={handleDownloadPayroll} variant="outline" className='mt-6'>
                   <Download className="h-4 w-4 mr-2" />
                   Export
                 </Button>
                 <Button 
                   onClick={handleGeneratePayslips} 
                   disabled={generatePayslips.isPending}
-                  className="bg-green-600 hover:bg-green-700"
+                  className="bg-green-600 hover:bg-green-700 mt-6"
                 >
                   <Send className="h-4 w-4 mr-2" />
                   {generatePayslips.isPending ? 'Generating...' : 'Generate & Email Payslips'}

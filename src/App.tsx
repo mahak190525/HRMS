@@ -254,129 +254,129 @@ function AppRoutes() {
           </GuardedRoute>
         } />
         <Route path="grievance" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <GrievanceDashboard />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="grievance/*" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <GrievanceDashboard />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="grievance/all" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <AllComplaints />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="bd" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <BDDashboard />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="bd/*" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <BDDashboard />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="bd/billing" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <AllBillings />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="bd/invoices" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <AllInvoices />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="bd/logs" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <BillingLogs />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="finance" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <FinanceDashboard />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="finance/*" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <FinanceDashboard />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="finance/payroll" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <AllPayroll />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="finance/billing" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <AllBilling />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="finance/invoice-logs" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <InvoiceLogs />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="finance/logs" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <PayrollLogs />
-          </Suspense>
+          </GuardedRoute>
         } /> 
         <Route path="ats" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <ATSDashboard />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="ats/*" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <ATSDashboard />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="ats/candidates" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <CandidatesList />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="ats/assessment" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <RecruitmentAssessment />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="ats/questions" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <QuestionBank />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="lms" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <LMSDashboard />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="lms/*" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <LMSDashboard />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="lms/prerequisites" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <Prerequisites />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="lms/documents" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <DocumentUpload />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="lms/candidates" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <AllCandidates />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="notifications" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <NotificationsPage />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="policies" element={
           <GuardedRoute>
@@ -404,29 +404,29 @@ function AppRoutes() {
           </GuardedRoute>
         } /> */}
         <Route path="exit" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <ExitDashboard />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="exit/*" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <ExitDashboard />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="exit/documents" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <ExitDocuments />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="exit/clearance" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <ExitClearance />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="exit/interview" element={
-          <Suspense fallback={<LoadingSpinner size="lg" />}>
+          <GuardedRoute>
             <ExitInterview />
-          </Suspense>
+          </GuardedRoute>
         } />
         <Route path="" element={<Navigate to="/dashboard" replace />} />
       </Route>

@@ -153,6 +153,7 @@ const employeeSchema = z.object({
   esi_employee: z.string().optional(),
   tds: z.string().optional(),
   professional_tax: z.string().optional(),
+  vpf: z.string().optional(),
   total_deductions: z.string().optional(),
   net_pay: z.string().optional(),
   monthly_take_home_salary: z.string().optional(),
@@ -372,6 +373,7 @@ export function EmployeeDetailsModal({
       const { data, error } = await supabase
         .from('roles')
         .select('id, name')
+        .neq('name', 'super_admin')
         .order('name');
       if (error) throw error;
       return data;
@@ -451,6 +453,7 @@ export function EmployeeDetailsModal({
       esi_employee: '',
       tds: '',
       professional_tax: '200',
+      vpf: '',
       total_deductions: '',
       net_pay: '',
       monthly_take_home_salary: '',
@@ -581,6 +584,7 @@ export function EmployeeDetailsModal({
         esi_employee: currentEmployeeData.esi_employee ?? '',
         tds: currentEmployeeData.tds ?? '',
         professional_tax: currentEmployeeData.professional_tax ?? '200',
+        vpf: currentEmployeeData.vpf ?? '',
         total_deductions: currentEmployeeData.total_deductions ?? '',
         net_pay: currentEmployeeData.net_pay ?? '',
         monthly_take_home_salary: currentEmployeeData.monthly_take_home_salary ?? '',
@@ -724,6 +728,7 @@ export function EmployeeDetailsModal({
       esi_employee: data.esi_employee || null,
       tds: data.tds || null,
       professional_tax: data.professional_tax || '200',
+      vpf: data.vpf || null,
       total_deductions: data.total_deductions || null,
       net_pay: data.net_pay || null,
       monthly_take_home_salary: data.monthly_take_home_salary || null,
@@ -756,7 +761,11 @@ export function EmployeeDetailsModal({
     console.log('🔍 Employee update data:', {
       additional_role_ids: safeUpdates.additional_role_ids,
       role_id: safeUpdates.role_id,
-      employee_id: currentEmployee.id
+      employee_id: currentEmployee.id,
+      vpf: safeUpdates.vpf,
+      total_deductions: safeUpdates.total_deductions,
+      net_pay: safeUpdates.net_pay,
+      monthly_take_home_salary: safeUpdates.monthly_take_home_salary
     });
 
     updateEmployee.mutate({
@@ -1808,7 +1817,10 @@ function WorkInfoView({ employee, getStatusBadge }: { employee: Employee; getSta
         <div>
           <p className="font-medium">Primary Role:</p>
           <Badge variant="default" className="capitalize mt-1">
-            {getRoleDisplayName(employee.role?.name || '') || 'Not assigned'}
+            {employee.role?.name ? 
+              employee.role.name.charAt(0).toUpperCase() + employee.role.name.slice(1).replace(/_/g, ' ') : 
+              'Not assigned'
+            }
           </Badge>
         </div>
         <div>
@@ -1818,7 +1830,7 @@ function WorkInfoView({ employee, getStatusBadge }: { employee: Employee; getSta
               <div className="flex flex-wrap gap-2">
                 {employee.additional_roles.map((role: any) => (
                   <Badge key={role.id} variant="secondary" className="text-xs">
-                    {getRoleDisplayName(role.name)}
+                    {role.name.charAt(0).toUpperCase() + role.name.slice(1).replace(/_/g, ' ')}
                   </Badge>
                 ))}
               </div>
@@ -2678,7 +2690,7 @@ function WorkInfoEdit({ form, departmentOptions, roleOptions, userOptions, emplo
                 <SelectContent>
                   {filteredRoleOptions?.map((role: any) => (
                     <SelectItem key={role.id} value={role.id}>
-                      {getRoleDisplayName(role.name)}
+                      {role.name.charAt(0).toUpperCase() + role.name.slice(1).replace(/_/g, ' ')}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -2779,7 +2791,7 @@ function WorkInfoEdit({ form, departmentOptions, roleOptions, userOptions, emplo
                             />
                             <div className="flex-1">
                               <span className={isPrimaryRole ? "text-muted-foreground" : ""}>
-                                {getRoleDisplayName(role.name)}
+                                {role.name.charAt(0).toUpperCase() + role.name.slice(1).replace(/_/g, ' ')}
                               </span>
                               {isPrimaryRole && (
                                 <span className="text-xs text-muted-foreground ml-2">
@@ -2804,7 +2816,7 @@ function WorkInfoEdit({ form, departmentOptions, roleOptions, userOptions, emplo
                     
                     return (
                       <Badge key={roleId} variant="secondary" className="flex items-center gap-1">
-                        {getRoleDisplayName(role.name)}
+                        {role.name.charAt(0).toUpperCase() + role.name.slice(1).replace(/_/g, ' ')}
                         <button
                           type="button"
                           onClick={() => {
@@ -3738,6 +3750,7 @@ function CTCView({ employee }: { employee: Employee }) {
         esi_employee: 0,
         tds: 0,
         professional_tax: 200,
+        vpf: 0,
         total_deductions: 0,
         net_pay: 0,
         monthly_take_home_salary: 0
@@ -3771,9 +3784,10 @@ function CTCView({ employee }: { employee: Employee }) {
     const employeeESIValue = employee.esi_applicable ? monthlyBasicValue * 0.0075 : 0;
     const tdsValue = parseFloat(employee.tds?.toString() || '0');
     const professionalTaxValue = parseFloat(employee.professional_tax?.toString() || '200');
+    const vpfValue = parseFloat(employee.vpf?.toString() || '0');
     
     // Calculate totals from original values
-    const totalDeductionsValue = employeePFValue + employeeESIValue + tdsValue + professionalTaxValue;
+    const totalDeductionsValue = employeePFValue + employeeESIValue + tdsValue + professionalTaxValue + vpfValue;
     const netPayValue = monthlyGrossValue - totalDeductionsValue;
     const takeHomeValue = netPayValue + bonusValue;
 
@@ -3794,6 +3808,7 @@ function CTCView({ employee }: { employee: Employee }) {
       esi_employee: Math.ceil(employeeESIValue),
       tds: Math.ceil(tdsValue),
       professional_tax: Math.ceil(professionalTaxValue),
+      vpf: Math.ceil(vpfValue),
       total_deductions: Math.ceil(totalDeductionsValue),
       net_pay: Math.ceil(netPayValue),
       monthly_take_home_salary: Math.ceil(takeHomeValue)
@@ -3802,9 +3817,25 @@ function CTCView({ employee }: { employee: Employee }) {
 
   // Use database values when available, fallback to calculated values
   const getDisplayValue = (dbValue: any, calculatedValue: number, fallbackValue: number = 0) => {
+    // Check if we have database CTC values - if so, prioritize database values even if they're 0 or null
+    if (hasDbValues) {
+      // For database mode, show actual database values (including 0 and null)
+      if (dbValue !== undefined) {
+        if (dbValue === null) {
+          return 0; // Show 0 for null database values
+        }
+        const parsed = parseFloat(dbValue.toString());
+        return isNaN(parsed) ? 0 : parsed;
+      }
+      // If field doesn't exist in database but we're in database mode, show 0
+      return 0;
+    }
+    
+    // For calculated mode (no database CTC values), use calculated values
     // If database value exists and is not null/undefined/empty string, use it
     if (dbValue !== null && dbValue !== undefined && dbValue !== '') {
-      return parseFloat(dbValue.toString()) || fallbackValue;
+      const parsed = parseFloat(dbValue.toString()) || fallbackValue;
+      return parsed;
     }
     // Otherwise use calculated value
     return calculatedValue;
@@ -3813,14 +3844,22 @@ function CTCView({ employee }: { employee: Employee }) {
   const calculated = calculateSalaryComponents();
   
   // Determine if we have database values or need to show calculated ones
-  const hasDbValues = !!(employee?.monthly_ctc || employee?.monthly_basic_pay || employee?.total_deductions);
+  // If any of the core CTC fields have values (including "0"), we're in database mode
+  const hasDbValues = !!(
+    (employee?.monthly_ctc !== undefined && employee?.monthly_ctc !== null) ||
+    (employee?.monthly_basic_pay !== undefined && employee?.monthly_basic_pay !== null) ||
+    (employee?.total_deductions !== undefined && employee?.total_deductions !== null)
+  );
   
   console.log('💰 CTC Display Values:', {
     hasDbValues,
     db_monthly_ctc: employee?.monthly_ctc,
     calc_monthly_ctc: calculated.monthly_ctc,
     db_pf_applicable: employee?.pf_applicable,
-    db_total_deductions: employee?.total_deductions
+    db_total_deductions: employee?.total_deductions,
+    db_vpf: employee?.vpf,
+    db_tds: employee?.tds,
+    db_professional_tax: employee?.professional_tax
   });
 
   return (
@@ -3935,6 +3974,10 @@ function CTCView({ employee }: { employee: Employee }) {
               <p className="font-medium">Professional Tax:</p>
               <p className="text-muted-foreground">₹ {getDisplayValue(employee?.professional_tax, calculated.professional_tax, 200).toLocaleString()}</p>
             </div>
+            <div>
+              <p className="font-medium">VPF:</p>
+              <p className="text-muted-foreground">₹ {getDisplayValue(employee?.vpf, calculated.vpf).toLocaleString()}</p>
+            </div>
           </div>
         </div>
 
@@ -4045,6 +4088,18 @@ function CTCEdit({ form }: { form: any }) {
   const watchedGroupInsurance = form.watch('group_medical_insurance');
   const watchedTDS = form.watch('tds');
   const watchedProfessionalTax = form.watch('professional_tax');
+  const watchedVPF = form.watch('vpf');
+
+  // Debug VPF changes
+  React.useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 VPF field changed:', {
+        vpf: watchedVPF,
+        type: typeof watchedVPF,
+        parsed: parseFloat(watchedVPF || '0')
+      });
+    }
+  }, [watchedVPF]);
 
   // Effect to mark form as ready after a short delay
   React.useEffect(() => {
@@ -4070,7 +4125,8 @@ function CTCEdit({ form }: { form: any }) {
     night_allowance: watchedNightAllowance,
     group_medical_insurance: watchedGroupInsurance,
     tds: watchedTDS,
-    professional_tax: watchedProfessionalTax
+    professional_tax: watchedProfessionalTax,
+    vpf: watchedVPF
   });
 
   // Auto-calculate fields when dependencies change (rounding to ceiling values)
@@ -4111,7 +4167,8 @@ function CTCEdit({ form }: { form: any }) {
         night_allowance: watchedNightAllowance,
         group_medical_insurance: watchedGroupInsurance,
         tds: watchedTDS,
-        professional_tax: watchedProfessionalTax
+        professional_tax: watchedProfessionalTax,
+        vpf: watchedVPF
       };
       return;
     }
@@ -4124,7 +4181,8 @@ function CTCEdit({ form }: { form: any }) {
       prevValuesRef.current.night_allowance !== watchedNightAllowance ||
       prevValuesRef.current.group_medical_insurance !== watchedGroupInsurance ||
       prevValuesRef.current.tds !== watchedTDS ||
-      prevValuesRef.current.professional_tax !== watchedProfessionalTax;
+      prevValuesRef.current.professional_tax !== watchedProfessionalTax ||
+      prevValuesRef.current.vpf !== watchedVPF;
 
     // Only recalculate if dependencies changed
     if (!hasChanged) {
@@ -4141,7 +4199,8 @@ function CTCEdit({ form }: { form: any }) {
       night_allowance: watchedNightAllowance,
       group_medical_insurance: watchedGroupInsurance,
       tds: watchedTDS,
-      professional_tax: watchedProfessionalTax
+      professional_tax: watchedProfessionalTax,
+      vpf: watchedVPF
     };
 
     if (watchedSalary && watchedSalary > 0) {
@@ -4173,11 +4232,29 @@ function CTCEdit({ form }: { form: any }) {
       const employeeESIValue = watchedESIApplicable ? monthlyBasicValue * 0.0075 : 0;
       const tdsValue = parseFloat(watchedTDS || '0');
       const professionalTaxValue = parseFloat(watchedProfessionalTax || '200');
+      const vpfValue = parseFloat(watchedVPF || '0');
       
       // Calculate totals from original values
-      const totalDeductionsValue = employeePFValue + employeeESIValue + tdsValue + professionalTaxValue;
+      const totalDeductionsValue = employeePFValue + employeeESIValue + tdsValue + professionalTaxValue + vpfValue;
       const netPayValue = monthlyGrossValue - totalDeductionsValue;
       const takeHomeValue = netPayValue + bonusValue;
+
+      // Debug VPF calculation
+      if (process.env.NODE_ENV === 'development' && vpfValue > 0) {
+        console.log('💰 VPF Calculation Debug:', {
+          vpfValue,
+          totalDeductionsValue,
+          netPayValue,
+          takeHomeValue,
+          breakdown: {
+            employeePF: employeePFValue,
+            employeeESI: employeeESIValue,
+            tds: tdsValue,
+            professionalTax: professionalTaxValue,
+            vpf: vpfValue
+          }
+        });
+      }
 
       // Apply ceiling to each final result independently
       // Note: nightAllowance, groupInsurance, tds, and professionalTax are user-editable fields,
@@ -4213,7 +4290,130 @@ function CTCEdit({ form }: { form: any }) {
       form.setValue('net_pay', netPay.toString());
       form.setValue('monthly_take_home_salary', takeHome.toString());
     }
-  }, [isFormReady, watchedSalary, watchedPFApplicable, watchedESIApplicable, watchedNightAllowance, watchedGroupInsurance, watchedTDS, watchedProfessionalTax, form]);
+  }, [isFormReady, watchedSalary, watchedPFApplicable, watchedESIApplicable, watchedNightAllowance, watchedGroupInsurance, watchedTDS, watchedProfessionalTax, watchedVPF, form]);
+
+  // Watch all user-editable CTC fields for real-time calculations
+  const watchedMonthlyBasicPay = form.watch('monthly_basic_pay');
+  const watchedHRA = form.watch('hra');
+  const watchedSpecialAllowance = form.watch('special_allowance');
+  const watchedMonthlyGross = form.watch('monthly_gross');
+  // These are watched for potential future use in real-time calculations
+  // const watchedEmployerPF = form.watch('employer_pf');
+  // const watchedEmployerESI = form.watch('employer_esi');
+  // const watchedMonthlyGratuity = form.watch('monthly_gratuity_provision');
+  const watchedMonthlyBonus = form.watch('monthly_bonus_provision');
+  const watchedPFEmployee = form.watch('pf_employee');
+  const watchedESIEmployee = form.watch('esi_employee');
+
+  // Real-time calculation effect for all user-editable CTC fields
+  React.useEffect(() => {
+    if (!isFormReady) return;
+
+    // Get current values from form
+    const currentVPF = parseFloat(watchedVPF || '0');
+    const currentTDS = parseFloat(watchedTDS || '0');
+    const currentProfessionalTax = parseFloat(watchedProfessionalTax || '200');
+    const currentPFEmployee = parseFloat(watchedPFEmployee || '0');
+    const currentESIEmployee = parseFloat(watchedESIEmployee || '0');
+    const currentMonthlyGross = parseFloat(watchedMonthlyGross || '0');
+    const currentMonthlyBonus = parseFloat(watchedMonthlyBonus || '0');
+
+    // Recalculate dependent fields
+    const newTotalDeductions = currentPFEmployee + currentESIEmployee + currentTDS + currentProfessionalTax + currentVPF;
+    const newNetPay = currentMonthlyGross - newTotalDeductions;
+    const newTakeHome = newNetPay + currentMonthlyBonus;
+
+    // Update the calculated fields
+    form.setValue('total_deductions', Math.ceil(newTotalDeductions).toString());
+    form.setValue('net_pay', Math.ceil(newNetPay).toString());
+    form.setValue('monthly_take_home_salary', Math.ceil(newTakeHome).toString());
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔄 Real-time CTC recalculation:', {
+        inputs: {
+          vpf: currentVPF,
+          tds: currentTDS,
+          professionalTax: currentProfessionalTax,
+          pfEmployee: currentPFEmployee,
+          esiEmployee: currentESIEmployee,
+          monthlyGross: currentMonthlyGross,
+          monthlyBonus: currentMonthlyBonus
+        },
+        outputs: {
+          totalDeductions: Math.ceil(newTotalDeductions),
+          netPay: Math.ceil(newNetPay),
+          takeHome: Math.ceil(newTakeHome)
+        }
+      });
+    }
+  }, [
+    isFormReady, 
+    watchedVPF, 
+    watchedTDS, 
+    watchedProfessionalTax, 
+    watchedPFEmployee, 
+    watchedESIEmployee, 
+    watchedMonthlyGross, 
+    watchedMonthlyBonus, 
+    form
+  ]);
+
+  // Additional real-time calculation for when basic salary components change
+  React.useEffect(() => {
+    if (!isFormReady) return;
+
+    // Get current values
+    const currentMonthlyBasic = parseFloat(watchedMonthlyBasicPay || '0');
+    const currentHRA = parseFloat(watchedHRA || '0');
+    const currentNightAllowance = parseFloat(watchedNightAllowance || '2000');
+    const currentSpecialAllowance = parseFloat(watchedSpecialAllowance || '0');
+
+    // Recalculate monthly gross when components change
+    const newMonthlyGross = currentMonthlyBasic + currentHRA + currentNightAllowance + currentSpecialAllowance;
+
+    // Update monthly gross if it changed
+    const currentMonthlyGrossValue = parseFloat(watchedMonthlyGross || '0');
+    if (Math.abs(newMonthlyGross - currentMonthlyGrossValue) > 0.01) {
+      form.setValue('monthly_gross', Math.ceil(newMonthlyGross).toString());
+    }
+
+    // Recalculate PF and ESI based on basic pay changes
+    if (watchedPFApplicable) {
+      const newPFEmployee = currentMonthlyBasic * 0.12;
+      const newEmployerPF = currentMonthlyBasic * 0.12;
+      form.setValue('pf_employee', Math.ceil(newPFEmployee).toString());
+      form.setValue('employer_pf', Math.ceil(newEmployerPF).toString());
+    }
+
+    if (watchedESIApplicable && newMonthlyGross < 21000) {
+      const newESIEmployee = currentMonthlyBasic * 0.0075;
+      const newEmployerESI = newMonthlyGross * 0.0325;
+      form.setValue('esi_employee', Math.ceil(newESIEmployee).toString());
+      form.setValue('employer_esi', Math.ceil(newEmployerESI).toString());
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔄 Basic components recalculation:', {
+        monthlyGross: Math.ceil(newMonthlyGross),
+        components: {
+          basic: currentMonthlyBasic,
+          hra: currentHRA,
+          nightAllowance: currentNightAllowance,
+          specialAllowance: currentSpecialAllowance
+        }
+      });
+    }
+  }, [
+    isFormReady,
+    watchedMonthlyBasicPay,
+    watchedHRA,
+    watchedNightAllowance,
+    watchedSpecialAllowance,
+    watchedMonthlyGross,
+    watchedPFApplicable,
+    watchedESIApplicable,
+    form
+  ]);
 
   // Loyalty bonus calculation
   const watchedLoyaltyAmount = form.watch('loyalty_bonus_amount');
@@ -4721,6 +4921,41 @@ function CTCEdit({ form }: { form: any }) {
                     />
                   </FormControl>
                   <p className="text-xs text-muted-foreground">Default: Rs. 200 (editable)</p>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="vpf"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium text-gray-700">VPF</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="number" 
+                      step="0.01"
+                      {...field} 
+                      value={field.value || ''}
+                      placeholder="Enter VPF amount" 
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        field.onChange(value);
+                        // Mark form as dirty to enable save button
+                        form.trigger('vpf');
+                        
+                        if (process.env.NODE_ENV === 'development') {
+                          console.log('💰 VPF field changed:', {
+                            newValue: value,
+                            parsed: parseFloat(value || '0'),
+                            formIsDirty: form.formState.isDirty
+                          });
+                        }
+                      }}
+                      className="mt-1" 
+                    />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">Voluntary Provident Fund (employee deduction)</p>
                 </FormItem>
               )}
             />
