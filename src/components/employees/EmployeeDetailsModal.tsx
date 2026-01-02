@@ -4103,6 +4103,9 @@ function CTCEdit({ form }: { form: any }) {
 
   // Effect to mark form as ready after a short delay
   React.useEffect(() => {
+    // Reset calculation flag when form is reset/initialized
+    mainCalculationRunRef.current = false;
+    
     const timer = setTimeout(() => {
       setIsFormReady(true);
       console.log('📋 CTCEdit form marked as ready, current values:', {
@@ -4118,16 +4121,44 @@ function CTCEdit({ form }: { form: any }) {
   }, [form]);
 
   // Track previous values to detect actual changes
-  const prevValuesRef = React.useRef({
-    salary: watchedSalary,
-    pf_applicable: watchedPFApplicable,
-    esi_applicable: watchedESIApplicable,
-    night_allowance: watchedNightAllowance,
-    group_medical_insurance: watchedGroupInsurance,
-    tds: watchedTDS,
-    professional_tax: watchedProfessionalTax,
-    vpf: watchedVPF
+  const prevValuesRef = React.useRef<{
+    salary?: number;
+    pf_applicable?: boolean;
+    esi_applicable?: boolean;
+    night_allowance?: string;
+    group_medical_insurance?: string;
+    tds?: string;
+    professional_tax?: string;
+    vpf?: string;
+    initialized?: boolean;
+  }>({
+    initialized: false
   });
+
+  // Track if main calculation has run to prevent real-time effects from interfering
+  const mainCalculationRunRef = React.useRef(false);
+
+  // Reset initialization state when salary changes significantly (indicates employee switch)
+  React.useEffect(() => {
+    if (isFormReady && prevValuesRef.current.initialized && prevValuesRef.current.salary) {
+      // Parse salary values for comparison
+      const currentSalary = typeof watchedSalary === 'string' ? parseFloat(watchedSalary) : (watchedSalary || 0);
+      const prevSalary = prevValuesRef.current.salary || 0;
+      
+      // If salary changed significantly (more than 10% difference), reset initialization
+      // This handles employee switching where the component doesn't remount
+      const salaryDiff = Math.abs(currentSalary - prevSalary);
+      const salaryPercentDiff = prevSalary > 0 
+        ? (salaryDiff / prevSalary) * 100 
+        : 100;
+      
+      if (salaryPercentDiff > 10) {
+        console.log('🔄 Detected significant salary change, resetting initialization state');
+        prevValuesRef.current.initialized = false;
+        mainCalculationRunRef.current = false; // Reset main calculation flag too
+      }
+    }
+  }, [isFormReady, watchedSalary]);
 
   // Auto-calculate fields when dependencies change (rounding to ceiling values)
   React.useEffect(() => {
@@ -4139,27 +4170,35 @@ function CTCEdit({ form }: { form: any }) {
 
     // Skip if no salary value
     if (!watchedSalary || watchedSalary <= 0) {
+      console.log('⏳ Skipping calculation - no salary value', { watchedSalary });
       return;
     }
 
-    // Check if monthly_ctc exists in database - if so, NEVER auto-calculate
-    const existingMonthlyCTC = form.getValues('monthly_ctc');
-    const existingBasicPay = form.getValues('monthly_basic_pay');
-    const existingTotalDeductions = form.getValues('total_deductions');
+    // Check if salary actually changed - if not, skip recalculation (unless it's first initialization)
+    const salaryValue = typeof watchedSalary === 'string' ? parseFloat(watchedSalary) : (watchedSalary || 0);
+    const prevSalary = prevValuesRef.current.salary || 0;
     
-    // More robust check - if ANY of the key CTC fields have values, skip auto-calculation
-    const hasExistingCTCData = (existingMonthlyCTC && existingMonthlyCTC !== '') || 
-                               (existingBasicPay && existingBasicPay !== '') ||
-                               (existingTotalDeductions && existingTotalDeductions !== '');
+    // If salary hasn't changed and we've already initialized, skip (unless other dependencies changed)
+    if (prevValuesRef.current.initialized && Math.abs(salaryValue - prevSalary) < 0.01) {
+      // Check if any other dependency changed
+      const hasOtherChanges = 
+        prevValuesRef.current.pf_applicable !== watchedPFApplicable ||
+        prevValuesRef.current.esi_applicable !== watchedESIApplicable ||
+        prevValuesRef.current.night_allowance !== watchedNightAllowance ||
+        prevValuesRef.current.group_medical_insurance !== watchedGroupInsurance ||
+        prevValuesRef.current.tds !== watchedTDS ||
+        prevValuesRef.current.professional_tax !== watchedProfessionalTax ||
+        prevValuesRef.current.vpf !== watchedVPF;
+      
+      if (!hasOtherChanges) {
+        // No changes, skip calculation
+        return;
+      }
+    }
 
-    // If CTC data exists in database, completely disable auto-calculation
-    if (hasExistingCTCData) {
-      console.log('✅ Skipping calculation - DB values exist', {
-        monthly_ctc: existingMonthlyCTC,
-        monthly_basic_pay: existingBasicPay,
-        total_deductions: existingTotalDeductions
-      });
-      // Update refs to prevent future calculations
+    // On first initialization, always calculate if salary exists and no CTC data
+    if (!prevValuesRef.current.initialized) {
+      console.log('🧮 Running initial auto-calculation for new employee');
       prevValuesRef.current = {
         salary: watchedSalary,
         pf_applicable: watchedPFApplicable,
@@ -4168,44 +4207,49 @@ function CTCEdit({ form }: { form: any }) {
         group_medical_insurance: watchedGroupInsurance,
         tds: watchedTDS,
         professional_tax: watchedProfessionalTax,
-        vpf: watchedVPF
+        vpf: watchedVPF,
+        initialized: true
       };
-      return;
+      // Continue to calculation below
+    } else {
+      // Check if any dependency actually changed
+      const hasChanged = 
+        prevValuesRef.current.salary !== watchedSalary ||
+        prevValuesRef.current.pf_applicable !== watchedPFApplicable ||
+        prevValuesRef.current.esi_applicable !== watchedESIApplicable ||
+        prevValuesRef.current.night_allowance !== watchedNightAllowance ||
+        prevValuesRef.current.group_medical_insurance !== watchedGroupInsurance ||
+        prevValuesRef.current.tds !== watchedTDS ||
+        prevValuesRef.current.professional_tax !== watchedProfessionalTax ||
+        prevValuesRef.current.vpf !== watchedVPF;
+
+      // Only recalculate if dependencies changed
+      if (!hasChanged) {
+        console.log('⏳ Skipping calculation - no changes detected');
+        return;
+      }
+
+      console.log('🧮 Running auto-calculation for changed values');
+      
+      // Update refs with current values
+      prevValuesRef.current = {
+        salary: watchedSalary,
+        pf_applicable: watchedPFApplicable,
+        esi_applicable: watchedESIApplicable,
+        night_allowance: watchedNightAllowance,
+        group_medical_insurance: watchedGroupInsurance,
+        tds: watchedTDS,
+        professional_tax: watchedProfessionalTax,
+        vpf: watchedVPF,
+        initialized: true
+      };
     }
 
-    // Check if any dependency actually changed
-    const hasChanged = 
-      prevValuesRef.current.salary !== watchedSalary ||
-      prevValuesRef.current.pf_applicable !== watchedPFApplicable ||
-      prevValuesRef.current.esi_applicable !== watchedESIApplicable ||
-      prevValuesRef.current.night_allowance !== watchedNightAllowance ||
-      prevValuesRef.current.group_medical_insurance !== watchedGroupInsurance ||
-      prevValuesRef.current.tds !== watchedTDS ||
-      prevValuesRef.current.professional_tax !== watchedProfessionalTax ||
-      prevValuesRef.current.vpf !== watchedVPF;
-
-    // Only recalculate if dependencies changed
-    if (!hasChanged) {
-      return;
-    }
-
-    console.log('🧮 Running auto-calculation for new employee or changed values');
-
-    // Update refs with current values
-    prevValuesRef.current = {
-      salary: watchedSalary,
-      pf_applicable: watchedPFApplicable,
-      esi_applicable: watchedESIApplicable,
-      night_allowance: watchedNightAllowance,
-      group_medical_insurance: watchedGroupInsurance,
-      tds: watchedTDS,
-      professional_tax: watchedProfessionalTax,
-      vpf: watchedVPF
-    };
-
-    if (watchedSalary && watchedSalary > 0) {
+    // Perform calculation if we reach here (either initial calculation or changed values)
+    // Ensure salary is parsed as a number (already done above)
+    if (salaryValue && salaryValue > 0) {
       // Calculate ALL values from original unrounded values first
-      const monthlyCTCValue = watchedSalary / 12;
+      const monthlyCTCValue = salaryValue / 12;
       const monthlyBasicValue = monthlyCTCValue * 0.51;
       const hraValue = monthlyBasicValue * 0.40;
       const nightAllowanceValue = parseFloat(watchedNightAllowance || '2000');
@@ -4275,20 +4319,37 @@ function CTCEdit({ form }: { form: any }) {
       const takeHome = Math.ceil(takeHomeValue);
 
       // Update form values with ceiling rounded values (whole numbers)
-      form.setValue('monthly_ctc', monthlyCTC.toString());
-      form.setValue('monthly_basic_pay', monthlyBasic.toString());
-      form.setValue('hra', hra.toString());
-      form.setValue('special_allowance', specialAllowance.toString());
-      form.setValue('monthly_gross', monthlyGross.toString());
-      form.setValue('employer_pf', employerPF.toString());
-      form.setValue('employer_esi', employerESI.toString());
-      form.setValue('monthly_gratuity_provision', gratuity.toString());
-      form.setValue('monthly_bonus_provision', bonus.toString());
-      form.setValue('pf_employee', employeePF.toString());
-      form.setValue('esi_employee', employeeESI.toString());
-      form.setValue('total_deductions', totalDeductions.toString());
-      form.setValue('net_pay', netPay.toString());
-      form.setValue('monthly_take_home_salary', takeHome.toString());
+      // Use shouldDirty: false to allow real-time updates without marking form dirty
+      // But allow shouldValidate to trigger so watchers can react
+      form.setValue('monthly_ctc', monthlyCTC.toString(), { shouldDirty: false });
+      form.setValue('monthly_basic_pay', monthlyBasic.toString(), { shouldDirty: false });
+      form.setValue('hra', hra.toString(), { shouldDirty: false });
+      form.setValue('special_allowance', specialAllowance.toString(), { shouldDirty: false });
+      form.setValue('monthly_gross', monthlyGross.toString(), { shouldDirty: false });
+      form.setValue('employer_pf', employerPF.toString(), { shouldDirty: false });
+      form.setValue('employer_esi', employerESI.toString(), { shouldDirty: false });
+      form.setValue('monthly_gratuity_provision', gratuity.toString(), { shouldDirty: false });
+      form.setValue('monthly_bonus_provision', bonus.toString(), { shouldDirty: false });
+      form.setValue('pf_employee', employeePF.toString(), { shouldDirty: false });
+      form.setValue('esi_employee', employeeESI.toString(), { shouldDirty: false });
+      form.setValue('total_deductions', totalDeductions.toString(), { shouldDirty: false });
+      form.setValue('net_pay', netPay.toString(), { shouldDirty: false });
+      form.setValue('monthly_take_home_salary', takeHome.toString(), { shouldDirty: false });
+      
+      // Mark that main calculation has run
+      mainCalculationRunRef.current = true;
+      
+      console.log('✅ Auto-calculation completed (real-time):', {
+        salary: salaryValue,
+        monthlyCTC,
+        monthlyBasic,
+        hra,
+        specialAllowance,
+        monthlyGross,
+        totalDeductions,
+        netPay,
+        takeHome
+      });
     }
   }, [isFormReady, watchedSalary, watchedPFApplicable, watchedESIApplicable, watchedNightAllowance, watchedGroupInsurance, watchedTDS, watchedProfessionalTax, watchedVPF, form]);
 
@@ -4304,7 +4365,7 @@ function CTCEdit({ form }: { form: any }) {
   const watchedMonthlyBonus = form.watch('monthly_bonus_provision');
   const watchedPFEmployee = form.watch('pf_employee');
   const watchedESIEmployee = form.watch('esi_employee');
-
+  
   // Real-time calculation effect for all user-editable CTC fields
   React.useEffect(() => {
     if (!isFormReady) return;
@@ -4317,16 +4378,23 @@ function CTCEdit({ form }: { form: any }) {
     const currentESIEmployee = parseFloat(watchedESIEmployee || '0');
     const currentMonthlyGross = parseFloat(watchedMonthlyGross || '0');
     const currentMonthlyBonus = parseFloat(watchedMonthlyBonus || '0');
+    
+    // Skip calculation if monthly gross is invalid (but allow if it's being calculated from salary)
+    // Only skip if we have no salary and no meaningful gross value
+    const salaryValue = typeof watchedSalary === 'string' ? parseFloat(watchedSalary) : (watchedSalary || 0);
+    if (currentMonthlyGross <= 0 && salaryValue <= 0) {
+      return;
+    }
 
     // Recalculate dependent fields
     const newTotalDeductions = currentPFEmployee + currentESIEmployee + currentTDS + currentProfessionalTax + currentVPF;
     const newNetPay = currentMonthlyGross - newTotalDeductions;
     const newTakeHome = newNetPay + currentMonthlyBonus;
 
-    // Update the calculated fields
-    form.setValue('total_deductions', Math.ceil(newTotalDeductions).toString());
-    form.setValue('net_pay', Math.ceil(newNetPay).toString());
-    form.setValue('monthly_take_home_salary', Math.ceil(newTakeHome).toString());
+    // Update the calculated fields (use shouldDirty: false to allow real-time updates without marking form dirty)
+    form.setValue('total_deductions', Math.ceil(newTotalDeductions).toString(), { shouldDirty: false, shouldValidate: false });
+    form.setValue('net_pay', Math.ceil(newNetPay).toString(), { shouldDirty: false, shouldValidate: false });
+    form.setValue('monthly_take_home_salary', Math.ceil(newTakeHome).toString(), { shouldDirty: false, shouldValidate: false });
 
     if (process.env.NODE_ENV === 'development') {
       console.log('🔄 Real-time CTC recalculation:', {
@@ -4367,29 +4435,44 @@ function CTCEdit({ form }: { form: any }) {
     const currentHRA = parseFloat(watchedHRA || '0');
     const currentNightAllowance = parseFloat(watchedNightAllowance || '2000');
     const currentSpecialAllowance = parseFloat(watchedSpecialAllowance || '0');
+    
+    // Skip if all values are zero or empty (form not initialized yet)
+    if (currentMonthlyBasic === 0 && currentHRA === 0 && currentSpecialAllowance === 0) {
+      return;
+    }
 
     // Recalculate monthly gross when components change
     const newMonthlyGross = currentMonthlyBasic + currentHRA + currentNightAllowance + currentSpecialAllowance;
 
-    // Update monthly gross if it changed
+    // Update monthly gross if it changed (use shouldDirty: false for real-time updates)
     const currentMonthlyGrossValue = parseFloat(watchedMonthlyGross || '0');
     if (Math.abs(newMonthlyGross - currentMonthlyGrossValue) > 0.01) {
-      form.setValue('monthly_gross', Math.ceil(newMonthlyGross).toString());
+      form.setValue('monthly_gross', Math.ceil(newMonthlyGross).toString(), { shouldDirty: false, shouldValidate: false });
     }
 
-    // Recalculate PF and ESI based on basic pay changes
-    if (watchedPFApplicable) {
-      const newPFEmployee = currentMonthlyBasic * 0.12;
-      const newEmployerPF = currentMonthlyBasic * 0.12;
-      form.setValue('pf_employee', Math.ceil(newPFEmployee).toString());
-      form.setValue('employer_pf', Math.ceil(newEmployerPF).toString());
-    }
+    // Recalculate PF and ESI based on basic pay changes (only if basic pay is meaningful)
+    if (currentMonthlyBasic > 0) {
+      if (watchedPFApplicable) {
+        const newPFEmployee = currentMonthlyBasic * 0.12;
+        const newEmployerPF = currentMonthlyBasic * 0.12;
+        form.setValue('pf_employee', Math.ceil(newPFEmployee).toString(), { shouldDirty: false, shouldValidate: false });
+        form.setValue('employer_pf', Math.ceil(newEmployerPF).toString(), { shouldDirty: false, shouldValidate: false });
+      } else {
+        // Reset PF values if PF is not applicable
+        form.setValue('pf_employee', '0', { shouldDirty: false, shouldValidate: false });
+        form.setValue('employer_pf', '0', { shouldDirty: false, shouldValidate: false });
+      }
 
-    if (watchedESIApplicable && newMonthlyGross < 21000) {
-      const newESIEmployee = currentMonthlyBasic * 0.0075;
-      const newEmployerESI = newMonthlyGross * 0.0325;
-      form.setValue('esi_employee', Math.ceil(newESIEmployee).toString());
-      form.setValue('employer_esi', Math.ceil(newEmployerESI).toString());
+      if (watchedESIApplicable && newMonthlyGross < 21000) {
+        const newESIEmployee = currentMonthlyBasic * 0.0075;
+        const newEmployerESI = newMonthlyGross * 0.0325;
+        form.setValue('esi_employee', Math.ceil(newESIEmployee).toString(), { shouldDirty: false, shouldValidate: false });
+        form.setValue('employer_esi', Math.ceil(newEmployerESI).toString(), { shouldDirty: false, shouldValidate: false });
+      } else {
+        // Reset ESI values if ESI is not applicable or gross >= 21000
+        form.setValue('esi_employee', '0', { shouldDirty: false, shouldValidate: false });
+        form.setValue('employer_esi', '0', { shouldDirty: false, shouldValidate: false });
+      }
     }
 
     if (process.env.NODE_ENV === 'development') {
