@@ -143,11 +143,11 @@ export const DASHBOARD_CONFIG = [
     icon: 'DollarSign',
     color: 'emerald',
     pages: [
-      { id: 'overview', name: 'Finance Dashboard', slug: 'overview', path: '/finance', icon: 'DollarSign' },
-      { id: 'payroll', name: 'All Payroll', slug: 'payroll', path: '/finance/payroll', icon: 'Banknote' },
+      // { id: 'overview', name: 'Finance Dashboard', slug: 'overview', path: '/finance', icon: 'DollarSign' },
+      // { id: 'payroll', name: 'All Payroll', slug: 'payroll', path: '/finance/payroll', icon: 'Banknote' },
       { id: 'billing', name: 'All Billing', slug: 'billing', path: '/finance/billing', icon: 'Receipt' },
       { id: 'invoice-logs', name: 'Invoice Logs', slug: 'invoice-logs', path: '/finance/invoice-logs', icon: 'FileText' },
-      { id: 'logs', name: 'Payroll Logs', slug: 'logs', path: '/finance/logs', icon: 'History' },
+      // { id: 'logs', name: 'Payroll Logs', slug: 'logs', path: '/finance/logs', icon: 'History' },
     ],
   },
   // {
