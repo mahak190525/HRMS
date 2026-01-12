@@ -465,13 +465,22 @@ export const InvoicePDFTemplate: React.FC<InvoicePDFTemplateProps> = ({ invoice,
   
   const total = invoice.invoice_amount || calculatedTotal;
 
-  // Get amount paid from invoice (check both amount_paid and amount_received)
-  const amountPaid = invoice.amount_received || invoice.amount_paid || 0;
+  // Calculate amount paid and balance due based on status
+  let amountPaid: number;
+  let balanceDue: number;
 
-  // Calculate balance due (use pending_amount if available, otherwise calculate)
-  const balanceDue = invoice.pending_amount !== null && invoice.pending_amount !== undefined 
-    ? invoice.pending_amount 
-    : total - amountPaid;
+  if (invoice.status === 'paid') {
+    // If status is 'paid', amount paid equals total and balance due is 0
+    amountPaid = total;
+    balanceDue = 0;
+  } else {
+    // For other statuses, use actual amount received/paid
+    amountPaid = invoice.amount_received || invoice.amount_paid || 0;
+    // Calculate balance due (use pending_amount if available, otherwise calculate)
+    balanceDue = invoice.pending_amount !== null && invoice.pending_amount !== undefined 
+      ? invoice.pending_amount 
+      : total - amountPaid;
+  }
 
   const currencySign = invoice.currency === 'USD' ? '$' : invoice.currency === 'INR' ? '₹' : invoice.currency === 'EUR' ? '€' : '£';
   const isINR = invoice.currency === 'INR';

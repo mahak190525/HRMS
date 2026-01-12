@@ -302,9 +302,33 @@ export function AllBilling() {
   React.useEffect(() => {
     const invoiceAmount = watchedInvoiceAmount || 0;
     const amountReceived = watchedAmountReceived || 0;
-    const pendingAmount = Math.max(0, invoiceAmount - amountReceived);
+    
+    // For 'paid' status, pending amount should always be 0
+    let pendingAmount;
+    if (watchedStatus === 'paid') {
+      pendingAmount = 0;
+    } else {
+      pendingAmount = Math.max(0, invoiceAmount - amountReceived);
+    }
+    
     invoiceForm.setValue('pending_amount', pendingAmount);
-  }, [watchedInvoiceAmount, watchedAmountReceived, invoiceForm]);
+  }, [watchedInvoiceAmount, watchedAmountReceived, watchedStatus, invoiceForm]);
+  
+  // Auto-adjust amounts when status changes to 'paid'
+  React.useEffect(() => {
+    if (watchedStatus === 'paid') {
+      const invoiceAmount = watchedInvoiceAmount || 0;
+      const currentAmountReceived = watchedAmountReceived || 0;
+      
+      // Only update if the current amount received is not equal to invoice amount
+      // This prevents unnecessary updates and ensures 'paid' status means full payment
+      if (currentAmountReceived !== invoiceAmount && invoiceAmount > 0) {
+        console.log('Status changed to paid - updating amount received from', currentAmountReceived, 'to', invoiceAmount);
+        invoiceForm.setValue('amount_received', invoiceAmount);
+        // Pending amount will be automatically calculated to 0 by the existing useEffect
+      }
+    }
+  }, [watchedStatus, watchedInvoiceAmount, watchedAmountReceived, invoiceForm]);
   
   // Auto-generate invoice number based on INVOICE DATE and COMPANY TYPE
   // Format: PREFIX/MMMXXX (e.g., MT/DEC001 for Indian, MECH/DEC001 for LLC)
@@ -3171,7 +3195,20 @@ export function AllBilling() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Status *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select 
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        // If status is changed to 'paid', immediately update amount_received
+                        if (value === 'paid') {
+                          const invoiceAmount = invoiceForm.getValues('invoice_amount') || 0;
+                          if (invoiceAmount > 0) {
+                            console.log('Status changed to paid via dropdown - updating amount received to', invoiceAmount);
+                            invoiceForm.setValue('amount_received', invoiceAmount);
+                          }
+                        }
+                      }} 
+                      value={field.value}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select status" />
