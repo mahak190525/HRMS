@@ -644,13 +644,14 @@ export const leaveApi = {
         let halfDayLeavesCount = 0;
         
         // Count leave days in this month
+        // Note: Weekend payment is now handled conditionally in the payroll calculation
         for (let day = 1; day <= monthEnd.getDate(); day++) {
           const currentDate = new Date(report.year, report.month - 1, day);
           const dayOfWeek = currentDate.getDay();
           const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
           
-          // Only count working days
-          if (!isWeekend) {
+          // Count all days for leave calculation
+          {
             const dateStr = currentDate.toISOString().split('T')[0];
             
             // Check if this date falls within any approved leave
@@ -1986,23 +1987,29 @@ export const employeeApi = {
     }
   },
 
-  // Helper function to calculate working days in a month (excluding weekends and holidays)
+  // Helper function to calculate total days in a month (including weekends)
+  // Employees get paid for weekends as they are considered paid holidays
   getWorkingDaysInMonth(year: number, month: number, holidays: any[] = []): number {
+    const endDate = new Date(year, month, 0);
+    // Return total days in the month since weekends are paid holidays
+    return endDate.getDate();
+  },
+
+  // Helper function to calculate weekend days in a month
+  getWeekendDaysInMonth(year: number, month: number): number {
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0);
-    let workingDays = 0;
+    let weekendDays = 0;
 
     for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
       const dayOfWeek = date.getDay();
-      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6; // Sunday (0) or Saturday (6)
-      const { isHoliday } = employeeApi.isHoliday(date, holidays);
-
-      if (!isWeekend && !isHoliday) {
-        workingDays++;
+      // Count weekends (0 = Sunday, 6 = Saturday)
+      if (dayOfWeek === 0 || dayOfWeek === 6) {
+        weekendDays++;
       }
     }
 
-    return workingDays;
+    return weekendDays;
   },
 
   // Helper function to calculate leave days in a month (only counting working days)

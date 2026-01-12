@@ -253,7 +253,7 @@ export function AllBilling() {
       payment_terms: 'net_30',
       currency: 'USD',
       notes_to_finance: '',
-      status: 'assigned',
+      status: 'in_progress',
       client_address: '',
       client_state: '',
       client_zip_code: '',
@@ -346,7 +346,7 @@ export function AllBilling() {
         payment_terms: 'net_30',
         currency: 'USD',
         notes_to_finance: '',
-        status: 'assigned',
+        status: 'in_progress',
         client_address: '',
         client_state: '',
         client_zip_code: '',
@@ -513,7 +513,7 @@ export function AllBilling() {
       // Set user info
       created_by: user.id,
       assigned_finance_poc: data.assigned_finance_poc || user.id,
-      status: data.status || 'assigned',
+      status: data.status || 'in_progress',
       
       // Set final calculated amount
       invoice_amount: finalAmount,
@@ -608,8 +608,8 @@ export function AllBilling() {
 
   const getStatusBadge = (status: string) => {
     const variants = {
-      assigned: 'bg-gray-100 text-gray-800',
       in_progress: 'bg-blue-100 text-blue-800',
+      partially_paid: 'bg-yellow-100 text-yellow-800',
       sent: 'bg-purple-100 text-purple-800',
       paid: 'bg-green-100 text-green-800',
       overdue: 'bg-red-100 text-red-800',
@@ -1090,7 +1090,7 @@ export function AllBilling() {
                 payment_terms: 'net_30',
                 currency: 'USD',
                 notes_to_finance: '',
-                status: 'assigned',
+                status: 'in_progress',
                 client_address: '',
                 client_state: '',
                 client_zip_code: '',
@@ -1671,7 +1671,7 @@ export function AllBilling() {
                                   type="number" 
                                   step="0.01"
                                   placeholder="0.00" 
-                                  {...field}
+                                  value={field.value || ''}
                                   onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                                 />
                               </FormControl>
@@ -1966,8 +1966,8 @@ export function AllBilling() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Statuses</SelectItem>
-                      <SelectItem value="assigned">Assigned</SelectItem>
                       <SelectItem value="in_progress">In Progress</SelectItem>
+                      <SelectItem value="partially_paid">Partially Paid</SelectItem>
                       <SelectItem value="sent">Sent</SelectItem>
                       <SelectItem value="paid">Paid</SelectItem>
                       <SelectItem value="overdue">Overdue</SelectItem>
@@ -2164,7 +2164,7 @@ export function AllBilling() {
                                 payment_terms: invoice.payment_terms,
                                 currency: invoice.currency,
                                 notes_to_finance: invoice.notes_to_finance || '',
-                                status: invoice.status || 'assigned',
+                                status: invoice.status || 'in_progress',
                                 client_address: invoice.client_address || '',
                                 client_state: invoice.client_state || '',
                                 client_zip_code: invoice.client_zip_code || '',
@@ -2602,7 +2602,7 @@ export function AllBilling() {
             payment_terms: 'net_30',
             currency: 'USD',
             notes_to_finance: '',
-            status: 'assigned',
+            status: 'in_progress',
             client_address: '',
             client_state: '',
             client_zip_code: '',
@@ -3117,8 +3117,8 @@ export function AllBilling() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="assigned">Assigned</SelectItem>
                         <SelectItem value="in_progress">In Progress</SelectItem>
+                        <SelectItem value="partially_paid">Partially Paid</SelectItem>
                         <SelectItem value="sent">Sent</SelectItem>
                         <SelectItem value="paid">Paid</SelectItem>
                         <SelectItem value="overdue">Overdue</SelectItem>
@@ -3181,7 +3181,7 @@ export function AllBilling() {
                               type="number" 
                               step="0.01"
                               placeholder="0.00" 
-                              {...field}
+                              value={field.value || ''}
                               onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                             />
                           </FormControl>
@@ -3676,7 +3676,7 @@ export function AllBilling() {
                   <Label className="text-xs font-medium text-muted-foreground">Status</Label>
                   <div className="p-2 bg-muted rounded-md">
                     <Badge className={getStatusBadge(selectedInvoice.status)}>
-                      {selectedInvoice.status?.replace('_', ' ') || 'assigned'}
+                      {selectedInvoice.status?.replace('_', ' ') || 'in progress'}
                     </Badge>
                   </div>
                 </div>
@@ -3774,7 +3774,7 @@ export function AllBilling() {
                       payment_terms: selectedInvoice.payment_terms,
                       currency: selectedInvoice.currency,
                       notes_to_finance: selectedInvoice.notes_to_finance || '',
-                      status: selectedInvoice.status || 'assigned',
+                      status: selectedInvoice.status || 'in_progress',
                       client_address: selectedInvoice.client_address || '',
                       client_state: selectedInvoice.client_state || '',
                       client_zip_code: selectedInvoice.client_zip_code || '',
