@@ -84,6 +84,7 @@ export interface User {
   esi_employee?: string;
   tds?: string;
   professional_tax?: string;
+  vpf?: string;
   total_deductions?: string;
   net_pay?: string;
   monthly_take_home_salary?: string;

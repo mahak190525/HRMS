@@ -506,13 +506,26 @@ export function LeaveApplication() {
       const leaveMonth = startDate.getMonth() + 1; // JavaScript months are 0-indexed
       const leaveYear = startDate.getFullYear();
       
+      // IMPORTANT: Check if monthly credit has already been applied for the leave month
+      // The monthly credit is added to allocated_days on the 1st of each month
+      // If it's already been credited for the leave month, the balance already includes the monthly rate
+      // So we should NOT count remainingMonthlyRate again to avoid double-counting
+      const leaveMonthStart = new Date(leaveYear, leaveMonth - 1, 1); // First day of leave month
+      const currentDate = new Date();
+      // Monthly credit is applied on the 1st, so if we're past the 1st of the leave month, credit has been applied
+      // Also, if the leave month is in the past, credit has definitely been applied
+      const isMonthlyCreditAlreadyApplied = currentDate >= leaveMonthStart;
+      
       // Calculate how much of the monthly leave rate has been used this month
-      // IMPORTANT: Check ALL existing approved leaves for this month to determine remaining monthly rate
-      // Only non-LOP days from approved leaves count against the monthly rate
+      // IMPORTANT: Only calculate remainingMonthlyRate if monthly credit hasn't been applied yet
+      // If monthly credit is already in the balance, remainingMonthlyRate should be 0
       let monthlyRateUsed = 0;
       let remainingMonthlyRate = 0;
       
-      if (leaveRate > 0 && user?.id) {
+      // Only calculate remainingMonthlyRate if:
+      // 1. Monthly credit hasn't been applied yet (future month or before 1st of current month)
+      // 2. OR if we're in the same month but the credit hasn't been applied yet (edge case)
+      if (leaveRate > 0 && user?.id && !isMonthlyCreditAlreadyApplied) {
         try {
           // Get compensatory off and birthday leave type IDs to exclude (these don't count against monthly rate)
           const { data: leaveTypesData } = await supabase
@@ -570,6 +583,10 @@ export function LeaveApplication() {
           // On error, assume monthly rate is exhausted to be safe
           remainingMonthlyRate = 0;
         }
+      } else if (isMonthlyCreditAlreadyApplied) {
+        // Monthly credit has already been applied, so it's already included in the balance
+        // Set remainingMonthlyRate to 0 to avoid double-counting
+        remainingMonthlyRate = 0;
       }
       
       // Priority order for covering leave days:

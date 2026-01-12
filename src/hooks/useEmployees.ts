@@ -66,7 +66,6 @@ export function useFilteredEmployees() {
             role:roles!users_role_id_fkey(id, name)
           `)
           .eq('manager_id', user.id)
-          .eq('status', 'active')
           .order('full_name');
 
         if (error) throw error;

@@ -30,14 +30,11 @@ import {
   Edit,
   Monitor,
   CheckCircle,
-  AlertTriangle,
-  FileText
+  AlertTriangle
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import {getRoleDisplayName} from '@/constants/index';
 import { EmployeeDetailsModal } from '@/components/employees/EmployeeDetailsModal';
 import { PrintBlockingLogs } from '@/components/admin/PrintBlockingLogs';
-import { RoleDisplay } from '@/components/ui/role-display';
 
 
 interface Employee {
@@ -52,6 +49,8 @@ interface Employee {
   department?: { name: string };
   role?: { name: string };
   role_id?: string;
+  additional_role_ids?: string[];
+  additional_roles?: { id: string; name: string }[];
   status: string;
   avatar_url?: string;
   auth_provider?: 'microsoft' | 'google' | 'manual';
@@ -75,6 +74,7 @@ export function EmployeeManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [selectedEmployeeForAccess, setSelectedEmployeeForAccess] = useState<Employee | null>(null);
   const [isAccessDialogOpen, setIsAccessDialogOpen] = useState(false);
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
@@ -118,6 +118,7 @@ export function EmployeeManagement() {
       const { data, error } = await supabase
         .from('roles')
         .select('id, name')
+        .neq('name', 'super_admin')
         .order('name');
       if (error) throw error;
       return data;
@@ -127,14 +128,22 @@ export function EmployeeManagement() {
 
 
 
+  // Get unique status values from employees
+  const statusOptions = React.useMemo(() => {
+    if (!employees) return [];
+    const uniqueStatuses = Array.from(new Set(employees.map((emp: Employee) => emp.status).filter(Boolean)));
+    return uniqueStatuses.sort();
+  }, [employees]);
+
   const filteredEmployees = employees?.filter((emp: Employee) => {
     const matchesSearch = emp.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          emp.employee_id?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDepartment = !departmentFilter || departmentFilter === 'all' || emp.department_id === departmentFilter;
     const matchesRole = !roleFilter || roleFilter === 'all' || emp.role_id === roleFilter;
+    const matchesStatus = !statusFilter || statusFilter === 'all' || emp.status === statusFilter;
     
-    return matchesSearch && matchesDepartment && matchesRole;
+    return matchesSearch && matchesDepartment && matchesRole && matchesStatus;
   })?.sort((a, b) => a.full_name.localeCompare(b.full_name));
 
   const handleViewEmployee = (employee: Employee) => {
@@ -225,7 +234,7 @@ export function EmployeeManagement() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div>
                 <Label htmlFor="filter-employee-name" className='mb-2 ml-2'>Employee Name</Label>
                   <Input
@@ -259,7 +268,25 @@ export function EmployeeManagement() {
                     <SelectContent>
                       <SelectItem value="all">All Roles</SelectItem>
                       {roleOptions?.map((role) => (
-                        <SelectItem key={role.id} value={role.id}>{getRoleDisplayName(role.name)}</SelectItem>
+                        <SelectItem key={role.id} value={role.id}>
+                          {role.name.charAt(0).toUpperCase() + role.name.slice(1).replace(/_/g, ' ')}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="filter-status" className='mb-2'>Status</Label>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger >
+                      <SelectValue placeholder="All Statuses" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      {statusOptions.map((status) => (
+                        <SelectItem key={status} value={status} className="capitalize">
+                          {status}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -271,6 +298,7 @@ export function EmployeeManagement() {
                       setSearchTerm('');
                       setDepartmentFilter('all');
                       setRoleFilter('all');
+                      setStatusFilter('all');
                     }}
                   >
                     Clear Filters
@@ -297,6 +325,7 @@ export function EmployeeManagement() {
                     <TableHead>Contact</TableHead>
                     <TableHead>Department</TableHead>
                     <TableHead>Role</TableHead>
+                    <TableHead>Additional Roles</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -340,7 +369,32 @@ export function EmployeeManagement() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <RoleDisplay user={employee} variant="default" showLabels={false} />
+                        {employee.role?.name ? (
+                          <Badge variant="default" className="capitalize">
+                            {employee.role.name.charAt(0).toUpperCase() + employee.role.name.slice(1).replace(/_/g, ' ')}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-muted-foreground">
+                            No role assigned
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {employee.additional_roles && employee.additional_roles.length > 0 ? (
+                          <div className="flex flex-wrap items-center gap-1">
+                            {employee.additional_roles.map((role: any) => (
+                              <Badge key={role.id} variant="secondary" className="text-xs capitalize">
+                                {role.name.charAt(0).toUpperCase() + role.name.slice(1).replace(/_/g, ' ')}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : employee.additional_role_ids && employee.additional_role_ids.length > 0 ? (
+                          <span className="text-sm text-muted-foreground">
+                            {employee.additional_role_ids.length} additional role{employee.additional_role_ids.length > 1 ? 's' : ''} (loading...)
+                          </span>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">No additional roles</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge className={getStatusBadge(employee.status)}>

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Calendar,
@@ -19,6 +20,7 @@ import { employeeApi } from '@/services/api';
 
 export function AttendanceReports() {
   const [attendanceYear, setAttendanceYear] = useState(getCurrentISTDate().getFullYear());
+  const [yearInput, setYearInput] = useState<string>(getCurrentISTDate().getFullYear().toString());
   const [attendanceMonth, setAttendanceMonth] = useState<number | undefined>(undefined);
   const [shouldFetch, setShouldFetch] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<{ id: string; name: string; month: number; year: number } | null>(null);
@@ -187,17 +189,39 @@ export function AttendanceReports() {
         <CardContent>
           <div className="flex items-center gap-4 mb-6">
             <div>
-              <Select value={attendanceYear.toString()} onValueChange={(value) => setAttendanceYear(parseInt(value))}>
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="2024">2024</SelectItem>
-                  <SelectItem value="2025">2025</SelectItem>
-                </SelectContent>
-              </Select>
+              <label className="text-sm font-medium mb-1 block">Year</label>
+              <Input
+                type="number"
+                value={yearInput}
+                onChange={(e) => {
+                  const inputValue = e.target.value;
+                  setYearInput(inputValue);
+                  // Update attendanceYear if valid
+                  const value = parseInt(inputValue);
+                  if (!isNaN(value) && value >= 2000 && value <= 2100) {
+                    setAttendanceYear(value);
+                  }
+                }}
+                onBlur={(e) => {
+                  const value = parseInt(e.target.value);
+                  if (isNaN(value) || value < 2000 || value > 2100) {
+                    // Reset to current year if invalid
+                    const currentYear = getCurrentISTDate().getFullYear();
+                    setYearInput(currentYear.toString());
+                    setAttendanceYear(currentYear);
+                  } else {
+                    // Ensure input matches the valid year
+                    setYearInput(value.toString());
+                  }
+                }}
+                placeholder="Enter year"
+                className="w-32"
+                min={2000}
+                max={2100}
+              />
             </div>
             <div>
+              <label className="text-sm font-medium mb-1 block">Month</label>
               <Select value={attendanceMonth?.toString() || 'all'} onValueChange={(value) => setAttendanceMonth(value === 'all' ? undefined : parseInt(value))}>
                 <SelectTrigger className="w-40">
                   <SelectValue placeholder="All Months" />
@@ -212,12 +236,12 @@ export function AttendanceReports() {
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={handleGenerateReport} disabled={attendanceLoading}>
+            <Button onClick={handleGenerateReport} disabled={attendanceLoading} className='mt-6'>
               <BarChart3 className="h-4 w-4 mr-2" />
               Generate Report
             </Button>
             {attendanceData && (
-              <Button onClick={handleDownloadAttendance} variant="outline">
+              <Button onClick={handleDownloadAttendance} variant="outline" className='mt-6'>
                 <Download className="h-4 w-4 mr-2" />
                 Download CSV
               </Button>
@@ -232,7 +256,7 @@ export function AttendanceReports() {
           ) : attendanceData && attendanceData.length > 0 ? (
             <div className="space-y-6">
               {/* Summary Cards */}
-              `<div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                 <Card>
                   <CardContent className="p-4">
                     <div className="text-2xl font-bold">{attendanceData.length}</div>
@@ -278,7 +302,7 @@ export function AttendanceReports() {
                     </div>
                     <div className="text-sm text-muted-foreground">Total Overtime</div>
                   </CardContent>
-                </Card>`
+                </Card>
               </div>
 
               {/* Attendance Table */}

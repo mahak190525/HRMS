@@ -41,6 +41,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { supabase } from '@/services/supabase';
 import { DASHBOARD_CONFIG } from '@/constants';
 import type { Role, DashboardPermissions, PagePermissions } from '@/types';
+import { RoleManagement } from './RoleManagement';
 
 export function SettingsManager() {
   // General Settings
@@ -207,13 +208,14 @@ export function SettingsManager() {
   const [pagePermissions, setPagePermissions] = useState<Record<string, Record<string, PagePermissions>>>({});
   const [hasPermissionChanges, setHasPermissionChanges] = useState(false);
 
-  // Fetch all roles
+  // Fetch all roles (excluding super_admin)
   const { data: roles, isLoading: rolesLoading } = useQuery({
     queryKey: ['roles'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('roles')
         .select('id, name, description, dashboard_permissions, page_permissions, default_dashboards, permissions')
+        .neq('name', 'super_admin')
         .order('name');
       
       if (error) throw error;
@@ -1059,6 +1061,9 @@ export function SettingsManager() {
 
         {/* Employee Management Settings */}
         <TabsContent value="employees" className="space-y-4">
+          {/* Role Management */}
+          <RoleManagement />
+
           <Card>
             <CardHeader>
               <CardTitle>Employee Management Settings</CardTitle>

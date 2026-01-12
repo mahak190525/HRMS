@@ -89,7 +89,7 @@ export function AllInvoices() {
       currency: 'USD',
       notes_to_finance: '',
       assigned_finance_poc: '',
-      status: 'assigned',
+      status: 'in_progress',
     },
   });
 
@@ -127,7 +127,7 @@ export function AllInvoices() {
       ...data,
       due_date: data.due_date ? data.due_date.toISOString().split('T')[0] : getCurrentISTDate().toISOString().split('T')[0],
       created_by: user.id,
-      status: data.status || 'assigned',
+      status: data.status || 'in_progress',
     };
 
     if (selectedInvoice) {
@@ -164,7 +164,7 @@ export function AllInvoices() {
       currency: invoice.currency,
       notes_to_finance: invoice.notes_to_finance || '',
       assigned_finance_poc: invoice.assigned_finance_poc || '',
-      status: invoice.status || 'assigned',
+      status: invoice.status || 'in_progress',
     });
     setIsEditDialogOpen(true);
   };
@@ -235,8 +235,8 @@ export function AllInvoices() {
 
   const getStatusBadge = (status: string) => {
     const variants = {
-      assigned: 'bg-gray-100 text-gray-800',
       in_progress: 'bg-blue-100 text-blue-800',
+      partially_paid: 'bg-yellow-100 text-yellow-800',
       sent: 'bg-purple-100 text-purple-800',
       paid: 'bg-green-100 text-green-800',
       overdue: 'bg-red-100 text-red-800',
@@ -547,8 +547,8 @@ export function AllInvoices() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="assigned">Assigned</SelectItem>
                   <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="partially_paid">Partially Paid</SelectItem>
                   <SelectItem value="sent">Sent</SelectItem>
                   <SelectItem value="paid">Paid</SelectItem>
                   <SelectItem value="overdue">Overdue</SelectItem>
@@ -951,8 +951,8 @@ export function AllInvoices() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="assigned">Assigned</SelectItem>
                         <SelectItem value="in_progress">In Progress</SelectItem>
+                        <SelectItem value="partially_paid">Partially Paid</SelectItem>
                         <SelectItem value="sent">Sent</SelectItem>
                         <SelectItem value="paid">Paid</SelectItem>
                         <SelectItem value="overdue">Overdue</SelectItem>

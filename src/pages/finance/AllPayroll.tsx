@@ -44,6 +44,7 @@ export function AllPayroll() {
   // Removed unused user variable
   const [selectedMonth, setSelectedMonth] = useState(getCurrentISTDate().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(getCurrentISTDate().getFullYear());
+  const [yearInput, setYearInput] = useState<string>(getCurrentISTDate().getFullYear().toString());
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
@@ -88,11 +89,11 @@ export function AllPayroll() {
   const handleEditPayroll = (employee: any) => {
     setEditingEmployee(employee);
     editForm.reset({
-      basic_salary: employee.payroll.basicSalary || 0,
-      allowances: employee.payroll.allowances || 0,
+      basic_salary: employee.payroll.proratedBasicPay || employee.payroll.basicSalary || 0,
+      allowances: (employee.payroll.proratedNightAllowance || 0) + (employee.payroll.proratedSpecialAllowance || 0),
       deductions: employee.payroll.totalDeductions || 0,
       bonus: 0,
-      overtime_hours: employee.attendance?.[0]?.overtime_hours || 0,
+      overtime_hours: employee.payroll.overtimeHours || 0,
       adjustment_reason: '',
     });
     setIsEditDialogOpen(true);
@@ -132,9 +133,9 @@ export function AllPayroll() {
     
     // Create CSV content
     const headers = [
-      'Employee ID', 'Employee Name', 'Department', 'Base Salary', 'Monthly Salary', 
-      'Gross Pay', 'Tax Deduction', 'PF Deduction', 'Total Deductions', 'Net Pay',
-      'Total Working Days', 'Days Worked', 'Days on Leave', 'Attendance %'
+      'Employee ID', 'Employee Name', 'Department', 'Monthly CTC', 'Monthly Take Home', 'Basic Pay', 'HRA', 'Night Allowance', 'Special Allowance',
+      'Gross Pay', 'PF Deduction', 'ESI Deduction', 'TDS', 'Professional Tax', 'VPF', 'Total Deductions', 'Net Pay',
+      'Working Days', 'Payable Days', 'Days Present', 'Days on Leave', 'Days Absent', 'Total Hours', 'Overtime Hours', 'Attendance %'
     ];
     const csvContent = [
       headers.join(','),
@@ -142,16 +143,27 @@ export function AllPayroll() {
         employee.employee_id || '',
         `"${employee.full_name}"`,
         `"${employee.department?.name || ''}"`,
-        employee.payroll.baseSalary,
-        employee.payroll.monthlySalary.toFixed(2),
+        (employee.payroll.monthlyGross || employee.payroll.monthlySalary || 0).toFixed(2),
+        (employee.payroll.monthlyTakeHomeSalary || employee.payroll.monthlySalary || 0).toFixed(2),
+        (employee.payroll.proratedBasicPay || employee.payroll.basicSalary || 0).toFixed(2),
+        (employee.payroll.proratedHRA || employee.payroll.hra || 0).toFixed(2),
+        (employee.payroll.proratedNightAllowance || 0).toFixed(2),
+        (employee.payroll.proratedSpecialAllowance || 0).toFixed(2),
         employee.payroll.grossPay.toFixed(2),
-        employee.payroll.taxDeduction.toFixed(2),
-        employee.payroll.pfDeduction.toFixed(2),
+        (employee.payroll.pfEmployee || employee.payroll.pfDeduction || 0).toFixed(2),
+        (employee.payroll.esiEmployee || employee.payroll.esiDeduction || 0).toFixed(2),
+        (employee.payroll.tds || employee.payroll.taxDeduction || 0).toFixed(2),
+        (employee.payroll.professionalTax || 0).toFixed(2),
+        (employee.payroll.vpf || 0).toFixed(2),
         employee.payroll.totalDeductions.toFixed(2),
         employee.payroll.netPay.toFixed(2),
-        employee.payroll.totalWorkingDays,
-        employee.payroll.daysWorked,
-        employee.payroll.daysOnLeave,
+        employee.payroll.totalWorkingDays || 0,
+        employee.payroll.payableDays || employee.payroll.effectiveDaysWorked || 0,
+        employee.payroll.daysPresent || employee.payroll.daysWorked || 0,
+        employee.payroll.daysOnLeave || 0,
+        employee.payroll.daysAbsent || 0,
+        (employee.payroll.totalHoursWorked || 0).toFixed(1),
+        (employee.payroll.overtimeHours || 0).toFixed(1),
         employee.payroll.attendanceRatio.toFixed(1)
       ].join(','))
     ].join('\n');
@@ -206,7 +218,7 @@ export function AllPayroll() {
             <CardTitle className="text-sm font-medium">Gross Payroll</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalGrossPay.toLocaleString()}</div>
+            <div className="text-2xl font-bold">₹{totalGrossPay.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">Before deductions</p>
           </CardContent>
         </Card>
@@ -216,7 +228,7 @@ export function AllPayroll() {
             <CardTitle className="text-sm font-medium">Net Payroll</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalNetPay.toLocaleString()}</div>
+            <div className="text-2xl font-bold">₹{totalNetPay.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">After deductions</p>
           </CardContent>
         </Card>
@@ -246,6 +258,7 @@ export function AllPayroll() {
         <CardContent>
           <div className="flex items-center gap-4 mb-6">
             <div>
+              <label className="text-sm font-medium mb-1 block">Month</label>
               <Select value={selectedMonth.toString()} onValueChange={(value) => {
                 setSelectedMonth(parseInt(value));
                 setShouldFetch(false); // Reset fetch state when month changes
@@ -263,33 +276,52 @@ export function AllPayroll() {
               </Select>
             </div>
             <div>
-              <Select value={selectedYear.toString()} onValueChange={(value) => {
-                setSelectedYear(parseInt(value));
-                setShouldFetch(false); // Reset fetch state when year changes
-              }}>
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="2024">2024</SelectItem>
-                  <SelectItem value="2025">2025</SelectItem>
-                </SelectContent>
-              </Select>
+              <label className="text-sm font-medium mb-1 block">Year</label>
+              <Input
+                type="number"
+                value={yearInput}
+                onChange={(e) => {
+                  const inputValue = e.target.value;
+                  setYearInput(inputValue);
+                  // Update selectedYear if valid
+                  const value = parseInt(inputValue);
+                  if (!isNaN(value) && value >= 2000 && value <= 2100) {
+                    setSelectedYear(value);
+                    setShouldFetch(false); // Reset fetch state when year changes
+                  }
+                }}
+                onBlur={(e) => {
+                  const value = parseInt(e.target.value);
+                  if (isNaN(value) || value < 2000 || value > 2100) {
+                    // Reset to current year if invalid
+                    const currentYear = getCurrentISTDate().getFullYear();
+                    setYearInput(currentYear.toString());
+                    setSelectedYear(currentYear);
+                  } else {
+                    // Ensure input matches the valid year
+                    setYearInput(value.toString());
+                  }
+                }}
+                placeholder="Enter year"
+                className="w-32"
+                min={2000}
+                max={2100}
+              />
             </div>
-            <Button onClick={handleGeneratePayroll} disabled={payrollLoading}>
+            <Button onClick={handleGeneratePayroll} disabled={payrollLoading} className='mt-6'>
               <Calculator className="h-4 w-4 mr-2" />
               {payrollLoading ? 'Generating...' : 'Generate Latest Report'}
             </Button>
             {payrollData && (
               <div className="flex gap-2">
-                <Button onClick={handleDownloadPayroll} variant="outline">
+                <Button onClick={handleDownloadPayroll} variant="outline" className='mt-6'>
                   <Download className="h-4 w-4 mr-2" />
                   Export
                 </Button>
                 <Button 
                   onClick={handleGeneratePayslips} 
                   disabled={generatePayslips.isPending}
-                  className="bg-green-600 hover:bg-green-700"
+                  className="bg-green-600 hover:bg-green-700 mt-6"
                 >
                   <Send className="h-4 w-4 mr-2" />
                   {generatePayslips.isPending ? 'Generating...' : 'Generate & Email Payslips'}
@@ -345,9 +377,9 @@ export function AllPayroll() {
                 <TableRow>
                   <TableHead>Employee</TableHead>
                   <TableHead>Department</TableHead>
-                  <TableHead>Monthly Pay</TableHead>
-                  <TableHead>Days Worked</TableHead>
-                  <TableHead>Expected Days</TableHead>
+                  <TableHead>Monthly Take Home</TableHead>
+                  <TableHead>Payable Days</TableHead>
+                  <TableHead>Working Days</TableHead>
                   <TableHead>Attendance</TableHead>
                   <TableHead>Net Pay</TableHead>
                   <TableHead>Actions</TableHead>
@@ -376,13 +408,13 @@ export function AllPayroll() {
                     </TableCell>
                     <TableCell>
                       <div className="text-sm">
-                        <div className="font-medium">${employee.payroll.monthlySalary.toLocaleString()}</div>
-                        <div className="text-xs text-muted-foreground">Base monthly</div>
+                        <div className="font-medium">₹{employee.payroll.monthlyTakeHomeSalary?.toLocaleString() || employee.payroll.monthlySalary?.toLocaleString()}</div>
+                        <div className="text-xs text-muted-foreground">Take Home Salary</div>
                       </div>
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-green-600">
-                        {employee.payroll.effectiveDaysWorked}
+                        {employee.payroll.payableDays || employee.payroll.effectiveDaysWorked}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -398,7 +430,7 @@ export function AllPayroll() {
                     </TableCell>
                     <TableCell>
                       <div className="text-sm">
-                        <div className="font-medium">${employee.payroll.netPay.toLocaleString()}</div>
+                        <div className="font-medium">₹{employee.payroll.netPay.toLocaleString()}</div>
                         <div className="text-xs text-muted-foreground">After deductions</div>
                       </div>
                     </TableCell>
@@ -444,20 +476,24 @@ export function AllPayroll() {
                                     <CardContent className="space-y-3">
                                       <div className="flex justify-between">
                                         <span>Basic Salary</span>
-                                        <span className="font-medium">${employeeDetails.payrollDetails.basicSalary.toLocaleString()}</span>
+                                        <span className="font-medium">₹{employeeDetails.payrollDetails.basicSalary.toLocaleString()}</span>
                                       </div>
                                       <div className="flex justify-between">
-                                        <span>HRA (30%)</span>
-                                        <span className="font-medium">${employeeDetails.payrollDetails.hra.toLocaleString()}</span>
+                                        <span>HRA</span>
+                                        <span className="font-medium">₹{(employeeDetails.payrollDetails.proratedHRA || employeeDetails.payrollDetails.hra).toLocaleString()}</span>
                                       </div>
                                       <div className="flex justify-between">
-                                        <span>Allowances</span>
-                                        <span className="font-medium">${employeeDetails.payrollDetails.allowances.toLocaleString()}</span>
+                                        <span>Night Allowance</span>
+                                        <span className="font-medium">₹{(employeeDetails.payrollDetails.proratedNightAllowance || 0).toLocaleString()}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>Special Allowance</span>
+                                        <span className="font-medium">₹{(employeeDetails.payrollDetails.proratedSpecialAllowance || 0).toLocaleString()}</span>
                                       </div>
                                       <div className="border-t pt-2">
                                         <div className="flex justify-between font-semibold">
                                           <span>Gross Pay</span>
-                                          <span>${employeeDetails.payrollDetails.grossPay.toLocaleString()}</span>
+                                          <span>₹{employeeDetails.payrollDetails.grossPay.toLocaleString()}</span>
                                         </div>
                                       </div>
                                     </CardContent>
@@ -473,41 +509,70 @@ export function AllPayroll() {
                                     </CardHeader>
                                     <CardContent className="space-y-3">
                                       <div className="flex justify-between">
-                                        <span>Income Tax (10%)</span>
-                                        <span className="font-medium">${employeeDetails.payrollDetails.taxDeduction.toLocaleString()}</span>
+                                        <span>TDS</span>
+                                        <span className="font-medium">₹{employeeDetails.payrollDetails.taxDeduction.toLocaleString()}</span>
                                       </div>
                                       <div className="flex justify-between">
-                                        <span>Provident Fund (12%)</span>
-                                        <span className="font-medium">${employeeDetails.payrollDetails.pfDeduction.toLocaleString()}</span>
+                                        <span>Provident Fund</span>
+                                        <span className="font-medium">₹{employeeDetails.payrollDetails.pfDeduction.toLocaleString()}</span>
                                       </div>
                                       <div className="flex justify-between">
-                                        <span>ESI (0.75%)</span>
-                                        <span className="font-medium">${employeeDetails.payrollDetails.esiDeduction.toLocaleString()}</span>
+                                        <span>ESI</span>
+                                        <span className="font-medium">₹{(employeeDetails.payrollDetails.esiDeduction || 0).toLocaleString()}</span>
                                       </div>
                                       <div className="flex justify-between">
                                         <span>Professional Tax</span>
-                                        <span className="font-medium">${employeeDetails.payrollDetails.professionalTax}</span>
+                                        <span className="font-medium">₹{employeeDetails.payrollDetails.professionalTax}</span>
                                       </div>
+                                      {employeeDetails.payrollDetails.vpfDeduction > 0 && (
+                                        <div className="flex justify-between">
+                                          <span>VPF</span>
+                                          <span className="font-medium">₹{employeeDetails.payrollDetails.vpfDeduction.toLocaleString()}</span>
+                                        </div>
+                                      )}
                                       <div className="border-t pt-2">
                                         <div className="flex justify-between font-semibold">
                                           <span>Total Deductions</span>
-                                          <span>${employeeDetails.payrollDetails.totalDeductions.toLocaleString()}</span>
+                                          <span>₹{employeeDetails.payrollDetails.totalDeductions.toLocaleString()}</span>
                                         </div>
                                       </div>
                                     </CardContent>
                                   </Card>
                                 </div>
 
+                                {/* Calculation Note */}
+                                <Card className="bg-blue-50 border-blue-200">
+                                  <CardContent className="pt-6">
+                                    <div className="text-center">
+                                      <div className="text-sm text-blue-700">
+                                        <p className="font-medium mb-2">💡 Salary Calculation Method</p>
+                                        <p className="text-xs">
+                                          Net Pay is calculated as: <strong>Monthly Take Home Salary × Attendance Ratio</strong>
+                                        </p>
+                                        <p className="text-xs mt-1">
+                                          The earnings and deductions shown above are for reference from the CTC structure.
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+
                                 {/* Net Pay Summary */}
                                 <Card className="bg-green-50 border-green-200">
                                   <CardContent className="pt-6">
                                     <div className="text-center">
                                       <div className="text-3xl font-bold text-green-600 mb-2">
-                                        ${employeeDetails.payrollDetails.netPay.toLocaleString()}
+                                        ₹{employeeDetails.payrollDetails.netPay.toLocaleString()}
                                       </div>
                                       <p className="text-green-700 font-medium">Net Pay (In-Hand Salary)</p>
                                       <p className="text-sm text-green-600 mt-1">
-                                        Based on {employeeDetails.payrollDetails.attendanceRatio.toFixed(1)}% attendance
+                                        Monthly Take Home: ₹{(employeeDetails.payrollDetails.monthlyTakeHomeSalary || 0).toLocaleString()}
+                                      </p>
+                                      <p className="text-sm text-green-600 mt-1">
+                                        Prorated for {(employeeDetails.payrollDetails.payableDays || employeeDetails.payrollDetails.effectiveDaysWorked)} payable days out of {employeeDetails.payrollDetails.totalWorkingDays} working days
+                                      </p>
+                                      <p className="text-xs text-green-600 mt-1">
+                                        Attendance: {employeeDetails.payrollDetails.attendanceRatio.toFixed(1)}%
                                       </p>
                                     </div>
                                   </CardContent>
@@ -519,12 +584,12 @@ export function AllPayroll() {
                                   <Card>
                                     <CardContent className="pt-6 text-center">
                                       <div className="text-2xl font-bold">{employeeDetails.payrollDetails.totalWorkingDays}</div>
-                                      <p className="text-sm text-muted-foreground">Total Working Days</p>
+                                      <p className="text-sm text-muted-foreground">Working Days</p>
                                     </CardContent>
                                   </Card>
                                   <Card>
                                     <CardContent className="pt-6 text-center">
-                                      <div className="text-2xl font-bold text-green-600">{employeeDetails.payrollDetails.daysWorked}</div>
+                                      <div className="text-2xl font-bold text-green-600">{employeeDetails.payrollDetails.daysPresent || employeeDetails.payrollDetails.daysWorked}</div>
                                       <p className="text-sm text-muted-foreground">Days Present</p>
                                     </CardContent>
                                   </Card>
@@ -556,8 +621,14 @@ export function AllPayroll() {
                                         <Progress value={employeeDetails.payrollDetails.attendanceRatio} />
                                       </div>
                                       <div className="text-sm text-muted-foreground">
-                                        <p>Effective working days: {employeeDetails.payrollDetails.effectiveDaysWorked} (including approved leaves)</p>
-                                        <p>Salary calculation is based on effective working days</p>
+                                        <p>Payable days: {employeeDetails.payrollDetails.payableDays || employeeDetails.payrollDetails.effectiveDaysWorked} (present + approved leaves)</p>
+                                        <p>Salary calculation is based on payable days out of working days</p>
+                                        {employeeDetails.payrollDetails.totalHoursWorked && (
+                                          <p>Total hours worked: {employeeDetails.payrollDetails.totalHoursWorked.toFixed(1)}h</p>
+                                        )}
+                                        {employeeDetails.payrollDetails.overtimeHours > 0 && (
+                                          <p>Overtime hours: {employeeDetails.payrollDetails.overtimeHours.toFixed(1)}h</p>
+                                        )}
                                       </div>
                                     </div>
                                   </CardContent>

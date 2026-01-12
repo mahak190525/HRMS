@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { getTodayIST, getISTDateOffset } from '@/utils/dateUtils';
+import { getTodayIST, getISTDateOffset, formatDateForDatabase, convertToIST } from '@/utils/dateUtils';
 
 // Finance Dashboard API
 export const financeApi = {
@@ -16,7 +16,7 @@ export const financeApi = {
     const { data: unpaidInvoices } = await supabase
       .from('invoices')
       .select('invoice_amount')
-      .in('status', ['assigned', 'in_progress', 'sent']);
+      .in('status', ['in_progress', 'partially_paid', 'sent']);
     
     const unpaidAmount = unpaidInvoices?.reduce((sum, inv) => sum + inv.invoice_amount, 0) || 0;
     const unpaidCount = unpaidInvoices?.length || 0;
@@ -72,163 +72,668 @@ export const financeApi = {
     const currentMonth = month || new Date().getMonth() + 1;
     const currentYear = year || new Date().getFullYear();
 
-    // Get all active employees with their attendance data
+    // Get all active employees with their CTC structure
     const { data: employees, error } = await supabase
       .from('users')
       .select(`
         *,
         role:roles(name, description),
-        department:departments!users_department_id_fkey(name, description),
-        attendance:attendance_summary!attendance_summary_user_id_fkey(
-          month,
-          year,
-          total_working_days,
-          days_present,
-          days_absent,
-          days_on_leave,
-          total_hours_worked,
-          overtime_hours
-        )
+        department:departments!users_department_id_fkey(name, description)
       `)
       .eq('status', 'active')
-      .eq('attendance.month', currentMonth)
-      .eq('attendance.year', currentYear)
       .order('full_name');
     
     if (error) throw error;
 
-    // Calculate payroll for each employee
-    const payrollData = employees?.map(employee => {
-      const attendance = employee.attendance?.[0];
-      const baseSalary = employee.salary || 0;
-      const monthlySalary = baseSalary / 12;
+    // Get attendance data from second database for all employees
+    const attendanceData = await this.getAllEmployeesAttendanceFromSecondDB(currentYear, currentMonth);
+
+    // Calculate payroll for each employee using CTC structure and attendance data
+    const payrollData = await Promise.all(employees?.map(async (employee) => {
+      // Find attendance record for this employee
+      const attendance = attendanceData?.find(att => att.user_id === employee.id);
       
-      // Calculate working days ratio
-      const totalWorkingDays = attendance?.total_working_days || 22;
-      const daysWorked = attendance?.days_present || 0;
-      const daysOnLeave = attendance?.days_on_leave || 0;
-      const effectiveDaysWorked = daysWorked + daysOnLeave; // Include approved leaves
+      // Parse CTC structure from employee data
+      const monthlyTakeHomeSalary = parseFloat(employee.monthly_take_home_salary || '0');
+      const monthlyBasicPay = parseFloat(employee.monthly_basic_pay || '0');
+      const hra = parseFloat(employee.hra || '0');
+      const nightAllowance = parseFloat(employee.night_allowance || '2000');
+      const specialAllowance = parseFloat(employee.special_allowance || '0');
+      const monthlyGross = parseFloat(employee.monthly_gross || '0');
       
-      // Calculate salary based on attendance
-      const attendanceRatio = totalWorkingDays > 0 ? effectiveDaysWorked / totalWorkingDays : 1;
-      const grossPay = monthlySalary * attendanceRatio;
+      // Employee deductions from CTC structure
+      const pfEmployee = parseFloat(employee.pf_employee || '0');
+      const esiEmployee = parseFloat(employee.esi_employee || '0');
+      const tds = parseFloat(employee.tds || '0');
+      const professionalTax = parseFloat(employee.professional_tax || '200');
+      const vpf = parseFloat(employee.vpf || '0');
       
-      // Calculate deductions (simplified)
-      const taxDeduction = grossPay * 0.1; // 10% tax
-      const pfDeduction = grossPay * 0.12; // 12% PF
-      const totalDeductions = taxDeduction + pfDeduction;
-      const netPay = grossPay - totalDeductions;
+      // Employer contributions
+      const monthlyGratuityProvision = parseFloat(employee.monthly_gratuity_provision || '0');
+      const monthlyBonusProvision = parseFloat(employee.monthly_bonus_provision || '0');
+      const groupMedicalInsurance = parseFloat(employee.group_medical_insurance || '138');
+      
+      // Calculate total days in the month
+      const totalDaysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+      
+      // Calculate payable days from attendance data
+      let payableDays = 0;
+      let totalWorkingDays = 0;
+      let daysPresent = 0;
+      let daysAbsent = 0;
+      let daysOnLeave = 0;
+      let totalHoursWorked = 0;
+      let overtimeHours = 0;
+      
+      if (attendance) {
+        totalWorkingDays = attendance.total_working_days || 0;
+        daysPresent = attendance.days_present || 0;
+        daysAbsent = attendance.days_absent || 0;
+        daysOnLeave = attendance.days_on_leave || 0;
+        totalHoursWorked = attendance.total_hours_worked || 0;
+        overtimeHours = attendance.overtime_hours || 0;
+        
+        // Payable days calculation with conditional weekend payment
+        // Weekends are only paid if employee worked preceding Friday AND upcoming Monday
+        const conditionalWeekendDays = await this.getConditionalWeekendDays(
+          employee.id, currentYear, currentMonth, daysOnLeave
+        );
+        
+        // Debug: Log weekend calculation with detailed breakdown
+        if (employee.full_name === 'Mahak Chhabra') {
+          console.log(`Detailed weekend calculation for ${employee.full_name}:`, {
+            conditionalWeekendDays,
+            month: currentMonth,
+            year: currentYear,
+            daysPresent,
+            timeEntriesCount: 'checking...'
+          });
+        }
+        
+        // Calculate paid leave days (approved leaves with 0 LOP)
+        const paidLeaveDays = await this.getPaidLeaveDays(employee.id, currentYear, currentMonth);
+        
+        // Total payable days = Present days + Paid leave days + Conditional weekend days
+        // Note: We use paidLeaveDays instead of daysOnLeave to avoid double-counting LOP
+        payableDays = daysPresent + paidLeaveDays + conditionalWeekendDays;
+        
+        // Debug logging for payable days calculation
+        console.log(`Payable days calculation for ${employee.full_name}:`, {
+          daysPresent,
+          paidLeaveDays,
+          conditionalWeekendDays,
+          totalPayableDays: payableDays,
+          originalDaysOnLeave: daysOnLeave,
+          totalWorkingDays,
+          attendanceSource: attendance ? 'second_db' : 'fallback'
+        });
+        
+        // If payable days exceed total working days, cap it at total working days
+        payableDays = Math.min(payableDays, totalWorkingDays);
+        
+        // Ensure payable days is not negative
+        payableDays = Math.max(0, payableDays);
+      } else {
+        // Fallback if no attendance data - assume standard working days
+        totalWorkingDays = this.getWorkingDaysInMonth(currentYear, currentMonth);
+        payableDays = 0; // No attendance data means no payable days
+        daysPresent = 0;
+        daysAbsent = totalWorkingDays;
+      }
+      
+      // Calculate attendance ratio based on payable days vs total working days (not total days in month)
+      // This ensures salary is calculated based on actual working days, not calendar days
+      const attendanceRatio = totalWorkingDays > 0 ? payableDays / totalWorkingDays : 0;
+      
+      // Calculate prorated salary components based on attendance
+      const proratedBasicPay = monthlyBasicPay * attendanceRatio;
+      const proratedHRA = hra * attendanceRatio;
+      const proratedNightAllowance = nightAllowance * attendanceRatio;
+      const proratedSpecialAllowance = specialAllowance * attendanceRatio;
+      const proratedGrossPay = monthlyGross * attendanceRatio;
+      
+      // Calculate prorated deductions
+      const proratedPFEmployee = employee.pf_applicable ? (pfEmployee * attendanceRatio) : 0;
+      const proratedESIEmployee = employee.esi_applicable ? (esiEmployee * attendanceRatio) : 0;
+      const proratedTDS = tds * attendanceRatio;
+      const proratedProfessionalTax = professionalTax * attendanceRatio;
+      const proratedVPF = vpf * attendanceRatio;
+      
+      // Calculate total deductions
+      const totalDeductions = proratedPFEmployee + proratedESIEmployee + proratedTDS + proratedProfessionalTax + proratedVPF;
+      
+      // Calculate net pay based on monthly take home salary (not gross pay)
+      // Net pay = Monthly take home salary * attendance ratio
+      const netPay = monthlyTakeHomeSalary * attendanceRatio;
+      
+      // Calculate prorated employer contributions for reference
+      const proratedGratuityProvision = monthlyGratuityProvision * attendanceRatio;
+      const proratedBonusProvision = monthlyBonusProvision * attendanceRatio;
+      const proratedGroupMedicalInsurance = groupMedicalInsurance * attendanceRatio;
 
       return {
         ...employee,
         payroll: {
-          baseSalary,
-          monthlySalary,
-          grossPay,
-          taxDeduction,
-          pfDeduction,
+          // Original CTC components
+          monthlyTakeHomeSalary,
+          monthlyBasicPay,
+          hra,
+          nightAllowance,
+          specialAllowance,
+          monthlyGross,
+          
+          // Prorated components based on attendance
+          proratedBasicPay,
+          proratedHRA,
+          proratedNightAllowance,
+          proratedSpecialAllowance,
+          grossPay: proratedGrossPay,
+          
+          // Deductions
+          pfEmployee: proratedPFEmployee,
+          esiEmployee: proratedESIEmployee,
+          tds: proratedTDS,
+          professionalTax: proratedProfessionalTax,
+          vpf: proratedVPF,
           totalDeductions,
+          
+          // Net pay
           netPay,
+          
+          // Employer contributions (for reference)
+          gratuityProvision: proratedGratuityProvision,
+          bonusProvision: proratedBonusProvision,
+          groupMedicalInsurance: proratedGroupMedicalInsurance,
+          
+          // Attendance details
+          totalDaysInMonth,
           totalWorkingDays,
-          daysWorked,
+          payableDays,
+          daysPresent,
+          daysAbsent,
           daysOnLeave,
-          effectiveDaysWorked,
-          attendanceRatio: attendanceRatio * 100
+          totalHoursWorked,
+          overtimeHours,
+          attendanceRatio: attendanceRatio * 100,
+          
+          // Legacy fields for backward compatibility
+          baseSalary: employee.salary || 0,
+          monthlySalary: monthlyTakeHomeSalary,
+          daysWorked: daysPresent,
+          effectiveDaysWorked: payableDays,
+          taxDeduction: proratedTDS,
+          pfDeduction: proratedPFEmployee,
+          esiDeduction: proratedESIEmployee
         }
       };
-    }) || [];
+    }) || []);
 
     return payrollData;
+  },
+
+  // Helper function to get attendance data from second database
+  async getAllEmployeesAttendanceFromSecondDB(year: number, month?: number) {
+    try {
+      // Import the employeeApi to use the existing, tested implementation
+      const { employeeApi } = await import('@/services/api');
+      
+      // Use the existing implementation from employeeApi
+      const attendanceData = await employeeApi.getAllEmployeesAttendanceFromSecondDB(year, month);
+      
+      return attendanceData;
+    } catch (error) {
+      console.error('Error fetching attendance from second database:', error);
+      return [];
+    }
+  },
+
+  // Helper function to calculate total days in a month (including weekends)
+  // Employees get paid for weekends as they are considered paid holidays
+  getWorkingDaysInMonth(year: number, month: number): number {
+    const endDate = new Date(year, month, 0);
+    // Return total days in the month since weekends are paid holidays
+    return endDate.getDate();
+  },
+
+  // Helper function to calculate weekend days in a month
+  getWeekendDaysInMonth(year: number, month: number): number {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0);
+    let weekendDays = 0;
+
+    for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+      const dayOfWeek = date.getDay();
+      // Count weekends (0 = Sunday, 6 = Saturday)
+      if (dayOfWeek === 0 || dayOfWeek === 6) {
+        weekendDays++;
+      }
+    }
+
+    return weekendDays;
+  },
+
+  // Helper function to calculate conditional weekend days based on Friday/Monday attendance
+  async getConditionalWeekendDays(userId: string, year: number, month: number, approvedLeaveDays: number): Promise<number> {
+    // Use IST timezone consistently
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0);
+    let paidWeekendDays = 0;
+
+    // Convert dates to IST format for database queries
+    const startDateIST = formatDateForDatabase(convertToIST(startDate));
+    const endDateIST = formatDateForDatabase(convertToIST(endDate));
+
+    // Get all time entries for this user in this month
+    const { data: timeEntries, error } = await supabase
+      .from('time_entries')
+      .select('entry_date')
+      .eq('user_id', userId)
+      .gte('entry_date', startDateIST)
+      .lte('entry_date', endDateIST);
+
+    if (error) {
+      console.error('Error fetching time entries:', error);
+      return 0;
+    }
+
+    // Get leave applications for this user in this month (both approved and unapproved)
+    const { data: leaveApplications, error: leaveError } = await supabase
+      .from('leave_applications')
+      .select('start_date, end_date, status, lop_days, days_count')
+      .eq('user_id', userId)
+      .gte('start_date', startDateIST)
+      .lte('end_date', endDateIST);
+
+    if (leaveError) {
+      console.error('Error fetching leave applications:', leaveError);
+    }
+
+    const workDates = new Set(timeEntries?.map(entry => entry.entry_date) || []);
+    const approvedLeaveDates = new Set();
+    
+    // Build set of ALL approved leave dates (regardless of LOP status)
+    // For weekend payment qualification, approved leaves count even if they have LOP
+    leaveApplications?.forEach(leave => {
+      if (leave.status === 'approved') {
+        const start = new Date(leave.start_date);
+        const end = new Date(leave.end_date);
+        
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          approvedLeaveDates.add(formatDateForDatabase(convertToIST(d)));
+        }
+      }
+    });
+
+    // Debug logging for weekend calculation
+    console.log(`\n=== Weekend Calculation Debug for ${month}/${year} ===`);
+    console.log(`Work dates found:`, Array.from(workDates).sort());
+    console.log(`Time entries raw data:`, timeEntries?.map(entry => entry.entry_date) || []);
+    console.log(`Approved leave dates:`, Array.from(approvedLeaveDates).sort());
+    
+    // Show what day of week each work date is
+    workDates.forEach(dateStr => {
+      const date = new Date(dateStr + 'T00:00:00');
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      console.log(`  Work date: ${dateStr} = ${dayNames[date.getDay()]}`);
+    });
+    
+    // Check if we have any Fridays or Mondays
+    const fridays = Array.from(workDates).filter(dateStr => {
+      const date = new Date(dateStr + 'T00:00:00');
+      return date.getDay() === 5; // Friday
+    });
+    const mondays = Array.from(workDates).filter(dateStr => {
+      const date = new Date(dateStr + 'T00:00:00');
+      return date.getDay() === 1; // Monday
+    });
+    console.log(`Fridays worked:`, fridays);
+    console.log(`Mondays worked:`, mondays);
+    
+    // Test if we can find any Friday/Monday pairs that should work
+    console.log('\\n--- Testing Friday/Monday Pairs ---');
+    fridays.forEach(fridayDate => {
+      mondays.forEach(mondayDate => {
+        const fri = new Date(fridayDate + 'T00:00:00');
+        const mon = new Date(mondayDate + 'T00:00:00');
+        const dayDiff = (mon.getTime() - fri.getTime()) / (1000 * 60 * 60 * 24);
+        
+        if (dayDiff === 3) { // Friday to Monday = 3 days (Fri -> Sat -> Sun -> Mon)
+          console.log('FOUND VALID PAIR: Friday ' + fridayDate + ' + Monday ' + mondayDate);
+          console.log('  This should qualify weekend: ' + new Date(fri.getTime() + 24*60*60*1000).toISOString().split('T')[0] + ' & ' + new Date(fri.getTime() + 2*24*60*60*1000).toISOString().split('T')[0]);
+        }
+      });
+    });
+
+    // Check each weekend in the month using IST
+    for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+      const istDate = convertToIST(date);
+      const dayOfWeek = istDate.getDay();
+      
+      if (dayOfWeek === 6 || dayOfWeek === 0) { // Saturday or Sunday
+        const currentDateStr = formatDateForDatabase(istDate);
+        
+        // Find preceding Friday and upcoming Monday using IST
+        const friday = new Date(istDate);
+        const monday = new Date(istDate);
+        
+        if (dayOfWeek === 6) { // Saturday
+          friday.setDate(friday.getDate() - 1); // Previous day (Friday)
+          monday.setDate(monday.getDate() + 2); // Two days later (Monday)
+        } else { // Sunday
+          friday.setDate(friday.getDate() - 2); // Two days before (Friday)
+          monday.setDate(monday.getDate() + 1); // Next day (Monday)
+        }
+        
+        const fridayStr = formatDateForDatabase(convertToIST(friday));
+        const mondayStr = formatDateForDatabase(convertToIST(monday));
+        
+        // Check if worked or had approved leave on Friday AND Monday
+        // Approved leaves qualify for weekend payment regardless of LOP status
+        // LOP deductions are handled separately in payable days calculation
+        const workedFriday = workDates.has(fridayStr) || approvedLeaveDates.has(fridayStr);
+        const workedMonday = workDates.has(mondayStr) || approvedLeaveDates.has(mondayStr);
+        
+        // Weekend is paid if employee worked/had approved leave on BOTH Friday AND Monday
+        if (workedFriday && workedMonday) {
+          paidWeekendDays++;
+          console.log(`✅ Weekend ${currentDateStr} PAID (F:${fridayStr}, M:${mondayStr})`);
+        } else {
+          console.log(`❌ Weekend ${currentDateStr} NOT PAID`);
+          console.log(`   Required Friday: ${fridayStr} - Found in work dates: ${workDates.has(fridayStr)} - Found in leaves: ${approvedLeaveDates.has(fridayStr)}`);
+          console.log(`   Required Monday: ${mondayStr} - Found in work dates: ${workDates.has(mondayStr)} - Found in leaves: ${approvedLeaveDates.has(mondayStr)}`);
+        }
+        // If neither Friday nor Monday worked (and no approved leave), weekend is not paid
+        // Unapproved leaves do NOT qualify for weekend payment
+      }
+    }
+
+    console.log(`\n=== Weekend Calculation Summary ===`);
+    console.log(`Total weekend days earned: ${paidWeekendDays}`);
+    console.log(`Expected payable days: ${Array.from(workDates).length} work + ${paidWeekendDays} weekend = ${Array.from(workDates).length + paidWeekendDays}`);
+    console.log(`==========================================\n`);
+    
+    return paidWeekendDays;
+  },
+
+  // Helper function to calculate LOP (Loss of Pay) deductions for the month
+  async getLOPDeductions(userId: string, year: number, month: number): Promise<number> {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0);
+
+    // Get all approved leave applications with LOP for this user in this month
+    const { data: leaveApplications, error } = await supabase
+      .from('leave_applications')
+      .select('start_date, end_date, lop_days, days_count')
+      .eq('user_id', userId)
+      .eq('status', 'approved')
+      .gt('lop_days', 0) // Only leaves with LOP
+      .gte('start_date', startDate.toISOString().split('T')[0])
+      .lte('end_date', endDate.toISOString().split('T')[0]);
+
+    if (error) {
+      console.error('Error fetching LOP leave applications:', error);
+      return 0;
+    }
+
+    let totalLOPDays = 0;
+
+    leaveApplications?.forEach(leave => {
+      const lopDays = leave.lop_days || 0;
+      
+      // Calculate how many days of this leave fall within the current month
+      const leaveStart = new Date(Math.max(new Date(leave.start_date).getTime(), startDate.getTime()));
+      const leaveEnd = new Date(Math.min(new Date(leave.end_date).getTime(), endDate.getTime()));
+      
+      if (leaveStart <= leaveEnd) {
+        const daysInMonth = Math.ceil((leaveEnd.getTime() - leaveStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        const totalLeaveDays = leave.days_count || 0;
+        
+        // Calculate proportional LOP for days in this month
+        if (totalLeaveDays > 0) {
+          const lopRatio = lopDays / totalLeaveDays;
+          totalLOPDays += daysInMonth * lopRatio;
+        }
+      }
+    });
+
+    return Math.round(totalLOPDays * 100) / 100; // Round to 2 decimal places
+  },
+
+  // Helper function to calculate paid leave days (approved leaves with 0 LOP)
+  async getPaidLeaveDays(userId: string, year: number, month: number): Promise<number> {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0);
+
+    // Convert dates to IST format for database queries
+    const startDateIST = formatDateForDatabase(convertToIST(startDate));
+    const endDateIST = formatDateForDatabase(convertToIST(endDate));
+
+    // Get all approved leave applications for this user in this month
+    const { data: leaveApplications, error } = await supabase
+      .from('leave_applications')
+      .select('start_date, end_date, lop_days, days_count')
+      .eq('user_id', userId)
+      .eq('status', 'approved')
+      .gte('start_date', startDateIST)
+      .lte('end_date', endDateIST);
+
+    if (error) {
+      console.error('Error fetching leave applications for paid leave calculation:', error);
+      return 0;
+    }
+
+    let totalPaidLeaveDays = 0;
+
+    leaveApplications?.forEach(leave => {
+      const lopDays = leave.lop_days || 0;
+      const totalLeaveDays = leave.days_count || 0;
+      
+      // Calculate how many days of this leave fall within the current month
+      const leaveStart = new Date(Math.max(new Date(leave.start_date).getTime(), startDate.getTime()));
+      const leaveEnd = new Date(Math.min(new Date(leave.end_date).getTime(), endDate.getTime()));
+      
+      if (leaveStart <= leaveEnd) {
+        const daysInMonth = Math.ceil((leaveEnd.getTime() - leaveStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        
+        if (totalLeaveDays > 0) {
+          // Calculate paid portion (non-LOP portion)
+          const paidPortion = (totalLeaveDays - lopDays) / totalLeaveDays;
+          const paidDaysInMonth = daysInMonth * paidPortion;
+          totalPaidLeaveDays += paidDaysInMonth;
+        }
+      }
+    });
+
+    return Math.round(totalPaidLeaveDays * 100) / 100; // Round to 2 decimal places
   },
 
   async getEmployeePayrollDetails(userId: string, month?: number, year?: number) {
     const currentMonth = month || new Date().getMonth() + 1;
     const currentYear = year || new Date().getFullYear();
 
+    // Get employee with CTC structure and leave applications
     const { data: employee, error } = await supabase
       .from('users')
       .select(`
         *,
         role:roles(name, description),
         department:departments!users_department_id_fkey(name, description),
-        attendance:attendance_summary!attendance_summary_user_id_fkey(
-          month,
-          year,
-          total_working_days,
-          days_present,
-          days_absent,
-          days_on_leave,
-          total_hours_worked,
-          overtime_hours
-        ),
         leave_applications:leave_applications!leave_applications_user_id_fkey(
           start_date,
           end_date,
           days_count,
           status,
+          half_day_period,
           leave_type:leave_types(name)
         )
       `)
       .eq('id', userId)
-      .eq('attendance.month', currentMonth)
-      .eq('attendance.year', currentYear)
       .single();
     
     if (error) throw error;
 
-    const attendance = employee.attendance?.[0];
-    const baseSalary = employee.salary || 0;
-    const monthlySalary = baseSalary / 12;
+    // Get attendance data from second database
+    const attendanceData = await this.getAllEmployeesAttendanceFromSecondDB(currentYear, currentMonth);
+    const attendance = attendanceData?.find(att => att.user_id === userId);
+
+    // Parse CTC structure from employee data
+    const monthlyTakeHomeSalary = parseFloat(employee.monthly_take_home_salary || '0');
+    const monthlyBasicPay = parseFloat(employee.monthly_basic_pay || '0');
+    const hra = parseFloat(employee.hra || '0');
+    const nightAllowance = parseFloat(employee.night_allowance || '2000');
+    const specialAllowance = parseFloat(employee.special_allowance || '0');
+    const monthlyGross = parseFloat(employee.monthly_gross || '0');
     
-    // Calculate detailed payroll breakdown
-    const totalWorkingDays = attendance?.total_working_days || 22;
-    const daysWorked = attendance?.days_present || 0;
-    const daysOnLeave = attendance?.days_on_leave || 0;
-    const daysAbsent = attendance?.days_absent || 0;
-    const effectiveDaysWorked = daysWorked + daysOnLeave;
+    // Employee deductions from CTC structure
+    const pfEmployee = parseFloat(employee.pf_employee || '0');
+    const esiEmployee = parseFloat(employee.esi_employee || '0');
+    const tds = parseFloat(employee.tds || '0');
+    const professionalTax = parseFloat(employee.professional_tax || '200');
+    const vpf = parseFloat(employee.vpf || '0');
     
-    const attendanceRatio = totalWorkingDays > 0 ? effectiveDaysWorked / totalWorkingDays : 1;
-    const grossPay = monthlySalary * attendanceRatio;
+    // Employer contributions
+    const monthlyGratuityProvision = parseFloat(employee.monthly_gratuity_provision || '0');
+    const monthlyBonusProvision = parseFloat(employee.monthly_bonus_provision || '0');
+    const groupMedicalInsurance = parseFloat(employee.group_medical_insurance || '138');
     
-    // Detailed deductions
-    const basicSalary = grossPay * 0.5;
-    const hra = grossPay * 0.3;
-    const allowances = grossPay * 0.2;
+    // Calculate total days in the month and attendance details
+    const totalDaysInMonth = new Date(currentYear, currentMonth, 0).getDate();
     
-    const taxDeduction = grossPay * 0.1;
-    const pfDeduction = grossPay * 0.12;
-    const esiDeduction = grossPay * 0.0075;
-    const professionalTax = 200;
+    let payableDays = 0;
+    let totalWorkingDays = 0;
+    let daysPresent = 0;
+    let daysAbsent = 0;
+    let daysOnLeave = 0;
+    let totalHoursWorked = 0;
+    let overtimeHours = 0;
     
-    const totalDeductions = taxDeduction + pfDeduction + esiDeduction + professionalTax;
-    const netPay = grossPay - totalDeductions;
+    if (attendance) {
+      totalWorkingDays = attendance.total_working_days || 0;
+      daysPresent = attendance.days_present || 0;
+      daysAbsent = attendance.days_absent || 0;
+      daysOnLeave = attendance.days_on_leave || 0;
+      totalHoursWorked = attendance.total_hours_worked || 0;
+      overtimeHours = attendance.overtime_hours || 0;
+      
+      // Payable days calculation with conditional weekend payment
+      // Weekends are only paid if employee worked preceding Friday AND upcoming Monday
+      const conditionalWeekendDays = await this.getConditionalWeekendDays(
+        userId, currentYear, currentMonth, daysOnLeave
+      );
+      
+      // Calculate paid leave days (approved leaves with 0 LOP)
+      const paidLeaveDays = await this.getPaidLeaveDays(userId, currentYear, currentMonth);
+      
+      // Total payable days = Present days + Paid leave days + Conditional weekend days
+      // Note: We use paidLeaveDays instead of daysOnLeave to avoid double-counting LOP
+      payableDays = daysPresent + paidLeaveDays + conditionalWeekendDays;
+      
+      // If payable days exceed total working days, cap it at total working days
+      payableDays = Math.min(payableDays, totalWorkingDays);
+      
+      // Ensure payable days is not negative
+      payableDays = Math.max(0, payableDays);
+    } else {
+      // Fallback if no attendance data - assume standard working days
+      totalWorkingDays = this.getWorkingDaysInMonth(currentYear, currentMonth);
+      payableDays = 0; // No attendance data means no payable days
+      daysPresent = 0;
+      daysAbsent = totalWorkingDays;
+    }
+    
+    // Calculate attendance ratio based on payable days vs total working days (not total days in month)
+    // This ensures salary is calculated based on actual working days, not calendar days
+    const attendanceRatio = totalWorkingDays > 0 ? payableDays / totalWorkingDays : 0;
+    
+    // Calculate prorated salary components based on attendance
+    const proratedBasicPay = monthlyBasicPay * attendanceRatio;
+    const proratedHRA = hra * attendanceRatio;
+    const proratedNightAllowance = nightAllowance * attendanceRatio;
+    const proratedSpecialAllowance = specialAllowance * attendanceRatio;
+    const proratedGrossPay = monthlyGross * attendanceRatio;
+    
+    // Calculate prorated deductions
+    const proratedPFEmployee = employee.pf_applicable ? (pfEmployee * attendanceRatio) : 0;
+    const proratedESIEmployee = employee.esi_applicable ? (esiEmployee * attendanceRatio) : 0;
+    const proratedTDS = tds * attendanceRatio;
+    const proratedProfessionalTax = professionalTax * attendanceRatio;
+    const proratedVPF = vpf * attendanceRatio;
+    
+    // Calculate total deductions
+    const totalDeductions = proratedPFEmployee + proratedESIEmployee + proratedTDS + proratedProfessionalTax + proratedVPF;
+    
+    // Calculate net pay based on monthly take home salary (not gross pay)
+    // Net pay = Monthly take home salary * attendance ratio
+    const netPay = monthlyTakeHomeSalary * attendanceRatio;
+    
+    // Calculate prorated employer contributions
+    const proratedGratuityProvision = monthlyGratuityProvision * attendanceRatio;
+    const proratedBonusProvision = monthlyBonusProvision * attendanceRatio;
+    const proratedGroupMedicalInsurance = groupMedicalInsurance * attendanceRatio;
+
+    // Filter approved leave applications for the current month
+    const approvedLeaves = employee.leave_applications?.filter((leave: any) => 
+      leave.status === 'approved' &&
+      new Date(leave.start_date).getMonth() + 1 === currentMonth &&
+      new Date(leave.start_date).getFullYear() === currentYear
+    ) || [];
 
     return {
       employee,
       payrollDetails: {
-        baseSalary,
-        monthlySalary,
-        grossPay,
-        basicSalary,
+        // Original CTC components
+        monthlyTakeHomeSalary,
+        monthlyBasicPay,
         hra,
-        allowances,
-        taxDeduction,
-        pfDeduction,
-        esiDeduction,
-        professionalTax,
+        nightAllowance,
+        specialAllowance,
+        monthlyGross,
+        
+        // Prorated components based on attendance
+        basicSalary: proratedBasicPay,
+        proratedHRA,
+        proratedNightAllowance,
+        proratedSpecialAllowance,
+        grossPay: proratedGrossPay,
+        
+        // Allowances breakdown for display
+        allowances: proratedNightAllowance + proratedSpecialAllowance,
+        
+        // Deductions
+        pfDeduction: proratedPFEmployee,
+        esiDeduction: proratedESIEmployee,
+        taxDeduction: proratedTDS,
+        professionalTax: proratedProfessionalTax,
+        vpfDeduction: proratedVPF,
         totalDeductions,
+        
+        // Net pay
         netPay,
+        
+        // Employer contributions (for reference)
+        gratuityProvision: proratedGratuityProvision,
+        bonusProvision: proratedBonusProvision,
+        groupMedicalInsurance: proratedGroupMedicalInsurance,
+        
+        // Attendance details
+        totalDaysInMonth,
         totalWorkingDays,
-        daysWorked,
-        daysOnLeave,
+        payableDays,
+        daysWorked: daysPresent,
+        daysPresent,
         daysAbsent,
-        effectiveDaysWorked,
+        daysOnLeave,
+        totalHoursWorked,
+        overtimeHours,
+        effectiveDaysWorked: payableDays,
         attendanceRatio: attendanceRatio * 100,
-        leaveApplications: employee.leave_applications?.filter((leave: any) => 
-          leave.status === 'approved' &&
-          new Date(leave.start_date).getMonth() + 1 === currentMonth &&
-          new Date(leave.start_date).getFullYear() === currentYear
-        ) || []
+        
+        // Leave applications
+        leaveApplications: approvedLeaves,
+        
+        // Legacy fields for backward compatibility
+        baseSalary: employee.salary || 0,
+        monthlySalary: monthlyTakeHomeSalary
       }
     };
   },

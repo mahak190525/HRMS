@@ -69,7 +69,7 @@ export const authApi = {
       'marital_status', 'date_of_marriage_anniversary', 'father_name',
       'father_dob', 'mother_name', 'mother_dob', 'designation_offer_letter',
       'permanent_address', 'aadhar_card_no', 'pan_no', 'bank_account_no',
-      'ifsc_code', 'qualification', 'employment_terms', 'date_of_joining',
+      'ifsc_code', 'qualification', 'employment_terms', 'date_of_joining', 'comp_off_balance',
       // New onboarding fields
       'appointment_formalities', 'orientation', 'order_id_card', 'email_account',
       'skype_account', 'system_account', 'added_to_mailing_list',
@@ -80,7 +80,7 @@ export const authApi = {
       'hra', 'night_allowance', 'special_allowance', 'monthly_gross',
       'employer_pf', 'employer_esi', 'monthly_gratuity_provision',
       'monthly_bonus_provision', 'group_medical_insurance', 'pf_employee',
-      'esi_employee', 'tds', 'professional_tax', 'total_deductions',
+      'esi_employee', 'tds', 'professional_tax', 'vpf', 'total_deductions',
       'net_pay', 'monthly_take_home_salary',
       // Loyalty Bonus fields
       'loyalty_bonus_enrollment_date', 'loyalty_bonus_specific_condition',
@@ -644,13 +644,14 @@ export const leaveApi = {
         let halfDayLeavesCount = 0;
         
         // Count leave days in this month
+        // Note: Weekend payment is now handled conditionally in the payroll calculation
         for (let day = 1; day <= monthEnd.getDate(); day++) {
           const currentDate = new Date(report.year, report.month - 1, day);
           const dayOfWeek = currentDate.getDay();
           const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
           
-          // Only count working days
-          if (!isWeekend) {
+          // Count all days for leave calculation
+          {
             const dateStr = currentDate.toISOString().split('T')[0];
             
             // Check if this date falls within any approved leave
@@ -1432,6 +1433,68 @@ export const exitApi = {
 
 // Employee Management API
 export const employeeApi = {
+  async getEmployeesForAttendanceReports() {
+    const { data, error } = await supabase
+      .rpc('get_users_for_attendance_reports');
+
+    if (error) throw error;
+
+    // Transform the data to match the expected structure
+    return data?.map((row: any) => ({
+      id: row.id,
+      email: row.email,
+      full_name: row.full_name,
+      employee_id: row.employee_id,
+      role_id: row.role_id,
+      department_id: row.department_id,
+      date_of_joining: row.date_of_joining,
+      status: row.status,
+      manager_id: row.manager_id,
+      tenure_mechlin: row.tenure_mechlin,
+      designation_offer_letter: row.designation_offer_letter,
+      employment_terms: row.employment_terms,
+      isSA: row.isSA,
+      comp_off_balance: row.comp_off_balance,
+      department: row.department_name ? {
+        name: row.department_name
+      } : null
+    })) || [];
+  },
+
+  async getEmployeeByIdForAttendance(employeeId: string) {
+    const { data, error } = await supabase
+      .rpc('get_user_for_attendance_reports', { p_user_id: employeeId });
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      throw new Error('Employee not found');
+    }
+
+    const employee = data[0];
+
+    // Transform the data to match the expected structure
+    return {
+      id: employee.id,
+      email: employee.email,
+      full_name: employee.full_name,
+      employee_id: employee.employee_id,
+      role_id: employee.role_id,
+      department_id: employee.department_id,
+      date_of_joining: employee.date_of_joining,
+      status: employee.status,
+      manager_id: employee.manager_id,
+      tenure_mechlin: employee.tenure_mechlin,
+      designation_offer_letter: employee.designation_offer_letter,
+      employment_terms: employee.employment_terms,
+      isSA: employee.isSA,
+      comp_off_balance: employee.comp_off_balance,
+      department: employee.department_name ? {
+        name: employee.department_name
+      } : null
+    };
+  },
+
   async getAllEmployees() {
     const { data, error } = await supabase
       .rpc('get_employees_with_manager_details');
@@ -1736,8 +1799,8 @@ export const employeeApi = {
       // Import secondSupabase dynamically to avoid circular dependencies
       const { secondSupabase } = await import('@/services/secondSupabase');
 
-      // Get all employees from main database
-      const employees = await this.getAllEmployees();
+      // Get all employees from main database using optimized function
+      const employees = await this.getEmployeesForAttendanceReports();
 
       // Get holidays for the year
       const holidays = await leaveApi.getAllHolidays(year);
@@ -1924,23 +1987,29 @@ export const employeeApi = {
     }
   },
 
-  // Helper function to calculate working days in a month (excluding weekends and holidays)
+  // Helper function to calculate total days in a month (including weekends)
+  // Employees get paid for weekends as they are considered paid holidays
   getWorkingDaysInMonth(year: number, month: number, holidays: any[] = []): number {
+    const endDate = new Date(year, month, 0);
+    // Return total days in the month since weekends are paid holidays
+    return endDate.getDate();
+  },
+
+  // Helper function to calculate weekend days in a month
+  getWeekendDaysInMonth(year: number, month: number): number {
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0);
-    let workingDays = 0;
+    let weekendDays = 0;
 
     for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
       const dayOfWeek = date.getDay();
-      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6; // Sunday (0) or Saturday (6)
-      const { isHoliday } = employeeApi.isHoliday(date, holidays);
-
-      if (!isWeekend && !isHoliday) {
-        workingDays++;
+      // Count weekends (0 = Sunday, 6 = Saturday)
+      if (dayOfWeek === 0 || dayOfWeek === 6) {
+        weekendDays++;
       }
     }
 
-    return workingDays;
+    return weekendDays;
   },
 
   // Helper function to calculate leave days in a month (only counting working days)
@@ -1969,8 +2038,8 @@ export const employeeApi = {
       // Import secondSupabase dynamically to avoid circular dependencies
       const { secondSupabase } = await import('@/services/secondSupabase');
 
-      // Get employee details from main database
-      const employee = await this.getEmployeeById(employeeId);
+      // Get employee details from main database using optimized function
+      const employee = await this.getEmployeeByIdForAttendance(employeeId);
       if (!employee) {
         throw new Error('Employee not found');
       }
