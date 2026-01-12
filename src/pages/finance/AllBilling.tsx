@@ -173,6 +173,20 @@ export function AllBilling() {
   const [isViewLogsDialogOpen, setIsViewLogsDialogOpen] = useState(false);
   const [selectedInvoiceForLogs, setSelectedInvoiceForLogs] = useState<any>(null);
   
+  // Calendar popover states for auto-close functionality
+  const [isInvoiceDateOpen, setIsInvoiceDateOpen] = useState(false);
+  const [isDueDateOpen, setIsDueDateOpen] = useState(false);
+  const [isServiceStartDateOpen, setIsServiceStartDateOpen] = useState(false);
+  const [isServiceEndDateOpen, setIsServiceEndDateOpen] = useState(false);
+  const [isPaymentDateOpen, setIsPaymentDateOpen] = useState(false);
+  const [isContractStartDateOpen, setIsContractStartDateOpen] = useState(false);
+  const [isContractEndDateOpen, setIsContractEndDateOpen] = useState(false);
+  const [isEditInvoiceDateOpen, setIsEditInvoiceDateOpen] = useState(false);
+  const [isEditDueDateOpen, setIsEditDueDateOpen] = useState(false);
+  const [isEditServiceStartDateOpen, setIsEditServiceStartDateOpen] = useState(false);
+  const [isEditServiceEndDateOpen, setIsEditServiceEndDateOpen] = useState(false);
+  const [isEditPaymentDateOpen, setIsEditPaymentDateOpen] = useState(false);
+  
   // Invoice tasks state
   const [invoiceTasks, setInvoiceTasks] = useState<InvoiceTaskData[]>([]);
   const [newTask, setNewTask] = useState<InvoiceTaskData>({
@@ -1317,7 +1331,7 @@ export function AllBilling() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Invoice Date *</FormLabel>
-                          <Popover>
+                          <Popover open={isInvoiceDateOpen} onOpenChange={setIsInvoiceDateOpen}>
                             <PopoverTrigger asChild>
                               <FormControl>
                                 <Button
@@ -1336,7 +1350,10 @@ export function AllBilling() {
                               <Calendar
                                 mode="single"
                                 selected={field.value}
-                                onSelect={field.onChange}
+                                onSelect={(date) => {
+                                  field.onChange(date);
+                                  setIsInvoiceDateOpen(false);
+                                }}
                                 initialFocus
                               />
                             </PopoverContent>
@@ -1352,7 +1369,7 @@ export function AllBilling() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Due Date *</FormLabel>
-                          <Popover>
+                          <Popover open={isDueDateOpen} onOpenChange={setIsDueDateOpen}>
                             <PopoverTrigger asChild>
                               <FormControl>
                                 <Button
@@ -1371,7 +1388,10 @@ export function AllBilling() {
                               <Calendar
                                 mode="single"
                                 selected={field.value}
-                                onSelect={field.onChange}
+                                onSelect={(date) => {
+                                  field.onChange(date);
+                                  setIsDueDateOpen(false);
+                                }}
                                 disabled={(date) => date < getCurrentISTDate()}
                                 initialFocus
                               />
@@ -1392,7 +1412,7 @@ export function AllBilling() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Service Period Start</FormLabel>
-                            <Popover>
+                            <Popover open={isServiceStartDateOpen} onOpenChange={setIsServiceStartDateOpen}>
                               <PopoverTrigger asChild>
                                 <FormControl>
                                   <Button
@@ -1411,7 +1431,10 @@ export function AllBilling() {
                                 <Calendar
                                   mode="single"
                                   selected={field.value}
-                                  onSelect={field.onChange}
+                                  onSelect={(date) => {
+                                    field.onChange(date);
+                                    setIsServiceStartDateOpen(false);
+                                  }}
                                   initialFocus
                                 />
                               </PopoverContent>
@@ -1427,7 +1450,7 @@ export function AllBilling() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Service Period End</FormLabel>
-                            <Popover>
+                            <Popover open={isServiceEndDateOpen} onOpenChange={setIsServiceEndDateOpen}>
                               <PopoverTrigger asChild>
                                 <FormControl>
                                   <Button
@@ -1446,7 +1469,10 @@ export function AllBilling() {
                                 <Calendar
                                   mode="single"
                                   selected={field.value}
-                                  onSelect={field.onChange}
+                                  onSelect={(date) => {
+                                    field.onChange(date);
+                                    setIsServiceEndDateOpen(false);
+                                  }}
                                   initialFocus
                                 />
                               </PopoverContent>
@@ -1619,8 +1645,8 @@ export function AllBilling() {
                     />
                   </div>
 
-                  {/* Payment Fields (Only when status is 'paid') */}
-                  {watchedStatus === 'paid' && (
+                  {/* Payment Fields (when status is 'paid' or 'partially_paid') */}
+                  {(watchedStatus === 'paid' || watchedStatus === 'partially_paid') && (
                     <div className="space-y-4 p-4 border rounded-lg bg-green-50">
                       <h3 className="text-lg font-medium text-green-800">Payment Information</h3>
                       
@@ -1631,7 +1657,7 @@ export function AllBilling() {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Payment Received Date</FormLabel>
-                              <Popover>
+                              <Popover open={isPaymentDateOpen} onOpenChange={setIsPaymentDateOpen}>
                                 <PopoverTrigger asChild>
                                   <FormControl>
                                     <Button
@@ -1650,53 +1676,14 @@ export function AllBilling() {
                                   <Calendar
                                     mode="single"
                                     selected={field.value}
-                                    onSelect={field.onChange}
+                                    onSelect={(date) => {
+                                      field.onChange(date);
+                                      setIsPaymentDateOpen(false);
+                                    }}
                                     initialFocus
                                   />
                                 </PopoverContent>
                               </Popover>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={invoiceForm.control}
-                          name="amount_received"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Amount Received</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  type="number" 
-                                  step="0.01"
-                                  placeholder="0.00" 
-                                  value={field.value || ''}
-                                  onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <FormField
-                          control={invoiceForm.control}
-                          name="pending_amount"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Pending Amount</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  type="number" 
-                                  step="0.01"
-                                  placeholder="0.00" 
-                                  {...field}
-                                  onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                                />
-                              </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -1727,6 +1714,56 @@ export function AllBilling() {
                           )}
                         />
                       </div>
+
+                      {/* Amount fields only for partially_paid status */}
+                      {watchedStatus === 'partially_paid' && (
+                        <div className="grid grid-cols-2 gap-4">
+                          <FormField
+                            control={invoiceForm.control}
+                            name="amount_received"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Amount Received</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    type="number" 
+                                    step="0.01"
+                                    placeholder="0.00" 
+                                    value={field.value || ''}
+                                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={invoiceForm.control}
+                            name="pending_amount"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Pending Amount (Calculated)</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    type="number" 
+                                    step="0.01"
+                                    placeholder="0.00" 
+                                    {...field}
+                                    value={field.value || 0}
+                                    disabled
+                                    className="bg-muted cursor-not-allowed"
+                                  />
+                                </FormControl>
+                                <FormDescription className="text-xs">
+                                  Calculated as: Invoice Amount - Amount Received
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      )}
 
                       <FormField
                         control={invoiceForm.control}
@@ -2089,6 +2126,7 @@ export function AllBilling() {
                     <TableHead>Invoice Details</TableHead>
                     <TableHead>Client & Project</TableHead>
                     <TableHead>Amount & Currency</TableHead>
+                    <TableHead>Invoice Date</TableHead>
                     <TableHead>Due Date</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Actions</TableHead>
@@ -2120,6 +2158,11 @@ export function AllBilling() {
                         <div>
                           <div className="font-medium">{invoice.currency} {invoice.invoice_amount.toLocaleString()}</div>
                           <div className="text-sm text-muted-foreground">{invoice.payment_terms.replace('_', ' ')}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {formatDateForDisplay(invoice.invoice_date, 'MMM dd, yyyy')}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -2456,7 +2499,7 @@ export function AllBilling() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Contract Start Date *</FormLabel>
-                      <Popover>
+                      <Popover open={isContractStartDateOpen} onOpenChange={setIsContractStartDateOpen}>
                         <PopoverTrigger asChild>
                           <FormControl>
                             <Button
@@ -2475,7 +2518,10 @@ export function AllBilling() {
                           <Calendar
                             mode="single"
                             selected={field.value}
-                            onSelect={field.onChange}
+                            onSelect={(date) => {
+                              field.onChange(date);
+                              setIsContractStartDateOpen(false);
+                            }}
                             initialFocus
                           />
                         </PopoverContent>
@@ -2491,7 +2537,7 @@ export function AllBilling() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Contract End Date *</FormLabel>
-                      <Popover>
+                      <Popover open={isContractEndDateOpen} onOpenChange={setIsContractEndDateOpen}>
                         <PopoverTrigger asChild>
                           <FormControl>
                             <Button
@@ -2510,7 +2556,10 @@ export function AllBilling() {
                           <Calendar
                             mode="single"
                             selected={field.value}
-                            onSelect={field.onChange}
+                            onSelect={(date) => {
+                              field.onChange(date);
+                              setIsContractEndDateOpen(false);
+                            }}
                             disabled={(date) => date < (billingForm.getValues('contract_start_date') || getCurrentISTDate())}
                             initialFocus
                           />
@@ -2802,7 +2851,7 @@ export function AllBilling() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Invoice Date *</FormLabel>
-                      <Popover>
+                      <Popover open={isEditInvoiceDateOpen} onOpenChange={setIsEditInvoiceDateOpen}>
                         <PopoverTrigger asChild>
                           <FormControl>
                             <Button
@@ -2821,7 +2870,10 @@ export function AllBilling() {
                           <Calendar
                             mode="single"
                             selected={field.value}
-                            onSelect={field.onChange}
+                            onSelect={(date) => {
+                              field.onChange(date);
+                              setIsEditInvoiceDateOpen(false);
+                            }}
                             initialFocus
                           />
                         </PopoverContent>
@@ -2837,7 +2889,7 @@ export function AllBilling() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Due Date *</FormLabel>
-                      <Popover>
+                      <Popover open={isEditDueDateOpen} onOpenChange={setIsEditDueDateOpen}>
                         <PopoverTrigger asChild>
                           <FormControl>
                             <Button
@@ -2856,7 +2908,10 @@ export function AllBilling() {
                               <Calendar
                                 mode="single"
                                 selected={field.value}
-                                onSelect={field.onChange}
+                                onSelect={(date) => {
+                                  field.onChange(date);
+                                  setIsEditDueDateOpen(false);
+                                }}
                                 initialFocus
                               />
                         </PopoverContent>
@@ -2876,7 +2931,7 @@ export function AllBilling() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Service Period Start</FormLabel>
-                        <Popover>
+                        <Popover open={isEditServiceStartDateOpen} onOpenChange={setIsEditServiceStartDateOpen}>
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button
@@ -2895,7 +2950,10 @@ export function AllBilling() {
                             <Calendar
                               mode="single"
                               selected={field.value}
-                              onSelect={field.onChange}
+                              onSelect={(date) => {
+                                field.onChange(date);
+                                setIsEditServiceStartDateOpen(false);
+                              }}
                               initialFocus
                             />
                           </PopoverContent>
@@ -2911,7 +2969,7 @@ export function AllBilling() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Service Period End</FormLabel>
-                        <Popover>
+                        <Popover open={isEditServiceEndDateOpen} onOpenChange={setIsEditServiceEndDateOpen}>
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button
@@ -2930,7 +2988,10 @@ export function AllBilling() {
                             <Calendar
                               mode="single"
                               selected={field.value}
-                              onSelect={field.onChange}
+                              onSelect={(date) => {
+                                field.onChange(date);
+                                setIsEditServiceEndDateOpen(false);
+                              }}
                               initialFocus
                             />
                           </PopoverContent>
@@ -3129,8 +3190,8 @@ export function AllBilling() {
                 )}
               />
 
-              {/* Payment Fields (Only when status is 'paid') */}
-              {watchedStatus === 'paid' && (
+              {/* Payment Fields (when status is 'paid' or 'partially_paid') */}
+              {(watchedStatus === 'paid' || watchedStatus === 'partially_paid') && (
                 <div className="space-y-4 p-4 border rounded-lg bg-green-50">
                   <h3 className="text-lg font-medium text-green-800">Payment Information</h3>
                   
@@ -3141,7 +3202,7 @@ export function AllBilling() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Payment Received Date</FormLabel>
-                          <Popover>
+                          <Popover open={isEditPaymentDateOpen} onOpenChange={setIsEditPaymentDateOpen}>
                             <PopoverTrigger asChild>
                               <FormControl>
                                 <Button
@@ -3160,58 +3221,14 @@ export function AllBilling() {
                               <Calendar
                                 mode="single"
                                 selected={field.value}
-                                onSelect={field.onChange}
+                                onSelect={(date) => {
+                                  field.onChange(date);
+                                  setIsEditPaymentDateOpen(false);
+                                }}
                                 initialFocus
                               />
                             </PopoverContent>
                           </Popover>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={invoiceForm.control}
-                      name="amount_received"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Amount Received</FormLabel>
-                          <FormControl>
-                            <Input 
-                              type="number" 
-                              step="0.01"
-                              placeholder="0.00" 
-                              value={field.value || ''}
-                              onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={invoiceForm.control}
-                      name="pending_amount"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Pending Amount (Calculated)</FormLabel>
-                          <FormControl>
-                            <Input 
-                              type="number" 
-                              step="0.01"
-                              placeholder="0.00" 
-                              {...field}
-                              value={field.value || 0}
-                              disabled
-                              className="bg-muted cursor-not-allowed"
-                            />
-                          </FormControl>
-                          <FormDescription className="text-xs">
-                            Calculated as: Invoice Amount - Amount Received
-                          </FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -3243,12 +3260,62 @@ export function AllBilling() {
                     />
                   </div>
 
+                  {/* Amount fields only for partially_paid status */}
+                  {watchedStatus === 'partially_paid' && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={invoiceForm.control}
+                        name="amount_received"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Amount Received</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="number" 
+                                step="0.01"
+                                placeholder="0.00" 
+                                value={field.value || ''}
+                                onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={invoiceForm.control}
+                        name="pending_amount"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Pending Amount (Calculated)</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="number" 
+                                step="0.01"
+                                placeholder="0.00" 
+                                {...field}
+                                value={field.value || 0}
+                                disabled
+                                className="bg-muted cursor-not-allowed"
+                              />
+                            </FormControl>
+                            <FormDescription className="text-xs">
+                              Calculated as: Invoice Amount - Amount Received
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  )}
+
                   <FormField
                     control={invoiceForm.control}
                     name="payment_remarks"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Remarks</FormLabel>
+                        <FormLabel>Payment Remarks</FormLabel>
                         <FormControl>
                           <Textarea 
                             placeholder="Add any payment-related remarks..."
@@ -3700,8 +3767,8 @@ export function AllBilling() {
                 </div>
               </div>
 
-              {/* Payment Fields (Only when status is 'paid') */}
-              {selectedInvoice.status === 'paid' && (
+              {/* Payment Fields (when status is 'paid' or 'partially_paid') */}
+              {(selectedInvoice.status === 'paid' || selectedInvoice.status === 'partially_paid') && (
                 <div className="space-y-4 p-4 border rounded-lg bg-green-50">
                   <h3 className="text-lg font-medium text-green-800">Payment Information</h3>
                   
@@ -3714,21 +3781,42 @@ export function AllBilling() {
                     </div>
 
                     <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Amount Received</Label>
-                      <div className="p-2 bg-white rounded-md text-sm font-semibold">
-                        {selectedInvoice.amount_received ? `${selectedInvoice.currency} ${selectedInvoice.amount_received.toFixed(2)}` : 'Not specified'}
+                      <Label className="text-xs font-medium text-muted-foreground">Assigned Finance POC</Label>
+                      <div className="p-2 bg-white rounded-md text-sm">
+                        {selectedInvoice.assigned_finance_poc_user ? (
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-6 w-6">
+                              <AvatarFallback className="text-xs">
+                                {selectedInvoice.assigned_finance_poc_user.full_name.charAt(0)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span>{selectedInvoice.assigned_finance_poc_user.full_name}</span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">Unassigned</span>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Pending Amount</Label>
-                      <div className="p-2 bg-white rounded-md text-sm">
-                        {selectedInvoice.pending_amount ? `${selectedInvoice.currency} ${selectedInvoice.pending_amount.toFixed(2)}` : '0.00'}
+                  {/* Amount fields only for partially_paid status */}
+                  {selectedInvoice.status === 'partially_paid' && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-xs font-medium text-muted-foreground">Amount Received</Label>
+                        <div className="p-2 bg-white rounded-md text-sm font-semibold">
+                          {selectedInvoice.amount_received ? `${selectedInvoice.currency} ${selectedInvoice.amount_received.toFixed(2)}` : 'Not specified'}
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label className="text-xs font-medium text-muted-foreground">Pending Amount</Label>
+                        <div className="p-2 bg-white rounded-md text-sm">
+                          {selectedInvoice.pending_amount ? `${selectedInvoice.currency} ${selectedInvoice.pending_amount.toFixed(2)}` : '0.00'}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
 
                   {selectedInvoice.payment_remarks && (
                     <div>
