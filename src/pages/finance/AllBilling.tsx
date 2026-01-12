@@ -311,7 +311,10 @@ export function AllBilling() {
       pendingAmount = Math.max(0, invoiceAmount - amountReceived);
     }
     
-    invoiceForm.setValue('pending_amount', pendingAmount);
+    // Round to 2 decimal places to avoid floating-point precision issues
+    const roundedPendingAmount = Math.round(pendingAmount * 100) / 100;
+    
+    invoiceForm.setValue('pending_amount', roundedPendingAmount);
   }, [watchedInvoiceAmount, watchedAmountReceived, watchedStatus, invoiceForm]);
   
   // Auto-adjust amounts when status changes to 'paid'
@@ -1774,14 +1777,11 @@ export function AllBilling() {
                                     step="0.01"
                                     placeholder="0.00" 
                                     {...field}
-                                    value={field.value || 0}
+                                    value={field.value ? Number(field.value).toFixed(2) : '0.00'}
                                     disabled
                                     className="bg-muted cursor-not-allowed"
                                   />
                                 </FormControl>
-                                <FormDescription className="text-xs">
-                                  Calculated as: Invoice Amount - Amount Received
-                                </FormDescription>
                                 <FormMessage />
                               </FormItem>
                             )}
@@ -3332,14 +3332,11 @@ export function AllBilling() {
                                 step="0.01"
                                 placeholder="0.00" 
                                 {...field}
-                                value={field.value || 0}
+                                value={field.value ? Number(field.value).toFixed(2) : '0.00'}
                                 disabled
                                 className="bg-muted cursor-not-allowed"
                               />
                             </FormControl>
-                            <FormDescription className="text-xs">
-                              Calculated as: Invoice Amount - Amount Received
-                            </FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}
