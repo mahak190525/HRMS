@@ -433,6 +433,11 @@ export function isPathAccessible(
     ? normalizedPath.slice(0, -1) 
     : normalizedPath;
 
+  // Special case: notifications page is accessible to all authenticated users
+  if (cleanPath === '/notifications') {
+    return true;
+  }
+
   // Find the dashboard and page that matches the path
   // First, try exact matches (most specific)
   for (const dashboard of DASHBOARD_CONFIG) {
